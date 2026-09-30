@@ -24,7 +24,7 @@ The TAK Forge repository is canonical. GitHub is a secondary repository.
 WearTAK is being rebuilt for Apple Watch from the Wear OS and Garmin
 implementations as a standalone watch-first experience. The Apple-specific
 repository and implementation identity is `weartak-ios`; the product name is
-WearTAK. The first vertical slice lives in `WearTAKWatch/` and covers
+WearTAK. The first vertical slice lives in `WearTAK/` and covers
 connection state, location/PLI, marker creation, and confirmed SOS
 alert/cancellation actions.
 
