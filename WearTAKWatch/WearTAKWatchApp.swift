@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct WearTAKWatchApp: App {
+struct WearTAKApp: App {
     @StateObject private var model = WatchSessionModel()
 
     var body: some Scene {
