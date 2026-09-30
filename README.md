@@ -18,3 +18,19 @@ Alex Gorsuch on chat.tak.gov or Signal.
 ### Repositories
 
 The TAK Forge repository is canonical. GitHub is a secondary repository.
+
+## Apple Watch rebuild
+
+The Apple Watch application is being rebuilt from the Wear OS and Garmin
+implementations as a standalone watch-first experience. The first vertical
+slice lives in `WearTAKWatch/` and covers connection state, location/PLI,
+marker creation, and confirmed SOS alert/cancellation actions.
+
+The Garmin implementation establishes the companion relay message boundary:
+`relay_hello`, `marker`, `marker_delete`, `emergency`, `chat`, and inbound
+`entity`/`entities` messages. Apple Watch transport code should preserve those
+semantics while allowing direct TAK connectivity where watchOS permits it.
+
+Platform-specific features remain separate adapters. Wear OS services, Samsung
+Health, Android plugins, Garmin Connect IQ, and watchOS location/sensor APIs
+must not leak into the shared operational model.
