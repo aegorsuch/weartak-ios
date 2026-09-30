@@ -9,7 +9,7 @@ enum ConnectionState: String {
     case failed = "Connection failed"
 }
 
-enum EmergencyState: String {
+enum EmergencyState: String, Codable {
     case alert = "ALERT"
     case cancel = "CANCEL"
 }
