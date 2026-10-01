@@ -103,6 +103,11 @@ struct ContentView: View {
         .onChange(of: physiology.activeAutomaticAlert) { _, category in
             model.updateAutomaticAlert(category)
         }
+        .onChange(of: settings.physiologicalAlertsEnabled) { _, enabled in
+            if !enabled {
+                physiology.stopMonitoring()
+            }
+        }
         .onChange(of: environment.activePressureCategory) { oldValue, newValue in
             if let oldValue, oldValue != newValue {
                 model.setEnvironmentalAlert(oldValue, active: false)

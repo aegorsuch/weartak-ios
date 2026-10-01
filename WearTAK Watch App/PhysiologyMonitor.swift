@@ -51,6 +51,10 @@ final class PhysiologyMonitor: ObservableObject {
 
     func startMonitoring() async {
         guard !automaticEnabled && !isStarting else { return }
+        guard settings.physiologicalAlertsEnabled else {
+            status = "Enable Physiological Alerts in Settings"
+            return
+        }
         isStarting = true
         defer { isStarting = false }
         let generation = monitoringGeneration
@@ -166,7 +170,13 @@ final class PhysiologyMonitor: ObservableObject {
             highResting: Double(settings.highRestingHeartRate),
             lowResting: Double(settings.lowRestingHeartRate),
             exertionWarningFraction: Double(settings.exertionWarningThreshold) / 100,
-            exertionAlertFraction: Double(settings.exertionAlertThreshold) / 100
+            exertionAlertFraction: Double(settings.exertionAlertThreshold) / 100,
+            highRestingWarningDuration: Double(settings.highRestingWarningMinutes * 60),
+            highRestingAlertDuration: Double(settings.highRestingAlertMinutes * 60),
+            lowRestingWarningDuration: Double(settings.lowRestingWarningMinutes * 60),
+            lowRestingAlertDuration: Double(settings.lowRestingAlertMinutes * 60),
+            exertionWarningDuration: Double(settings.exertionWarningLengthSeconds),
+            exertionAlertDuration: Double(settings.exertionAlertLengthSeconds)
         )
         evaluator.evaluate(heartRate: beatsPerMinute, at: sample.endDate, movement: movement, age: age, thresholds: thresholds)
         activeAutomaticAlert = evaluator.activeCategory

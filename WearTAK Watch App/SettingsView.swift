@@ -325,11 +325,8 @@ private struct AlertingPreferencesView: View {
 
     var body: some View {
         List {
-            NavigationLink {
+            NavigationLink("Physiological Alerts") {
                 PhysiologicalAlertsView(settings: settings)
-            } label: {
-                Toggle("Physiological Alerts", isOn: $settings.physiologicalAlertsEnabled)
-                    .toggleStyle(.switch)
             }
             NavigationLink("Environmental Alerts") {
                 EnvironmentalAlertsView(settings: settings)
@@ -353,28 +350,118 @@ private struct PhysiologicalAlertsView: View {
     var body: some View {
         List {
             Toggle("Physiological Alerts", isOn: $settings.physiologicalAlertsEnabled)
-            Section("Resting Heart Rate Alerts") {
-                Stepper(
-                    "High HR Threshold: \(settings.highRestingHeartRate) bpm",
-                    value: $settings.highRestingHeartRate, in: 80...220
-                )
-                Stepper(
-                    "Low HR Threshold: \(settings.lowRestingHeartRate) bpm",
-                    value: $settings.lowRestingHeartRate, in: 25...110
-                )
+            NavigationLink("Resting Heart Rate Alerts") {
+                RestingHeartRateAlertsView(settings: settings)
             }
-            Section("Exertion Alerts") {
-                Stepper(
-                    "Warning Threshold: \(settings.exertionWarningThreshold)%",
-                    value: $settings.exertionWarningThreshold, in: 50...100
-                )
-                Stepper(
-                    "Alert Threshold: \(settings.exertionAlertThreshold)%",
-                    value: $settings.exertionAlertThreshold, in: 50...100
-                )
+            NavigationLink("Exertion Alerts") {
+                ExertionAlertsView(settings: settings)
             }
         }
         .navigationTitle("Physiological Alerts")
+    }
+}
+
+private struct RestingHeartRateAlertsView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            Section("High Resting Heart Rate") {
+                NavigationLink {
+                    ProfileNumberPickerView(
+                        title: "High HR Threshold", selection: $settings.highRestingHeartRate,
+                        values: Array(stride(from: 80, through: 200, by: 5)), valueLabel: { "\($0) bpm" }
+                    )
+                } label: {
+                    LabeledContent("High HR Threshold", value: "\(settings.highRestingHeartRate) bpm")
+                }
+                NavigationLink {
+                    ProfileNumberPickerView(
+                        title: "Warning Length", selection: $settings.highRestingWarningMinutes,
+                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                    )
+                } label: {
+                    LabeledContent("Warning Length", value: "\(settings.highRestingWarningMinutes) minutes")
+                }
+                NavigationLink {
+                    ProfileNumberPickerView(
+                        title: "Alert Length", selection: $settings.highRestingAlertMinutes,
+                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                    )
+                } label: {
+                    LabeledContent("Alert Length", value: "\(settings.highRestingAlertMinutes) minutes")
+                }
+            }
+            Section("Low Resting Heart Rate") {
+                NavigationLink {
+                    ProfileNumberPickerView(
+                        title: "Low HR Threshold", selection: $settings.lowRestingHeartRate,
+                        values: Array(stride(from: 25, through: 100, by: 5)), valueLabel: { "\($0) bpm" }
+                    )
+                } label: {
+                    LabeledContent("Low HR Threshold", value: "\(settings.lowRestingHeartRate) bpm")
+                }
+                NavigationLink {
+                    ProfileNumberPickerView(
+                        title: "Warning Length", selection: $settings.lowRestingWarningMinutes,
+                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                    )
+                } label: {
+                    LabeledContent("Warning Length", value: "\(settings.lowRestingWarningMinutes) minutes")
+                }
+                NavigationLink {
+                    ProfileNumberPickerView(
+                        title: "Alert Length", selection: $settings.lowRestingAlertMinutes,
+                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                    )
+                } label: {
+                    LabeledContent("Alert Length", value: "\(settings.lowRestingAlertMinutes) minutes")
+                }
+            }
+        }
+        .navigationTitle("Resting Heart Rate Alerts")
+    }
+}
+
+private struct ExertionAlertsView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Warning Threshold", selection: $settings.exertionWarningThreshold,
+                    values: Array(stride(from: 50, through: 100, by: 5)), valueLabel: { "\($0)%" }
+                )
+            } label: {
+                LabeledContent("Warning Threshold", value: "\(settings.exertionWarningThreshold)%")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Warning Length", selection: $settings.exertionWarningLengthSeconds,
+                    values: Array(stride(from: 30, through: 600, by: 30)), valueLabel: { "\($0) seconds" }
+                )
+            } label: {
+                LabeledContent("Warning Length", value: "\(settings.exertionWarningLengthSeconds) seconds")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Alert Threshold", selection: $settings.exertionAlertThreshold,
+                    values: Array(stride(from: 50, through: 100, by: 5)), valueLabel: { "\($0)%" }
+                )
+            } label: {
+                LabeledContent("Alert Threshold", value: "\(settings.exertionAlertThreshold)%")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Alert Length", selection: $settings.exertionAlertLengthSeconds,
+                    values: Array(stride(from: 30, through: 600, by: 30)), valueLabel: { "\($0) seconds" }
+                )
+            } label: {
+                LabeledContent("Alert Length", value: "\(settings.exertionAlertLengthSeconds) seconds")
+            }
+        }
+        .navigationTitle("Exertion Alerts")
     }
 }
 

@@ -4,10 +4,6 @@ enum AutomaticAlertCategory: String {
     case highRestingHeartRate = "High resting heart rate"
     case lowRestingHeartRate = "Low resting heart rate"
     case highExertion = "High exertion"
-
-    var requiredDuration: TimeInterval {
-        self == .highExertion ? 120 : 600
-    }
 }
 
 enum MovementState {
@@ -21,6 +17,12 @@ struct AutomaticAlertThresholds {
     var lowResting: Double
     var exertionWarningFraction: Double
     var exertionAlertFraction: Double
+    var highRestingWarningDuration: TimeInterval
+    var highRestingAlertDuration: TimeInterval
+    var lowRestingWarningDuration: TimeInterval
+    var lowRestingAlertDuration: TimeInterval
+    var exertionWarningDuration: TimeInterval
+    var exertionAlertDuration: TimeInterval
 }
 
 struct AutomaticAlertEvaluator {
@@ -53,11 +55,13 @@ struct AutomaticAlertEvaluator {
         heartRate: Double, at time: Date, movement: MovementState, age: Int?,
         thresholds: AutomaticAlertThresholds
     ) {
-        guard heartRate > 0, let previous = lastSampleAt, time > previous,
-              time.timeIntervalSince(previous) <= 60 else {
+        guard heartRate > 0 else {
             reset()
-            lastSampleAt = time
             return
+        }
+        if let previous = lastSampleAt,
+           (time <= previous || time.timeIntervalSince(previous) > 60) {
+            reset()
         }
         lastSampleAt = time
 
@@ -104,8 +108,12 @@ struct AutomaticAlertEvaluator {
         }
         guard let since = restingCandidateSince else { return }
         let elapsed = time.timeIntervalSince(since)
-        warningCategory = elapsed >= 300 ? category : nil
-        activeCategory = elapsed >= category.requiredDuration ? category : nil
+        let warningDuration = category == .highRestingHeartRate
+            ? thresholds.highRestingWarningDuration : thresholds.lowRestingWarningDuration
+        let alertDuration = category == .highRestingHeartRate
+            ? thresholds.highRestingAlertDuration : thresholds.lowRestingAlertDuration
+        warningCategory = elapsed >= warningDuration ? category : nil
+        activeCategory = elapsed >= alertDuration ? category : nil
     }
 
     // Garmin times exertion warning and alert from independent threshold crossings, not a shared timer.
@@ -124,15 +132,15 @@ struct AutomaticAlertEvaluator {
         exertionAlertSince = percent >= thresholds.exertionAlertFraction ? (exertionAlertSince ?? time) : nil
         exertionWarningSince = percent >= thresholds.exertionWarningFraction ? (exertionWarningSince ?? time) : nil
 
-        if let since = exertionAlertSince, time.timeIntervalSince(since) >= AutomaticAlertCategory.highExertion.requiredDuration {
+        if let since = exertionWarningSince, time.timeIntervalSince(since) >= thresholds.exertionWarningDuration {
+            warningCategory = .highExertion
+        } else {
+            warningCategory = nil
+        }
+        if let since = exertionAlertSince, time.timeIntervalSince(since) >= thresholds.exertionAlertDuration {
             activeCategory = .highExertion
         } else {
             activeCategory = nil
-        }
-        if activeCategory == nil, let since = exertionWarningSince, time.timeIntervalSince(since) >= 120 {
-            warningCategory = .highExertion
-        } else if activeCategory == nil {
-            warningCategory = nil
         }
     }
 }

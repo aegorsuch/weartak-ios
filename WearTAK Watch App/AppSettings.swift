@@ -18,8 +18,14 @@ final class AppSettings: ObservableObject {
         static let sitxApiHost = "WearTAK.sitxApiHost"
         static let highRestingHeartRate = "WearTAK.highRestingHeartRate"
         static let lowRestingHeartRate = "WearTAK.lowRestingHeartRate"
+        static let highRestingWarningMinutes = "WearTAK.highRestingWarningMinutes"
+        static let highRestingAlertMinutes = "WearTAK.highRestingAlertMinutes"
+        static let lowRestingWarningMinutes = "WearTAK.lowRestingWarningMinutes"
+        static let lowRestingAlertMinutes = "WearTAK.lowRestingAlertMinutes"
         static let exertionWarningThreshold = "WearTAK.exertionWarningThreshold"
+        static let exertionWarningLengthSeconds = "WearTAK.exertionWarningLengthSeconds"
         static let exertionAlertThreshold = "WearTAK.exertionAlertThreshold"
+        static let exertionAlertLengthSeconds = "WearTAK.exertionAlertLengthSeconds"
         static let lowPressureThreshold = "WearTAK.lowPressureThreshold"
         static let highPressureThreshold = "WearTAK.highPressureThreshold"
         static let lowPressureAlertsEnabled = "WearTAK.lowPressureAlertsEnabled"
@@ -63,7 +69,7 @@ final class AppSettings: ObservableObject {
 
     @Published var highRestingHeartRate: Int {
         didSet {
-            let clamped = min(max(highRestingHeartRate, 80), 220)
+            let clamped = min(max(highRestingHeartRate, 80), 200)
             guard clamped == highRestingHeartRate else { highRestingHeartRate = clamped; return }
             guard highRestingHeartRate > lowRestingHeartRate else { highRestingHeartRate = lowRestingHeartRate + 20; return }
             defaults.set(highRestingHeartRate, forKey: Keys.highRestingHeartRate)
@@ -72,29 +78,80 @@ final class AppSettings: ObservableObject {
 
     @Published var lowRestingHeartRate: Int {
         didSet {
-            let clamped = min(max(lowRestingHeartRate, 25), 110)
+            let clamped = min(max(lowRestingHeartRate, 25), 100)
             guard clamped == lowRestingHeartRate else { lowRestingHeartRate = clamped; return }
+            guard highRestingHeartRate > lowRestingHeartRate else { highRestingHeartRate = min(lowRestingHeartRate + 20, 200); return }
             defaults.set(lowRestingHeartRate, forKey: Keys.lowRestingHeartRate)
+        }
+    }
+
+    @Published var highRestingWarningMinutes: Int {
+        didSet {
+            let clamped = min(max(highRestingWarningMinutes, 1), 60)
+            guard clamped == highRestingWarningMinutes else { highRestingWarningMinutes = clamped; return }
+            defaults.set(highRestingWarningMinutes, forKey: Keys.highRestingWarningMinutes)
+        }
+    }
+
+    @Published var highRestingAlertMinutes: Int {
+        didSet {
+            let clamped = min(max(highRestingAlertMinutes, 1), 60)
+            guard clamped == highRestingAlertMinutes else { highRestingAlertMinutes = clamped; return }
+            defaults.set(highRestingAlertMinutes, forKey: Keys.highRestingAlertMinutes)
+        }
+    }
+
+    @Published var lowRestingWarningMinutes: Int {
+        didSet {
+            let clamped = min(max(lowRestingWarningMinutes, 1), 60)
+            guard clamped == lowRestingWarningMinutes else { lowRestingWarningMinutes = clamped; return }
+            defaults.set(lowRestingWarningMinutes, forKey: Keys.lowRestingWarningMinutes)
+        }
+    }
+
+    @Published var lowRestingAlertMinutes: Int {
+        didSet {
+            let clamped = min(max(lowRestingAlertMinutes, 1), 60)
+            guard clamped == lowRestingAlertMinutes else { lowRestingAlertMinutes = clamped; return }
+            defaults.set(lowRestingAlertMinutes, forKey: Keys.lowRestingAlertMinutes)
         }
     }
 
     @Published var exertionWarningThreshold: Int {
         didSet {
-            let clamped = min(max(exertionWarningThreshold, 50), 100)
+            let clamped = min(max(exertionWarningThreshold, 50), 100) / 5 * 5
             guard clamped == exertionWarningThreshold else { exertionWarningThreshold = clamped; return }
+            if exertionAlertThreshold < exertionWarningThreshold {
+                exertionAlertThreshold = exertionWarningThreshold
+            }
             defaults.set(exertionWarningThreshold, forKey: Keys.exertionWarningThreshold)
+        }
+    }
+
+    @Published var exertionWarningLengthSeconds: Int {
+        didSet {
+            let clamped = min(max(exertionWarningLengthSeconds, 30), 600) / 30 * 30
+            guard clamped == exertionWarningLengthSeconds else { exertionWarningLengthSeconds = clamped; return }
+            defaults.set(exertionWarningLengthSeconds, forKey: Keys.exertionWarningLengthSeconds)
         }
     }
 
     @Published var exertionAlertThreshold: Int {
         didSet {
-            let clamped = min(max(exertionAlertThreshold, 50), 100)
+            let clamped = min(max(exertionAlertThreshold, 50), 100) / 5 * 5
             guard clamped == exertionAlertThreshold else { exertionAlertThreshold = clamped; return }
-            guard exertionAlertThreshold >= exertionWarningThreshold else {
-                exertionAlertThreshold = exertionWarningThreshold + 5
-                return
+            if exertionAlertThreshold < exertionWarningThreshold {
+                exertionWarningThreshold = exertionAlertThreshold
             }
             defaults.set(exertionAlertThreshold, forKey: Keys.exertionAlertThreshold)
+        }
+    }
+
+    @Published var exertionAlertLengthSeconds: Int {
+        didSet {
+            let clamped = min(max(exertionAlertLengthSeconds, 30), 600) / 30 * 30
+            guard clamped == exertionAlertLengthSeconds else { exertionAlertLengthSeconds = clamped; return }
+            defaults.set(exertionAlertLengthSeconds, forKey: Keys.exertionAlertLengthSeconds)
         }
     }
 
@@ -234,15 +291,21 @@ final class AppSettings: ObservableObject {
         sitxApiHost = defaults.string(forKey: Keys.sitxApiHost) ?? ""
         highRestingHeartRate = defaults.object(forKey: Keys.highRestingHeartRate) as? Int ?? 120
         lowRestingHeartRate = defaults.object(forKey: Keys.lowRestingHeartRate) as? Int ?? 40
+        highRestingWarningMinutes = defaults.object(forKey: Keys.highRestingWarningMinutes) as? Int ?? 5
+        highRestingAlertMinutes = defaults.object(forKey: Keys.highRestingAlertMinutes) as? Int ?? 10
+        lowRestingWarningMinutes = defaults.object(forKey: Keys.lowRestingWarningMinutes) as? Int ?? 5
+        lowRestingAlertMinutes = defaults.object(forKey: Keys.lowRestingAlertMinutes) as? Int ?? 10
         exertionWarningThreshold = defaults.object(forKey: Keys.exertionWarningThreshold) as? Int ?? 80
+        exertionWarningLengthSeconds = defaults.object(forKey: Keys.exertionWarningLengthSeconds) as? Int ?? 120
         exertionAlertThreshold = defaults.object(forKey: Keys.exertionAlertThreshold) as? Int ?? 90
+        exertionAlertLengthSeconds = defaults.object(forKey: Keys.exertionAlertLengthSeconds) as? Int ?? 120
         lowPressureThreshold = defaults.object(forKey: Keys.lowPressureThreshold) as? Int ?? 950
         highPressureThreshold = defaults.object(forKey: Keys.highPressureThreshold) as? Int ?? 2000
         lowPressureAlertsEnabled = defaults.object(forKey: Keys.lowPressureAlertsEnabled) as? Bool ?? true
         highPressureAlertsEnabled = defaults.object(forKey: Keys.highPressureAlertsEnabled) as? Bool ?? true
         immersionAlertsEnabled = defaults.object(forKey: Keys.immersionAlertsEnabled) as? Bool ?? true
         batteryAlertsEnabled = defaults.object(forKey: Keys.batteryAlertsEnabled) as? Bool ?? false
-        physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? true
+        physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? false
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true
         birthYear = defaults.object(forKey: Keys.birthYear) as? Int ?? 1990
