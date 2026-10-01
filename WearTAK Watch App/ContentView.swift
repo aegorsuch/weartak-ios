@@ -246,13 +246,19 @@ private struct EnvironmentView: View {
 
 private struct TacticalMapView: View {
     @ObservedObject var model: WatchSessionModel
+    @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var visibleRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+    )
     @State private var hasCentered = false
-    @State private var isPlacingPoint = false
     @State private var pointDraft: MapPointDraft?
+    @State private var longPressStart: CGPoint?
+    @State private var longPressTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: 4) {
+        ZStack {
             MapReader { proxy in
                 Map(position: $cameraPosition) {
                     if let coordinate = model.lastLocation?.coordinate {
@@ -267,73 +273,93 @@ private struct TacticalMapView: View {
                             .tint(entity.kind == .hostile ? .red : entity.kind == .friendly ? .blue : .yellow)
                     }
                 }
-                .onTapGesture { location in
-                    guard isPlacingPoint,
-                          let coordinate = proxy.convert(location, from: .local),
-                          CLLocationCoordinate2DIsValid(coordinate) else { return }
-                    isPlacingPoint = false
-                    pointDraft = MapPointDraft(coordinate: coordinate)
+                .onMapCameraChange(frequency: .continuous) { context in
+                    visibleRegion = context.region
                 }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                        .onChanged { value in
+                            if longPressStart == nil {
+                                longPressStart = value.startLocation
+                                let startLocation = value.startLocation
+                                longPressTask = Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 700_000_000)
+                                    guard !Task.isCancelled,
+                                          let coordinate = proxy.convert(startLocation, from: .local),
+                                          CLLocationCoordinate2DIsValid(coordinate) else { return }
+                                    pointDraft = MapPointDraft(coordinate: coordinate)
+                                    longPressTask = nil
+                                }
+                            } else if hypot(value.translation.width, value.translation.height) > 12 {
+                                longPressTask?.cancel()
+                                longPressTask = nil
+                            }
+                        }
+                        .onEnded { _ in
+                            longPressTask?.cancel()
+                            longPressTask = nil
+                            longPressStart = nil
+                        }
+                )
             }
             .onAppear(perform: centerOnce)
             .onChange(of: model.lastLocation?.timestamp) { _, _ in
                 centerOnce()
             }
 
-            HStack(spacing: 4) {
+            VStack(spacing: 0) {
+                Button {
+                    zoom(by: 0.5)
+                } label: {
+                    mapControl("plus.magnifyingglass", label: "Zoom in")
+                }
+                Spacer(minLength: 8)
+
                 Button {
                     centerOnLocation()
                 } label: {
-                    Image(systemName: "location.north.fill")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                    mapControl("location.north.fill", label: "Snap to self")
                 }
                 .disabled(model.lastLocation == nil)
-                .accessibilityLabel("Recenter map")
-
-                NavigationLink {
-                    PointListView(model: model)
-                } label: {
-                    Image(systemName: "list.bullet")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .accessibilityLabel("Points")
-
-                NavigationLink {
-                    BloodhoundView(model: model)
-                } label: {
-                    Image(systemName: "location.viewfinder")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .accessibilityLabel("Navigation")
+                Spacer(minLength: 8)
 
                 Button {
-                    isPlacingPoint.toggle()
+                    zoom(by: 2)
                 } label: {
-                    Image(systemName: "mappin.and.ellipse")
-                        .foregroundStyle(isPlacingPoint ? .orange : .primary)
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                    mapControl("minus.magnifyingglass", label: "Zoom out")
                 }
-                .accessibilityLabel("Place point on map")
-                .help("Tap the map to place a point")
-
-                NavigationLink {
-                    PointEditorView(model: model, coordinate: model.lastLocation?.coordinate)
-                } label: {
-                    Image(systemName: "location.circle")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .disabled(model.lastLocation == nil)
-                .accessibilityLabel("Drop point at GPS location")
             }
-            .buttonStyle(.plain)
-            .frame(height: 44)
+            .padding(.leading, 5)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+            HStack {
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    mapControl("arrow.right", label: "Back to menu")
+                }
+            }
+            .padding(.trailing, 5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .buttonStyle(.plain)
+        .navigationBarBackButtonHidden(true)
         .navigationTitle("Map")
         .sheet(item: $pointDraft) { draft in
             NavigationStack {
                 PointEditorView(model: model, coordinate: draft.coordinate)
             }
         }
+    }
+
+    private func mapControl(_ systemName: String, label: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 15, weight: .semibold))
+            .frame(width: 36, height: 36)
+            .background(.regularMaterial, in: Circle())
+            .accessibilityLabel(label)
     }
 
     private func centerOnce() {
@@ -343,11 +369,23 @@ private struct TacticalMapView: View {
 
     private func centerOnLocation() {
         guard let coordinate = model.lastLocation?.coordinate else { return }
-        cameraPosition = .region(MKCoordinateRegion(
+        let region = MKCoordinateRegion(
             center: coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        ))
+        )
+        visibleRegion = region
+        cameraPosition = .region(region)
         hasCentered = true
+    }
+
+    private func zoom(by factor: Double) {
+        let span = MKCoordinateSpan(
+            latitudeDelta: min(max(visibleRegion.span.latitudeDelta * factor, 0.0001), 180),
+            longitudeDelta: min(max(visibleRegion.span.longitudeDelta * factor, 0.0001), 360)
+        )
+        let region = MKCoordinateRegion(center: visibleRegion.center, span: span)
+        visibleRegion = region
+        cameraPosition = .region(region)
     }
 }
 
