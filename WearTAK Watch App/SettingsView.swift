@@ -250,7 +250,6 @@ private struct NetworkPreferencesView: View {
             } label: {
                 Text("Sit(x) Device API")
             }
-            LabeledContent("Relay Status", value: model.connectionState.rawValue)
         }
         .navigationTitle("Network Preferences")
     }
