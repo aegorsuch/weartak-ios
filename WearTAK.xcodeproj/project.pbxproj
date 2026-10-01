@@ -250,7 +250,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate and date of birth to show physiology and evaluate opted-in alerts.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
@@ -286,7 +286,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate and date of birth to show physiology and evaluate opted-in alerts.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";

@@ -7,7 +7,7 @@ struct SettingsView: View {
     var body: some View {
         List {
             NavigationLink("Device Preferences") {
-                DevicePreferencesView(model: model)
+                DevicePreferencesView(settings: settings)
             }
             NavigationLink("Network Preferences") {
                 NetworkPreferencesView(model: model, settings: settings)
@@ -18,23 +18,211 @@ struct SettingsView: View {
             NavigationLink("Tool Preferences") {
                 ToolPreferencesView(settings: settings)
             }
+            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")")
+                .foregroundStyle(.secondary)
         }
         .navigationTitle("Settings")
     }
 }
 
 private struct DevicePreferencesView: View {
-    @ObservedObject var model: WatchSessionModel
-
-    private var locationServicesLabel: String {
-        model.lastLocation != nil ? "On" : "Off"
-    }
+    @ObservedObject var settings: AppSettings
 
     var body: some View {
         List {
-            LabeledContent("Location Services", value: locationServicesLabel)
+            NavigationLink("My User Metrics") {
+                UserMetricsView(settings: settings)
+            }
         }
         .navigationTitle("Device Preferences")
+    }
+}
+
+private struct UserMetricsView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            NavigationLink("Medical Profile (BATDOK)") {
+                MedicalProfileView(settings: settings)
+            }
+            NavigationLink("Gait Tracking") {
+                GaitTrackingView(settings: settings)
+            }
+        }
+        .navigationTitle("My User Metrics")
+    }
+}
+
+private struct MedicalProfileView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Birth Year", selection: $settings.birthYear,
+                    values: Array(1920...Calendar.current.component(.year, from: Date())),
+                    valueLabel: { "\($0)" }
+                )
+            } label: {
+                LabeledContent("Birth Year", value: "\(settings.birthYear)")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Height", selection: $settings.heightInches,
+                    values: Array(48...84),
+                    valueLabel: { "\($0 / 12)' \($0 % 12)\u{22}" }
+                )
+            } label: {
+                LabeledContent("Height", value: "\(settings.heightInches / 12)' \(settings.heightInches % 12)\u{22}")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Weight", selection: $settings.weightPounds,
+                    values: Array(stride(from: 80, through: 320, by: 5)),
+                    valueLabel: { "\($0) lb" }
+                )
+            } label: {
+                LabeledContent("Weight", value: "\(settings.weightPounds) lb")
+            }
+            NavigationLink {
+                ProfileStringPickerView(title: "Sex", selection: $settings.sex, values: AppSettings.sexOptions)
+            } label: {
+                LabeledContent("Sex", value: settings.sex)
+            }
+            NavigationLink {
+                ProfileStringPickerView(title: "Blood Type", selection: $settings.bloodType, values: AppSettings.bloodTypeOptions)
+            } label: {
+                LabeledContent("Blood Type", value: settings.bloodType)
+            }
+            NavigationLink {
+                AllergiesView(settings: settings)
+            } label: {
+                LabeledContent("Allergies", value: settings.allergies.joined(separator: ", "))
+            }
+            NavigationLink {
+                ProfileStringPickerView(title: "User Type", selection: $settings.userType, values: AppSettings.userTypeOptions)
+            } label: {
+                LabeledContent("User Type", value: settings.userType)
+            }
+        }
+        .navigationTitle("Medical Profile (BATDOK)")
+    }
+}
+
+private struct ProfileNumberPickerView: View {
+    let title: String
+    @Binding var selection: Int
+    let values: [Int]
+    let valueLabel: (Int) -> String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List(values, id: \.self) { value in
+            Button {
+                selection = value
+                dismiss()
+            } label: {
+                HStack {
+                    Text(valueLabel(value))
+                    Spacer()
+                    if selection == value {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+    }
+}
+
+private struct ProfileStringPickerView: View {
+    let title: String
+    @Binding var selection: String
+    let values: [String]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List(values, id: \.self) { value in
+            Button {
+                selection = value
+                dismiss()
+            } label: {
+                HStack {
+                    Text(value)
+                    Spacer()
+                    if selection == value {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+    }
+}
+
+private struct AllergiesView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List(AppSettings.allergyOptions, id: \.self) { allergy in
+            Button {
+                settings.toggleAllergy(allergy)
+            } label: {
+                HStack {
+                    Text(allergy)
+                    Spacer()
+                    if settings.allergies.contains(allergy) {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle("Allergies")
+    }
+}
+
+private struct GaitTrackingView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Uniform Waist Size", selection: $settings.uniformWaistSize,
+                    values: Array(24...60), valueLabel: { "\($0) in" }
+                )
+            } label: {
+                LabeledContent("Uniform Waist Size", value: "\(settings.uniformWaistSize) in")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Stride Length", selection: $settings.strideLength,
+                    values: Array(20...45), valueLabel: { "\($0) in" }
+                )
+            } label: {
+                LabeledContent("Stride Length", value: "\(settings.strideLength) in")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Uniform Pants Length", selection: $settings.uniformPantsLength,
+                    values: Array(24...60), valueLabel: { "\($0) in" }
+                )
+            } label: {
+                LabeledContent("Uniform Pants Length", value: "\(settings.uniformPantsLength) in")
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Loadout Weight", selection: $settings.loadoutWeight,
+                    values: Array(stride(from: 10, through: 150, by: 5)),
+                    valueLabel: { "\($0) lbs" }
+                )
+            } label: {
+                LabeledContent("Loadout Weight", value: "\(settings.loadoutWeight) lbs")
+            }
+        }
+        .navigationTitle("Gait Tracking")
     }
 }
 

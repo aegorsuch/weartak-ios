@@ -8,72 +8,93 @@ struct ContentView: View {
     @ObservedObject var environment: EnvironmentalMonitor
     @ObservedObject var settings: AppSettings
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showClearPointsConfirmation = false
+    @State private var showExitInstructions = false
+    @State private var toastMessage: String?
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    connectionRow
-                    Button {
+                NavigationLink { ChatView() } label: {
+                    Label("Chat", systemImage: "message")
+                }
+                Button(role: .destructive) {
+                    showClearPointsConfirmation = true
+                } label: {
+                    Label("Clear 2525D Points", systemImage: "trash")
+                }
+                Button {
+                    if model.dropMarker() {
+                        showToast("2525D point dropped")
+                    } else {
                         model.requestLocation()
+                        showToast("Location unavailable")
+                    }
+                } label: {
+                    Label("Drop 2525D Point", systemImage: "mappin.and.ellipse")
+                }
+                NavigationLink {
+                    EnvironmentView(monitor: environment)
+                } label: {
+                    Label("Environment", systemImage: "barometer")
+                }
+                Button {
+                    showExitInstructions = true
+                } label: {
+                    Label("Exit", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                if let activeAlertType = model.activeAlertType {
+                    Button(role: .destructive) {
+                        model.cancelEmergencyAlert()
                     } label: {
-                        Label("Send position", systemImage: "location.fill")
+                        Label("Clear Manual Alert (\(activeAlertType.rawValue) Active)", systemImage: "xmark.circle.fill")
+                    }
+                } else {
+                    NavigationLink {
+                        ManualAlertView(model: model)
+                    } label: {
+                        Label("Manual Alert", systemImage: "exclamationmark.triangle.fill")
                     }
                 }
-
-                Section("Actions") {
-                    NavigationLink {
-                        PhysiologyView(monitor: physiology)
-                    } label: {
-                        Label("Physiology", systemImage: "heart.text.square")
-                    }
-
-                    NavigationLink {
-                        EnvironmentView(monitor: environment)
-                    } label: {
-                        Label("Environment", systemImage: "barometer")
-                    }
-
-                    NavigationLink {
-                        TacticalMapView(model: model)
-                    } label: {
-                        Label("Map", systemImage: "map")
-                    }
-
-                    NavigationLink {
-                        PointEditorView(model: model, coordinate: model.lastLocation?.coordinate)
-                    } label: {
-                        Label("Drop 2525D Point", systemImage: "mappin.and.ellipse")
-                    }
-                    .disabled(model.lastLocation == nil)
-
-                    if let activeAlertType = model.activeAlertType {
-                        Button(role: .destructive) {
-                            model.cancelEmergencyAlert()
-                        } label: {
-                            Label {
-                                Text("Clear Manual Alert (\(activeAlertType.rawValue) Active)")
-                                    .fixedSize(horizontal: false, vertical: true)
-                            } icon: {
-                                Image(systemName: "xmark.circle.fill")
-                            }
-                        }
-                    } else {
-                        NavigationLink {
-                            ManualAlertView(model: model)
-                        } label: {
-                            Label("Manual Alert", systemImage: "exclamationmark.triangle.fill")
-                        }
-                    }
-
-                    NavigationLink {
-                        SettingsView(model: model, settings: settings)
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
+                NavigationLink {
+                    TacticalMapView(model: model)
+                } label: {
+                    Label("Map", systemImage: "map")
+                }
+                NavigationLink {
+                    PhysiologyView(monitor: physiology)
+                } label: {
+                    Label("Physiology", systemImage: "heart.text.square")
+                }
+                NavigationLink {
+                    SettingsView(model: model, settings: settings)
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
                 }
             }
             .navigationTitle("WearTAK")
+            .confirmationDialog("Clear app points?", isPresented: $showClearPointsConfirmation) {
+                Button("Clear 2525D Points", role: .destructive) {
+                    model.clearAllPoints()
+                    showToast("Old points cleared")
+                }
+            }
+            .alert("Exit WearTAK", isPresented: $showExitInstructions) {
+                Button("Done", role: .cancel) {}
+            } message: {
+                Text("Press the Digital Crown to leave WearTAK.")
+            }
+            .overlay(alignment: .bottom) {
+                if let toastMessage {
+                    Text(toastMessage)
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
         }
         .task {
             model.connect()
@@ -101,46 +122,22 @@ struct ContentView: View {
         }
     }
 
-    private var connectionRow: some View {
-        HStack {
-            Circle()
-                .fill(model.connectionState == .connected ? .green : .yellow)
-                .frame(width: 8, height: 8)
-            VStack(alignment: .leading) {
-                Text(model.connectionState.rawValue)
-                    .font(.headline)
-                if let activeAlertType = model.activeAlertType {
-                    Text("ALERTING: \(activeAlertType.rawValue)")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let category = model.activeAutomaticAlert {
-                    Text("AUTO ALERT: \(category.rawValue)")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if model.automaticAlertDeliveryFailed {
-                        Text("Not delivered")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                    }
-                } else if model.automaticAlertDeliveryFailed {
-                    Text("Remote alert clear failed")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
-                if let location = model.lastLocation {
-                    Text(location.coordinate.formatted)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Location unavailable")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
+    private func showToast(_ message: String) {
+        withAnimation { toastMessage = message }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            withAnimation { toastMessage = nil }
         }
+    }
+}
+
+private struct ChatView: View {
+    var body: some View {
+        List {
+            Text("Select a map user")
+                .foregroundStyle(.secondary)
+        }
+        .navigationTitle("Chat")
     }
 }
 
@@ -151,6 +148,13 @@ private struct PhysiologyView: View {
         List {
             Section("Heart rate") {
                 VStack(alignment: .leading, spacing: 4) {
+                    if let exertion = monitor.exertionPercent {
+                        Text("Exertion: \(exertion)%")
+                            .font(.headline)
+                    } else {
+                        Text("Exertion: Unavailable")
+                            .font(.headline)
+                    }
                     if let heartRate = monitor.heartRate {
                         Text("\(heartRate) BPM")
                             .font(.title2)
@@ -201,6 +205,14 @@ private struct EnvironmentView: View {
 
     var body: some View {
         List {
+            Section("Altitude") {
+                if let altitude = monitor.relativeAltitudeMeters {
+                    Text(String(format: "%.1f m relative", altitude))
+                } else {
+                    Text("Unavailable")
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Pressure") {
                 VStack(alignment: .leading, spacing: 4) {
                     if let pressure = monitor.pressureHpa {
@@ -211,6 +223,10 @@ private struct EnvironmentView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+            }
+            Section("Temperature") {
+                Text("Unavailable on Apple Watch")
+                    .foregroundStyle(.secondary)
             }
             Section("Automatic alerts") {
                 Toggle("Monitor", isOn: Binding(
@@ -234,6 +250,8 @@ private struct EnvironmentView: View {
             }
         }
         .navigationTitle("Environment")
+        .onAppear { monitor.startMonitoring() }
+        .onDisappear { monitor.stopMonitoring() }
     }
 }
 

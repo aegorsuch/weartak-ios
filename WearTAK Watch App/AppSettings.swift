@@ -18,7 +18,23 @@ final class AppSettings: ObservableObject {
         static let physiologicalAlertsEnabled = "WearTAK.physiologicalAlertsEnabled"
         static let bloodhoundProximityRadius = "WearTAK.bloodhoundProximityRadius"
         static let bloodhoundProximityVibrationEnabled = "WearTAK.bloodhoundProximityVibrationEnabled"
+        static let birthYear = "WearTAK.birthYear"
+        static let heightInches = "WearTAK.heightInches"
+        static let weightPounds = "WearTAK.weightPounds"
+        static let sex = "WearTAK.sex"
+        static let bloodType = "WearTAK.bloodType"
+        static let allergies = "WearTAK.allergies"
+        static let userType = "WearTAK.userType"
+        static let uniformWaistSize = "WearTAK.uniformWaistSize"
+        static let strideLength = "WearTAK.strideLength"
+        static let uniformPantsLength = "WearTAK.uniformPantsLength"
+        static let loadoutWeight = "WearTAK.loadoutWeight"
     }
+
+    static let sexOptions = ["Not Set", "Female", "Male"]
+    static let bloodTypeOptions = ["Unknown", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+    static let allergyOptions = ["N/A", "Antibiotics", "Anti-Inflammatory (Ibuprofen)", "Antiseizure", "Aspirin", "Insulin", "Muscle Relaxers", "Sulfa Drugs"]
+    static let userTypeOptions = ["N/A", "Child", "Coalition Civilian", "Coalition Military", "Non-Coalition Civilian", "Non-Coalition Military", "Opposing Force Detainee"]
 
     private let defaults: UserDefaults
 
@@ -111,6 +127,78 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(bloodhoundProximityVibrationEnabled, forKey: Keys.bloodhoundProximityVibrationEnabled) }
     }
 
+    @Published var birthYear: Int {
+        didSet {
+            let clamped = min(max(birthYear, 1920), Calendar.current.component(.year, from: Date()))
+            guard clamped == birthYear else { birthYear = clamped; return }
+            defaults.set(birthYear, forKey: Keys.birthYear)
+        }
+    }
+
+    @Published var heightInches: Int {
+        didSet {
+            let clamped = min(max(heightInches, 48), 84)
+            guard clamped == heightInches else { heightInches = clamped; return }
+            defaults.set(heightInches, forKey: Keys.heightInches)
+        }
+    }
+
+    @Published var weightPounds: Int {
+        didSet {
+            let clamped = min(max(weightPounds, 80), 320)
+            guard clamped == weightPounds else { weightPounds = clamped; return }
+            defaults.set(weightPounds, forKey: Keys.weightPounds)
+        }
+    }
+
+    @Published var sex: String {
+        didSet { defaults.set(sex, forKey: Keys.sex) }
+    }
+
+    @Published var bloodType: String {
+        didSet { defaults.set(bloodType, forKey: Keys.bloodType) }
+    }
+
+    @Published var allergies: [String] {
+        didSet { defaults.set(allergies.isEmpty ? ["N/A"] : allergies, forKey: Keys.allergies) }
+    }
+
+    @Published var userType: String {
+        didSet { defaults.set(userType, forKey: Keys.userType) }
+    }
+
+    @Published var uniformWaistSize: Int {
+        didSet {
+            let clamped = min(max(uniformWaistSize, 24), 60)
+            guard clamped == uniformWaistSize else { uniformWaistSize = clamped; return }
+            defaults.set(uniformWaistSize, forKey: Keys.uniformWaistSize)
+        }
+    }
+
+    @Published var strideLength: Int {
+        didSet {
+            let clamped = min(max(strideLength, 20), 45)
+            guard clamped == strideLength else { strideLength = clamped; return }
+            defaults.set(strideLength, forKey: Keys.strideLength)
+        }
+    }
+
+    @Published var uniformPantsLength: Int {
+        didSet {
+            let clamped = min(max(uniformPantsLength, 24), 60)
+            guard clamped == uniformPantsLength else { uniformPantsLength = clamped; return }
+            defaults.set(uniformPantsLength, forKey: Keys.uniformPantsLength)
+        }
+    }
+
+    @Published var loadoutWeight: Int {
+        didSet {
+            let clamped = min(max(loadoutWeight, 10), 150)
+            guard clamped == loadoutWeight else { loadoutWeight = clamped; return }
+            defaults.set(loadoutWeight, forKey: Keys.loadoutWeight)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
@@ -126,5 +214,28 @@ final class AppSettings: ObservableObject {
         physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? true
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true
+        birthYear = defaults.object(forKey: Keys.birthYear) as? Int ?? 1990
+        heightInches = defaults.object(forKey: Keys.heightInches) as? Int ?? 68
+        weightPounds = defaults.object(forKey: Keys.weightPounds) as? Int ?? 155
+        sex = defaults.string(forKey: Keys.sex) ?? "Not Set"
+        bloodType = defaults.string(forKey: Keys.bloodType) ?? "Unknown"
+        allergies = defaults.stringArray(forKey: Keys.allergies) ?? ["N/A"]
+        userType = defaults.string(forKey: Keys.userType) ?? "N/A"
+        uniformWaistSize = defaults.object(forKey: Keys.uniformWaistSize) as? Int ?? 32
+        strideLength = defaults.object(forKey: Keys.strideLength) as? Int ?? 30
+        uniformPantsLength = defaults.object(forKey: Keys.uniformPantsLength) as? Int ?? 32
+        loadoutWeight = defaults.object(forKey: Keys.loadoutWeight) as? Int ?? 72
+    }
+
+    func toggleAllergy(_ allergy: String) {
+        if allergy == "N/A" {
+            allergies = ["N/A"]
+        } else if allergies.contains(allergy) {
+            allergies.removeAll { $0 == allergy }
+            if allergies.isEmpty { allergies = ["N/A"] }
+        } else {
+            allergies.removeAll { $0 == "N/A" }
+            allergies.append(allergy)
+        }
     }
 }

@@ -4,6 +4,7 @@ import Foundation
 
 @MainActor
 final class EnvironmentalMonitor: ObservableObject {
+    @Published private(set) var relativeAltitudeMeters: Double?
     @Published private(set) var pressureHpa: Double?
     @Published private(set) var status = "Barometer not started"
     @Published private(set) var isMonitoring = false
@@ -29,7 +30,10 @@ final class EnvironmentalMonitor: ObservableObject {
         altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, error in
             guard let self, let data, error == nil else { return }
             Task { @MainActor in
-                self.process(pressureKilopascals: data.pressure.doubleValue)
+                self.process(
+                    pressureKilopascals: data.pressure.doubleValue,
+                    relativeAltitudeMeters: data.relativeAltitude.doubleValue
+                )
             }
         }
     }
@@ -43,9 +47,10 @@ final class EnvironmentalMonitor: ObservableObject {
         status = "Monitoring stopped"
     }
 
-    private func process(pressureKilopascals: Double) {
+    private func process(pressureKilopascals: Double, relativeAltitudeMeters: Double) {
         let hpa = pressureKilopascals * 10
         pressureHpa = hpa
+        self.relativeAltitudeMeters = relativeAltitudeMeters
         evaluator.evaluate(
             pressureHpa: hpa, at: Date(),
             settings: EnvironmentalAlertSettings(

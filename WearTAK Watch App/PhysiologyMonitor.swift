@@ -13,10 +13,15 @@ final class PhysiologyMonitor: ObservableObject {
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
     @Published private(set) var warningCategory: AutomaticAlertCategory?
 
+    var exertionPercent: Int? {
+        guard let heartRate, let age, (18...100).contains(age) else { return nil }
+        let predictedMaximum = 208 - 0.7 * Double(age)
+        return Int((Double(heartRate) / predictedMaximum * 100).rounded())
+    }
+
     private let healthStore = HKHealthStore()
     private let pedometer = CMPedometer()
     private let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate)!
-    private let dateOfBirthType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth)!
     private var observerQuery: HKObserverQuery?
     private var freshnessTimer: Timer?
     private var evaluator = AutomaticAlertEvaluator()
@@ -36,13 +41,8 @@ final class PhysiologyMonitor: ObservableObject {
         }
 
         do {
-            try await healthStore.requestAuthorization(toShare: [], read: [heartRateType, dateOfBirthType])
-            if let birthComponents = try? healthStore.dateOfBirthComponents(),
-               let birthDate = Calendar.current.date(from: birthComponents) {
-                age = Calendar.current.dateComponents([.year], from: birthDate, to: Date()).year
-            } else {
-                age = nil
-            }
+            try await healthStore.requestAuthorization(toShare: [], read: [heartRateType])
+            age = Calendar.current.component(.year, from: Date()) - settings.birthYear
             await loadLatestReading()
         } catch {
             clearReading(status: "Health access unavailable")
