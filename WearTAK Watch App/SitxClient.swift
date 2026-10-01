@@ -46,6 +46,11 @@ final class SitxClient: ObservableObject {
         pairingTask = Task { await beginPairing() }
     }
 
+    func refreshAuthorizationCode() {
+        pairingTask?.cancel()
+        pairingTask = Task { await beginPairing() }
+    }
+
     func forgetAuthorization() {
         pairingTask?.cancel()
         pairingTask = nil
@@ -99,7 +104,7 @@ final class SitxClient: ObservableObject {
         } catch is CancellationError {
             return
         } catch {
-            status = error.localizedDescription
+            status = Self.errorSummary(error, context: "Sit(x) device authorization")
         }
     }
 
@@ -142,7 +147,7 @@ final class SitxClient: ObservableObject {
             } catch let error as SitxError where error == .slowDown {
                 pollInterval += 5
             } catch {
-                status = error.localizedDescription
+                status = Self.errorSummary(error, context: "Sit(x) token exchange")
                 return
             }
         }
@@ -185,13 +190,29 @@ final class SitxClient: ObservableObject {
             request.httpMethod = "GET"
             request.setValue("Bearer \(accessToken ?? "")", forHTTPHeaderField: "Authorization")
             let (_, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw SitxError.accountVerificationFailed
+            guard let http = response as? HTTPURLResponse else {
+                status = "Authorized; profile check returned no HTTP response"
+                return
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                status = "Authorized; profile check HTTP \(http.statusCode)"
+                return
             }
             status = State.connected
         } catch {
-            status = error.localizedDescription
+            status = "Authorized; " + Self.errorSummary(error, context: "profile check")
         }
+    }
+
+    private static func errorSummary(_ error: Error, context: String) -> String {
+        if let sitxError = error as? SitxError {
+            return "\(context) failed: \(sitxError.localizedDescription)"
+        }
+        let nsError = error as NSError
+        if let urlError = error as? URLError {
+            return "\(context) network error \(urlError.code.rawValue)"
+        }
+        return "\(context) failed (\(nsError.domain) \(nsError.code))"
     }
 
     private func postJSON(host: String, path: String, body: [String: String]) async throws -> [String: Any] {

@@ -286,32 +286,35 @@ private struct SitxDeviceAPIView: View {
 
     var body: some View {
         List {
-            Section {
-                TextField("API Host", text: $settings.sitxApiHost)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button("Connect / Pair") {
-                    client.connect()
+            TextField("Sit(x) Host", text: $settings.sitxApiHost)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            HStack {
+                Button {
+                    client.refreshAuthorizationCode()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auth Code")
+                        Text(client.authorizationCode.isEmpty ? "Tap to refresh" : client.authorizationCode)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                LabeledContent("Authorization code", value: client.authorizationCode.isEmpty ? "Not issued" : client.authorizationCode)
                 if !client.verificationURL.isEmpty, let url = URL(string: client.verificationURL) {
-                    Link("Open authorization page", destination: url)
+                    Link(destination: url) {
+                        Image(systemName: "arrow.up.right.square")
+                    }
+                    .accessibilityLabel("Open authorization page")
                 }
             }
-            Section {
-                Button("Forget authorization", role: .destructive) {
-                    confirmForget = true
-                }
-                .disabled(client.authorizationCode.isEmpty && client.status == "Not connected")
-            }
-            Section("Status") {
-                Text(client.status)
-                    .fixedSize(horizontal: false, vertical: true)
+            LabeledContent("Status", value: client.status)
+            Button("Clear Sit(x)", role: .destructive) {
+                confirmForget = true
             }
         }
         .navigationTitle("Sit(x) Device API")
-        .confirmationDialog("Forget Sit(x) authorization?", isPresented: $confirmForget) {
-            Button("Forget authorization", role: .destructive) {
+        .confirmationDialog("Clear Sit(x)?", isPresented: $confirmForget) {
+            Button("Clear Sit(x)", role: .destructive) {
                 client.forgetAuthorization()
             }
         }

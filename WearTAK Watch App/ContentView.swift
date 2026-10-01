@@ -411,9 +411,14 @@ private struct ManualAlertView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        List(ManualAlertType.allCases) { type in
-            Button(type.rawValue) {
-                model.startEmergencyAlert(type: type)
+        List {
+            ForEach(ManualAlertType.allCases) { type in
+                Button(type.rawValue) {
+                    model.startEmergencyAlert(type: type)
+                    dismiss()
+                }
+            }
+            Button("Cancel", role: .cancel) {
                 dismiss()
             }
         }
