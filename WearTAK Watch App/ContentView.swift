@@ -175,19 +175,20 @@ private struct PhysiologyView: View {
 
     var body: some View {
         List {
-            Section("Heart rate") {
-                VStack(alignment: .leading, spacing: 4) {
-                    if let exertion = monitor.exertionPercent {
-                        Text("Exertion: \(exertion)%")
-                            .font(.headline)
-                    } else {
-                        Text("Exertion: Unavailable")
-                            .font(.headline)
-                    }
+            Section("Heart Rate") {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
                     if let heartRate = monitor.heartRate {
-                        Text("\(heartRate) BPM")
-                            .font(.title2)
+                        Text("\(heartRate)")
+                            .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        Text("BPM")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: "heart.fill")
+                            .foregroundStyle(.red)
                     }
+                }
+                VStack(alignment: .leading, spacing: 3) {
                     Text(monitor.status)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -196,6 +197,19 @@ private struct PhysiologyView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                }
+            }
+            Section("Exertion") {
+                if let exertion = monitor.exertionPercent {
+                    Gauge(value: Double(exertion), in: 0...100) {
+                        Text("Exertion")
+                    } currentValueLabel: {
+                        Text("\(exertion)%")
+                    }
+                    .gaugeStyle(.linearCapacity)
+                } else {
+                    Text("Unavailable")
+                        .foregroundStyle(.secondary)
                 }
             }
             Button {
@@ -218,6 +232,7 @@ private struct EnvironmentView: View {
             Section("Altitude") {
                 if let altitude = monitor.relativeAltitudeMeters {
                     Text(String(format: "%.1f m relative", altitude))
+                        .font(.caption)
                 } else {
                     Text("Unavailable")
                         .foregroundStyle(.secondary)
@@ -227,16 +242,12 @@ private struct EnvironmentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let pressure = monitor.pressureHpa {
                         Text(String(format: "%.1f hPa", pressure))
-                            .font(.title2)
+                            .font(.headline)
                     }
                     Text(monitor.status)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-            }
-            Section("Temperature") {
-                Text("Unavailable on Apple Watch")
-                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("Environment")
