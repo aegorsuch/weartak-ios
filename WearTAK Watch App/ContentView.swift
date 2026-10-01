@@ -33,10 +33,11 @@ struct ContentView: View {
                     }
 
                     NavigationLink {
-                        MarkerView(model: model)
+                        PointEditorView(model: model, coordinate: model.lastLocation?.coordinate)
                     } label: {
                         Label("Drop marker", systemImage: "mappin.and.ellipse")
                     }
+                    .disabled(model.lastLocation == nil)
 
                     if let activeAlertType = model.activeAlertType {
                         Button(role: .destructive) {
@@ -173,16 +174,31 @@ private struct TacticalMapView: View {
     @ObservedObject var model: WatchSessionModel
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var hasCentered = false
+    @State private var isPlacingPoint = false
+    @State private var pointDraft: MapPointDraft?
 
     var body: some View {
         VStack(spacing: 4) {
-            Map(position: $cameraPosition) {
-                if let coordinate = model.lastLocation?.coordinate {
-                    Marker("You", systemImage: "location.fill", coordinate: coordinate)
-                        .tint(.blue)
+            MapReader { proxy in
+                Map(position: $cameraPosition) {
+                    if let coordinate = model.lastLocation?.coordinate {
+                        Marker("You", systemImage: "location.fill", coordinate: coordinate)
+                            .tint(.blue)
+                    }
+                    ForEach(model.markers) { marker in
+                        Marker(marker.displayTitle, coordinate: marker.coordinate)
+                    }
+                    ForEach(model.incomingEntities) { entity in
+                        Marker(entity.id, systemImage: "person.fill", coordinate: entity.coordinate)
+                            .tint(entity.kind == .hostile ? .red : entity.kind == .friendly ? .blue : .yellow)
+                    }
                 }
-                ForEach(model.markers) { marker in
-                    Marker(marker.kind.rawValue, coordinate: marker.coordinate)
+                .onTapGesture { location in
+                    guard isPlacingPoint,
+                          let coordinate = proxy.convert(location, from: .local),
+                          CLLocationCoordinate2DIsValid(coordinate) else { return }
+                    isPlacingPoint = false
+                    pointDraft = MapPointDraft(coordinate: coordinate)
                 }
             }
             .onAppear(perform: centerOnce)
@@ -190,23 +206,52 @@ private struct TacticalMapView: View {
                 centerOnce()
             }
 
-            HStack {
+            HStack(spacing: 4) {
                 Button {
                     centerOnLocation()
                 } label: {
                     Image(systemName: "location.north.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .disabled(model.lastLocation == nil)
                 .accessibilityLabel("Recenter map")
 
                 NavigationLink {
-                    MarkerView(model: model)
+                    PointListView(model: model)
                 } label: {
-                    Label("Drop point", systemImage: "mappin.and.ellipse")
+                    Image(systemName: "list.bullet")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .accessibilityLabel("Points")
+
+                Button {
+                    isPlacingPoint.toggle()
+                } label: {
+                    Image(systemName: "mappin.and.ellipse")
+                        .foregroundStyle(isPlacingPoint ? .orange : .primary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .accessibilityLabel("Place point on map")
+                .help("Tap the map to place a point")
+
+                NavigationLink {
+                    PointEditorView(model: model, coordinate: model.lastLocation?.coordinate)
+                } label: {
+                    Image(systemName: "location.circle")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .disabled(model.lastLocation == nil)
+                .accessibilityLabel("Drop point at GPS location")
             }
+            .buttonStyle(.plain)
+            .frame(height: 44)
         }
         .navigationTitle("Map")
+        .sheet(item: $pointDraft) { draft in
+            NavigationStack {
+                PointEditorView(model: model, coordinate: draft.coordinate)
+            }
+        }
     }
 
     private func centerOnce() {
@@ -224,6 +269,11 @@ private struct TacticalMapView: View {
     }
 }
 
+private struct MapPointDraft: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+}
+
 private struct ManualAlertView: View {
     @ObservedObject var model: WatchSessionModel
     @Environment(\.dismiss) private var dismiss
@@ -239,38 +289,111 @@ private struct ManualAlertView: View {
     }
 }
 
-private struct MarkerView: View {
+private struct PointListView: View {
     @ObservedObject var model: WatchSessionModel
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         List {
-            Section("Type") {
-                ForEach(MarkerKind.allCases) { kind in
-                    Button {
-                        model.selectedMarkerKind = kind
+            Section("Dropped points") {
+                if model.markers.isEmpty {
+                    Text("No points")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.markers) { marker in
+                    NavigationLink {
+                        PointEditorView(model: model, marker: marker)
                     } label: {
-                        HStack {
-                            Text(kind.rawValue)
-                            Spacer()
-                            if model.selectedMarkerKind == kind {
-                                Image(systemName: "checkmark")
-                            }
+                        VStack(alignment: .leading) {
+                            Text(marker.displayTitle)
+                            Text(marker.kind.rawValue)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
             }
+            if !model.incomingEntities.isEmpty {
+                Section("Incoming") {
+                    ForEach(model.incomingEntities) { entity in
+                        VStack(alignment: .leading) {
+                            Text(entity.id)
+                            Text(entity.coordinate.formatted)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Points")
+    }
+}
+
+private struct PointEditorView: View {
+    @ObservedObject var model: WatchSessionModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var kind: MarkerKind
+    @State private var title: String
+    @State private var remark: String
+    @State private var confirmDelete = false
+
+    private let markerID: UUID?
+    private let coordinate: CLLocationCoordinate2D?
+
+    init(model: WatchSessionModel, marker: WatchMarker? = nil, coordinate: CLLocationCoordinate2D? = nil) {
+        self.model = model
+        markerID = marker?.id
+        self.coordinate = marker?.coordinate ?? coordinate
+        _kind = State(initialValue: marker?.kind ?? model.selectedMarkerKind)
+        _title = State(initialValue: marker?.title ?? "")
+        _remark = State(initialValue: marker?.remark ?? "")
+    }
+
+    var body: some View {
+        List {
+            if let coordinate {
+                Section("Location") {
+                    Text(coordinate.formatted)
+                        .font(.caption2)
+                }
+            }
+            Section("Details") {
+                Picker("Type", selection: $kind) {
+                    ForEach(MarkerKind.allCases) { option in
+                        Text(option.rawValue).tag(option)
+                    }
+                }
+                TextField("Title", text: $title)
+                TextField("Remark", text: $remark)
+            }
 
             Section {
-                Button("Drop point") {
-                    if model.dropMarker() {
+                Button(markerID == nil ? "Drop point" : "Save point") {
+                    if let markerID {
+                        model.updateMarker(id: markerID, kind: kind, title: title, remark: remark)
+                        dismiss()
+                    } else if let coordinate,
+                              model.addMarker(at: coordinate, kind: kind, title: title, remark: remark) {
                         dismiss()
                     }
                 }
-                .disabled(model.lastLocation == nil)
+                .disabled(coordinate == nil)
+                if markerID != nil {
+                    Button("Delete point", role: .destructive) {
+                        confirmDelete = true
+                    }
+                }
             }
         }
-        .navigationTitle("Marker")
+        .navigationTitle(markerID == nil ? "Drop Point" : "Edit Point")
+        .confirmationDialog("Delete point?", isPresented: $confirmDelete) {
+            Button("Delete point", role: .destructive) {
+                if let markerID {
+                    model.deleteMarker(id: markerID)
+                    dismiss()
+                }
+            }
+        }
     }
 }
 

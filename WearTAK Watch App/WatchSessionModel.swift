@@ -29,13 +29,37 @@ enum ManualAlertType: String, CaseIterable, Identifiable {
 
 struct WatchMarker: Identifiable, Codable {
     let id: UUID
-    let kind: MarkerKind
+    var kind: MarkerKind
     let latitude: Double
     let longitude: Double
     let createdAt: Date
+    var title: String?
+    var remark: String?
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    var displayTitle: String {
+        title.flatMap { $0.isEmpty ? nil : $0 } ?? kind.rawValue
+    }
+}
+
+struct IncomingMapEntity: Identifiable {
+    let id: String
+    let latitude: Double
+    let longitude: Double
+    let type: String
+    let lastSeen: Date
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    var kind: MarkerKind {
+        if type.contains("a-h-") { return .hostile }
+        if type.contains("a-f-") { return .friendly }
+        return .unknown
     }
 }
 
@@ -52,7 +76,9 @@ protocol TAKTransport {
     func connect() async throws
     func sendPLI(coordinate: CLLocationCoordinate2D) async throws
     func sendMarker(_ marker: WatchMarker) async throws
+    func deleteMarker(uid: String) async throws
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws
+    func incomingEntities() -> AsyncStream<EntityRelayPayload>
 }
 
 enum TAKTransportError: Error {
@@ -63,7 +89,11 @@ struct UnconfiguredTAKTransport: TAKTransport {
     func connect() async throws { throw TAKTransportError.notConfigured }
     func sendPLI(coordinate: CLLocationCoordinate2D) async throws { throw TAKTransportError.notConfigured }
     func sendMarker(_ marker: WatchMarker) async throws { throw TAKTransportError.notConfigured }
+    func deleteMarker(uid: String) async throws { throw TAKTransportError.notConfigured }
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws { throw TAKTransportError.notConfigured }
+    func incomingEntities() -> AsyncStream<EntityRelayPayload> {
+        AsyncStream { continuation in continuation.finish() }
+    }
 }
 
 @MainActor
@@ -73,6 +103,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var connectionState: ConnectionState = .disconnected
     @Published private(set) var lastLocation: CLLocation?
     @Published private(set) var markers: [WatchMarker] = []
+    @Published private(set) var incomingEntities: [IncomingMapEntity] = []
     @Published private(set) var activeAlertType: ManualAlertType?
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
     @Published private(set) var automaticAlertDeliveryFailed = false
@@ -80,6 +111,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     private let locationManager = CLLocationManager()
     private let transport: TAKTransport
+    private var incomingEntityTask: Task<Void, Never>?
+    private var incomingPruneTimer: Timer?
     private var automaticAlertTask: Task<Void, Never>?
     private var deliveredAutomaticAlert: AutomaticAlertCategory?
 
@@ -91,6 +124,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        incomingPruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.pruneIncomingEntities() }
+        }
     }
 
     func requestLocation() {
@@ -112,6 +148,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
             do {
                 try await transport.connect()
                 connectionState = .connected
+                incomingEntityTask?.cancel()
+                incomingEntityTask = Task {
+                    for await payload in transport.incomingEntities() {
+                        guard !Task.isCancelled else { break }
+                        receiveEntity(payload)
+                    }
+                }
                 if let coordinate = lastLocation?.coordinate {
                     try await transport.sendPLI(coordinate: coordinate)
                 }
@@ -123,21 +166,77 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func dropMarker() -> Bool {
         guard let coordinate = lastLocation?.coordinate else { return false }
+        return addMarker(at: coordinate, kind: selectedMarkerKind, title: "", remark: "")
+    }
+
+    @discardableResult
+    func addMarker(at coordinate: CLLocationCoordinate2D, kind: MarkerKind, title: String, remark: String) -> Bool {
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return false }
         let marker = WatchMarker(
             id: UUID(),
-            kind: selectedMarkerKind,
+            kind: kind,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
-            createdAt: Date()
+            createdAt: Date(),
+            title: title,
+            remark: remark
         )
         markers.insert(marker, at: 0)
-        if let data = try? JSONEncoder().encode(markers) {
-            UserDefaults.standard.set(data, forKey: Self.markerStorageKey)
-        }
+        saveMarkers()
         Task {
             try? await transport.sendMarker(marker)
         }
         return true
+    }
+
+    func updateMarker(id: UUID, kind: MarkerKind, title: String, remark: String) {
+        guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        markers[index].kind = kind
+        markers[index].title = title
+        markers[index].remark = remark
+        let marker = markers[index]
+        saveMarkers()
+        Task {
+            try? await transport.sendMarker(marker)
+        }
+    }
+
+    func deleteMarker(id: UUID) {
+        guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        markers.remove(at: index)
+        saveMarkers()
+        Task {
+            try? await transport.deleteMarker(uid: id.uuidString)
+        }
+    }
+
+    func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date()) {
+        guard !payload.uid.isEmpty,
+              CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
+        let entity = IncomingMapEntity(
+            id: payload.uid, latitude: payload.lat, longitude: payload.lon,
+            type: payload.type, lastSeen: now
+        )
+        if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
+            incomingEntities[index] = entity
+        } else {
+            incomingEntities.append(entity)
+        }
+        pruneIncomingEntities(now: now)
+        if incomingEntities.count > 50 {
+            incomingEntities.sort { $0.lastSeen > $1.lastSeen }
+            incomingEntities.removeLast(incomingEntities.count - 50)
+        }
+    }
+
+    func pruneIncomingEntities(now: Date = Date()) {
+        incomingEntities.removeAll { now.timeIntervalSince($0.lastSeen) > 300 }
+    }
+
+    private func saveMarkers() {
+        if let data = try? JSONEncoder().encode(markers) {
+            UserDefaults.standard.set(data, forKey: Self.markerStorageKey)
+        }
     }
 
     func startEmergencyAlert(type: ManualAlertType) {
