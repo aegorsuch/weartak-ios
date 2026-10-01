@@ -5,6 +5,8 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var physiology: PhysiologyMonitor
+    @ObservedObject var environment: EnvironmentalMonitor
+    @ObservedObject var settings: AppSettings
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -24,6 +26,12 @@ struct ContentView: View {
                         PhysiologyView(monitor: physiology)
                     } label: {
                         Label("Physiology", systemImage: "heart.text.square")
+                    }
+
+                    NavigationLink {
+                        EnvironmentView(monitor: environment)
+                    } label: {
+                        Label("Environment", systemImage: "barometer")
                     }
 
                     NavigationLink {
@@ -57,6 +65,12 @@ struct ContentView: View {
                             Label("Manual Alert", systemImage: "exclamationmark.triangle.fill")
                         }
                     }
+
+                    NavigationLink {
+                        SettingsView(model: model, settings: settings)
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
                 }
             }
             .navigationTitle("WearTAK")
@@ -68,9 +82,21 @@ struct ContentView: View {
         .onChange(of: physiology.activeAutomaticAlert) { _, category in
             model.updateAutomaticAlert(category)
         }
+        .onChange(of: environment.activePressureCategory) { oldValue, newValue in
+            if let oldValue, oldValue != newValue {
+                model.setEnvironmentalAlert(oldValue, active: false)
+            }
+            if let newValue {
+                model.setEnvironmentalAlert(newValue, active: true)
+            }
+        }
+        .onChange(of: environment.immersionActive) { _, active in
+            model.setEnvironmentalAlert(.immersion, active: active)
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 physiology.stopMonitoring()
+                environment.stopMonitoring()
             }
         }
     }
@@ -167,6 +193,47 @@ private struct PhysiologyView: View {
         }
         .navigationTitle("Physiology")
         .task { await monitor.refresh() }
+    }
+}
+
+private struct EnvironmentView: View {
+    @ObservedObject var monitor: EnvironmentalMonitor
+
+    var body: some View {
+        List {
+            Section("Pressure") {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let pressure = monitor.pressureHpa {
+                        Text(String(format: "%.1f hPa", pressure))
+                            .font(.title2)
+                    }
+                    Text(monitor.status)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section("Automatic alerts") {
+                Toggle("Monitor", isOn: Binding(
+                    get: { monitor.isMonitoring },
+                    set: { enabled in
+                        if enabled {
+                            monitor.startMonitoring()
+                        } else {
+                            monitor.stopMonitoring()
+                        }
+                    }
+                ))
+                if let category = monitor.activePressureCategory {
+                    Text("ALERT: \(category.rawValue)")
+                        .foregroundStyle(.red)
+                }
+                if monitor.immersionActive {
+                    Text("ALERT: Immersion")
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle("Environment")
     }
 }
 
@@ -288,17 +355,22 @@ private struct BloodhoundView: View {
     var body: some View {
         VStack(spacing: 8) {
             if let target = model.bloodhoundTarget {
-                if let location = model.lastLocation, let reading = model.bloodhoundReading(from: location) {
+                if let location = model.lastLocation,
+                   let reading = model.bloodhoundCompassReading(from: location) {
                     Image(systemName: "location.north.fill")
                         .font(.largeTitle)
-                        .rotationEffect(.degrees(reading.bearingDegrees))
+                        .rotationEffect(.degrees(reading.relativeBearingDegrees))
+                        .animation(.linear(duration: 0.2), value: reading.relativeBearingDegrees)
                     Text(target.displayTitle)
                         .font(.caption)
                         .multilineTextAlignment(.center)
                     Text("Range: \(Int(reading.rangeMeters)) m")
                         .font(.caption2)
-                    Text("Bearing: \(Int(reading.bearingDegrees)) deg")
-                        .font(.caption2)
+                    if !reading.isCompassRelative {
+                        Text("Compass unavailable")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
                 } else {
                     Text("Location unavailable")
                         .foregroundStyle(.secondary)
@@ -311,6 +383,8 @@ private struct BloodhoundView: View {
             }
         }
         .navigationTitle("Navigation")
+        .onAppear { model.startHeadingUpdates() }
+        .onDisappear { model.stopHeadingUpdates() }
     }
 }
 

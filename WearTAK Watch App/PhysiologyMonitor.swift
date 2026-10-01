@@ -23,6 +23,11 @@ final class PhysiologyMonitor: ObservableObject {
     private var lastProcessedSampleID: UUID?
     private var monitoringGeneration = 0
     private var age: Int?
+    private let settings: AppSettings
+
+    init(settings: AppSettings) {
+        self.settings = settings
+    }
 
     func refresh() async {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -135,6 +140,12 @@ final class PhysiologyMonitor: ObservableObject {
     }
 
     private func evaluate(sample: HKQuantitySample, beatsPerMinute: Double) async {
+        guard settings.physiologicalAlertsEnabled else {
+            evaluator.reset()
+            activeAutomaticAlert = nil
+            warningCategory = nil
+            return
+        }
         guard (0...60).contains(Date().timeIntervalSince(sample.endDate)) else {
             evaluator.reset()
             activeAutomaticAlert = nil
@@ -151,7 +162,13 @@ final class PhysiologyMonitor: ObservableObject {
             }
         }
         guard automaticEnabled else { return }
-        evaluator.evaluate(heartRate: beatsPerMinute, at: sample.endDate, movement: movement, age: age)
+        let thresholds = AutomaticAlertThresholds(
+            highResting: Double(settings.highRestingHeartRate),
+            lowResting: Double(settings.lowRestingHeartRate),
+            exertionWarningFraction: Double(settings.exertionWarningThreshold) / 100,
+            exertionAlertFraction: Double(settings.exertionAlertThreshold) / 100
+        )
+        evaluator.evaluate(heartRate: beatsPerMinute, at: sample.endDate, movement: movement, age: age, thresholds: thresholds)
         activeAutomaticAlert = evaluator.activeCategory
         warningCategory = evaluator.warningCategory
     }

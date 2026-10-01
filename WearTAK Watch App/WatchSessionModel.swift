@@ -115,20 +115,28 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var markers: [WatchMarker] = []
     @Published private(set) var incomingEntities: [IncomingMapEntity] = []
     @Published private(set) var bloodhoundTargetID: UUID?
+    @Published private(set) var headingDegrees: Double?
     @Published private(set) var activeAlertType: ManualAlertType?
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
+    @Published private(set) var activeEnvironmentalAlerts: Set<EnvironmentalAlertCategory> = []
     @Published private(set) var automaticAlertDeliveryFailed = false
     @Published var selectedMarkerKind: MarkerKind = .unknown
 
     private let locationManager = CLLocationManager()
     private let transport: TAKTransport
+    private let settings: AppSettings
     private var incomingEntityTask: Task<Void, Never>?
     private var incomingPruneTimer: Timer?
     private var automaticAlertTask: Task<Void, Never>?
     private var deliveredAutomaticAlert: AutomaticAlertCategory?
+    private var environmentalAlertTasks: [EnvironmentalAlertCategory: Task<Void, Never>] = [:]
+    private var deliveredEnvironmentalAlerts: Set<EnvironmentalAlertCategory> = []
+    private var bloodhoundProximityNotified = false
+    private var isUpdatingHeading = false
 
-    init(transport: TAKTransport? = nil) {
+    init(transport: TAKTransport? = nil, settings: AppSettings) {
         self.transport = transport ?? UnconfiguredTAKTransport()
+        self.settings = settings
         super.init()
         if let data = UserDefaults.standard.data(forKey: Self.markerStorageKey) {
             markers = (try? JSONDecoder().decode([WatchMarker].self, from: data)) ?? []
@@ -151,6 +159,19 @@ final class WatchSessionModel: NSObject, ObservableObject {
         @unknown default:
             break
         }
+    }
+
+    func startHeadingUpdates() {
+        guard CLLocationManager.headingAvailable(), !isUpdatingHeading else { return }
+        isUpdatingHeading = true
+        locationManager.startUpdatingHeading()
+    }
+
+    func stopHeadingUpdates() {
+        guard isUpdatingHeading else { return }
+        isUpdatingHeading = false
+        locationManager.stopUpdatingHeading()
+        headingDegrees = nil
     }
 
     func connect() {
@@ -238,6 +259,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func toggleBloodhound(id: UUID) {
         bloodhoundTargetID = (bloodhoundTargetID == id) ? nil : id
+        bloodhoundProximityNotified = false
     }
 
     var bloodhoundTarget: WatchMarker? {
@@ -250,6 +272,16 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let targetLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
         let bearing = Self.bearingDegrees(from: location.coordinate, to: target.coordinate)
         return (bearing, location.distance(from: targetLocation))
+    }
+
+    /// Arrow rotation relative to where the watch currently points, so it spins like a real compass.
+    func bloodhoundCompassReading(from location: CLLocation) -> (relativeBearingDegrees: Double, rangeMeters: Double, isCompassRelative: Bool)? {
+        guard let reading = bloodhoundReading(from: location) else { return nil }
+        guard let headingDegrees else {
+            return (reading.bearingDegrees, reading.rangeMeters, false)
+        }
+        let relative = (reading.bearingDegrees - headingDegrees + 360).truncatingRemainder(dividingBy: 360)
+        return (relative, reading.rangeMeters, true)
     }
 
     private static func bearingDegrees(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) -> Double {
@@ -340,6 +372,39 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
         }
     }
+
+    /// Mirrors updateAutomaticAlert but tracks each environmental category independently,
+    /// since pressure and immersion alerts can be active at the same time.
+    func setEnvironmentalAlert(_ category: EnvironmentalAlertCategory, active: Bool) {
+        let alreadyActive = activeEnvironmentalAlerts.contains(category)
+        guard active != alreadyActive else { return }
+        if active {
+            activeEnvironmentalAlerts.insert(category)
+            WKInterfaceDevice.current().play(.notification)
+        } else {
+            activeEnvironmentalAlerts.remove(category)
+        }
+        if active && connectionState != .connected {
+            automaticAlertDeliveryFailed = true
+        }
+
+        let pending = environmentalAlertTasks[category]
+        environmentalAlertTasks[category] = Task {
+            await pending?.value
+            do {
+                if active {
+                    try await transport.sendEmergencyAlert(state: .alert, type: category.rawValue)
+                    deliveredEnvironmentalAlerts.insert(category)
+                    automaticAlertDeliveryFailed = false
+                } else if deliveredEnvironmentalAlerts.contains(category) {
+                    try await transport.sendEmergencyAlert(state: .cancel, type: category.rawValue)
+                    deliveredEnvironmentalAlerts.remove(category)
+                }
+            } catch {
+                automaticAlertDeliveryFailed = true
+            }
+        }
+    }
 }
 
 extension WatchSessionModel: CLLocationManagerDelegate {
@@ -352,13 +417,37 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         lastLocation = location
+        checkBloodhoundProximity(at: location)
         guard connectionState == .connected else { return }
         Task {
             try? await transport.sendPLI(coordinate: location.coordinate)
         }
     }
 
+    private func checkBloodhoundProximity(at location: CLLocation) {
+        guard settings.bloodhoundProximityVibrationEnabled,
+              let reading = bloodhoundReading(from: location) else {
+            bloodhoundProximityNotified = false
+            return
+        }
+        guard reading.rangeMeters <= Double(settings.bloodhoundProximityRadius) else {
+            bloodhoundProximityNotified = false
+            return
+        }
+        guard !bloodhoundProximityNotified else { return }
+        bloodhoundProximityNotified = true
+        WKInterfaceDevice.current().play(.notification)
+    }
+
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         lastLocation = nil
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else {
+            headingDegrees = nil
+            return
+        }
+        headingDegrees = newHeading.magneticHeading
     }
 }
