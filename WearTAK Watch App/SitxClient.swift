@@ -30,6 +30,18 @@ final class SitxClient: ObservableObject {
     @Published private(set) var verificationURL = ""
     @Published private(set) var status = State.unconfigured
 
+    var menuLabel: String {
+        if status == State.connected || status == "Authorized; select Connect / Pair to verify" {
+            return "Sit(x) Enabled"
+        }
+        let lowercasedStatus = status.lowercased()
+        if lowercasedStatus.contains("error") || lowercasedStatus.contains("failed") ||
+            lowercasedStatus.contains("http ") || lowercasedStatus.contains("expired") {
+            return "Sit(x) Error"
+        }
+        return "Sit(x) Disabled"
+    }
+
     init(settings: AppSettings, session: URLSession = .shared) {
         self.settings = settings
         self.session = session

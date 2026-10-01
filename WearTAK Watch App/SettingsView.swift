@@ -248,7 +248,7 @@ private struct NetworkPreferencesView: View {
             NavigationLink {
                 SitxDeviceAPIView(settings: settings, client: sitxClient)
             } label: {
-                Text("Sit(x) Device API")
+                Text(sitxClient.menuLabel)
             }
         }
         .navigationTitle("Network Preferences")
