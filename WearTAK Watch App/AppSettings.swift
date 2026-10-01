@@ -25,6 +25,7 @@ final class AppSettings: ObservableObject {
         static let lowPressureAlertsEnabled = "WearTAK.lowPressureAlertsEnabled"
         static let highPressureAlertsEnabled = "WearTAK.highPressureAlertsEnabled"
         static let immersionAlertsEnabled = "WearTAK.immersionAlertsEnabled"
+        static let batteryAlertsEnabled = "WearTAK.batteryAlertsEnabled"
         static let physiologicalAlertsEnabled = "WearTAK.physiologicalAlertsEnabled"
         static let bloodhoundProximityRadius = "WearTAK.bloodhoundProximityRadius"
         static let bloodhoundProximityVibrationEnabled = "WearTAK.bloodhoundProximityVibrationEnabled"
@@ -127,6 +128,10 @@ final class AppSettings: ObservableObject {
 
     @Published var immersionAlertsEnabled: Bool {
         didSet { defaults.set(immersionAlertsEnabled, forKey: Keys.immersionAlertsEnabled) }
+    }
+
+    @Published var batteryAlertsEnabled: Bool {
+        didSet { defaults.set(batteryAlertsEnabled, forKey: Keys.batteryAlertsEnabled) }
     }
 
     @Published var physiologicalAlertsEnabled: Bool {
@@ -236,6 +241,7 @@ final class AppSettings: ObservableObject {
         lowPressureAlertsEnabled = defaults.object(forKey: Keys.lowPressureAlertsEnabled) as? Bool ?? true
         highPressureAlertsEnabled = defaults.object(forKey: Keys.highPressureAlertsEnabled) as? Bool ?? true
         immersionAlertsEnabled = defaults.object(forKey: Keys.immersionAlertsEnabled) as? Bool ?? true
+        batteryAlertsEnabled = defaults.object(forKey: Keys.batteryAlertsEnabled) as? Bool ?? false
         physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? true
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true

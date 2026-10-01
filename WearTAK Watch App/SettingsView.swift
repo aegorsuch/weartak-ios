@@ -334,6 +334,14 @@ private struct AlertingPreferencesView: View {
             NavigationLink("Environmental Alerts") {
                 EnvironmentalAlertsView(settings: settings)
             }
+            Toggle(isOn: $settings.batteryAlertsEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Battery Alerts")
+                    Text(settings.batteryAlertsEnabled ? "On (50%, 25%)" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .navigationTitle("Alerting Preferences")
     }
