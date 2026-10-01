@@ -2,8 +2,9 @@ import Combine
 import Foundation
 
 enum RelayProvider: String, CaseIterable, Identifiable {
+    case notSet = "N/A"
     case itak = "iTAK"
-    case takAwareRelay = "TAK Aware Relay"
+    case takAwareRelay = "TAK Aware"
 
     var id: Self { self }
 }
@@ -219,7 +220,12 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
-        relayProvider = RelayProvider(rawValue: defaults.string(forKey: Keys.relayProvider) ?? "iTAK") ?? .itak
+        let storedRelayProvider = defaults.string(forKey: Keys.relayProvider)
+        if storedRelayProvider == "TAK Aware Relay" {
+            relayProvider = .takAwareRelay
+        } else {
+            relayProvider = RelayProvider(rawValue: storedRelayProvider ?? "N/A") ?? .notSet
+        }
         sitxApiHost = defaults.string(forKey: Keys.sitxApiHost) ?? ""
         highRestingHeartRate = defaults.object(forKey: Keys.highRestingHeartRate) as? Int ?? 120
         lowRestingHeartRate = defaults.object(forKey: Keys.lowRestingHeartRate) as? Int ?? 40

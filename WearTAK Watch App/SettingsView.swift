@@ -243,7 +243,7 @@ private struct NetworkPreferencesView: View {
             NavigationLink {
                 RelayProviderView(settings: settings)
             } label: {
-                LabeledContent("Relay", value: settings.relayProvider.rawValue)
+                Text("TAK Relay (\(settings.relayProvider.rawValue))")
             }
             NavigationLink {
                 SitxDeviceAPIView(settings: settings, client: sitxClient)
@@ -275,7 +275,7 @@ private struct RelayProviderView: View {
                 }
             }
         }
-        .navigationTitle("Relay")
+        .navigationTitle("TAK Relay")
     }
 }
 
