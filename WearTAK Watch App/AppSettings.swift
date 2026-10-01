@@ -1,11 +1,20 @@
 import Combine
 import Foundation
 
+enum RelayProvider: String, CaseIterable, Identifiable {
+    case itak = "iTAK"
+    case takAwareRelay = "TAK Aware Relay"
+
+    var id: Self { self }
+}
+
 /// Persisted preferences mirroring Garmin's Device/Network/Alerting/Tool Preferences menus.
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let watchLabel = "WearTAK.watchLabel"
+        static let relayProvider = "WearTAK.relayProvider"
+        static let sitxApiHost = "WearTAK.sitxApiHost"
         static let highRestingHeartRate = "WearTAK.highRestingHeartRate"
         static let lowRestingHeartRate = "WearTAK.lowRestingHeartRate"
         static let exertionWarningThreshold = "WearTAK.exertionWarningThreshold"
@@ -40,6 +49,14 @@ final class AppSettings: ObservableObject {
 
     @Published var watchLabel: String {
         didSet { defaults.set(watchLabel, forKey: Keys.watchLabel) }
+    }
+
+    @Published var relayProvider: RelayProvider {
+        didSet { defaults.set(relayProvider.rawValue, forKey: Keys.relayProvider) }
+    }
+
+    @Published var sitxApiHost: String {
+        didSet { defaults.set(sitxApiHost, forKey: Keys.sitxApiHost) }
     }
 
     @Published var highRestingHeartRate: Int {
@@ -202,6 +219,8 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
+        relayProvider = RelayProvider(rawValue: defaults.string(forKey: Keys.relayProvider) ?? "iTAK") ?? .itak
+        sitxApiHost = defaults.string(forKey: Keys.sitxApiHost) ?? ""
         highRestingHeartRate = defaults.object(forKey: Keys.highRestingHeartRate) as? Int ?? 120
         lowRestingHeartRate = defaults.object(forKey: Keys.lowRestingHeartRate) as? Int ?? 40
         exertionWarningThreshold = defaults.object(forKey: Keys.exertionWarningThreshold) as? Int ?? 80

@@ -3,6 +3,13 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
+    @StateObject private var sitxClient: SitxClient
+
+    init(model: WatchSessionModel, settings: AppSettings) {
+        self.model = model
+        self.settings = settings
+        _sitxClient = StateObject(wrappedValue: SitxClient(settings: settings))
+    }
 
     var body: some View {
         List {
@@ -10,7 +17,7 @@ struct SettingsView: View {
                 DevicePreferencesView(settings: settings)
             }
             NavigationLink("Network Preferences") {
-                NetworkPreferencesView(model: model, settings: settings)
+                NetworkPreferencesView(model: model, settings: settings, sitxClient: sitxClient)
             }
             NavigationLink("Alerting Preferences") {
                 AlertingPreferencesView(settings: settings)
@@ -229,17 +236,85 @@ private struct GaitTrackingView: View {
 private struct NetworkPreferencesView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject var sitxClient: SitxClient
+
+    var body: some View {
+        List {
+            NavigationLink {
+                RelayProviderView(settings: settings)
+            } label: {
+                LabeledContent("Relay", value: settings.relayProvider.rawValue)
+            }
+            NavigationLink {
+                SitxDeviceAPIView(settings: settings, client: sitxClient)
+            } label: {
+                Text("Sit(x) Device API")
+            }
+            LabeledContent("Relay Status", value: model.connectionState.rawValue)
+        }
+        .navigationTitle("Network Preferences")
+    }
+}
+
+private struct RelayProviderView: View {
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List(RelayProvider.allCases) { provider in
+            Button {
+                settings.relayProvider = provider
+                dismiss()
+            } label: {
+                HStack {
+                    Text(provider.rawValue)
+                    Spacer()
+                    if settings.relayProvider == provider {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle("Relay")
+    }
+}
+
+private struct SitxDeviceAPIView: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var client: SitxClient
+    @State private var confirmForget = false
 
     var body: some View {
         List {
             Section {
-                TextField("Watch label", text: $settings.watchLabel)
+                TextField("API Host", text: $settings.sitxApiHost)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Connect / Pair") {
+                    client.connect()
+                }
+                LabeledContent("Authorization code", value: client.authorizationCode.isEmpty ? "Not issued" : client.authorizationCode)
+                if !client.verificationURL.isEmpty, let url = URL(string: client.verificationURL) {
+                    Link("Open authorization page", destination: url)
+                }
             }
             Section {
-                LabeledContent("ATAK Connect", value: model.connectionState.rawValue)
+                Button("Forget authorization", role: .destructive) {
+                    confirmForget = true
+                }
+                .disabled(client.authorizationCode.isEmpty && client.status == "Not connected")
+            }
+            Section("Status") {
+                Text(client.status)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .navigationTitle("Network Preferences")
+        .navigationTitle("Sit(x) Device API")
+        .confirmationDialog("Forget Sit(x) authorization?", isPresented: $confirmForget) {
+            Button("Forget authorization", role: .destructive) {
+                client.forgetAuthorization()
+            }
+        }
     }
 }
 
