@@ -14,6 +14,7 @@ enum RelayProvider: String, CaseIterable, Identifiable {
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let watchLabel = "WearTAK.watchLabel"
+        static let chatEnabled = "WearTAK.chatEnabled"
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
         static let highRestingHeartRate = "WearTAK.highRestingHeartRate"
@@ -35,6 +36,7 @@ final class AppSettings: ObservableObject {
         static let physiologicalAlertsEnabled = "WearTAK.physiologicalAlertsEnabled"
         static let bloodhoundProximityRadius = "WearTAK.bloodhoundProximityRadius"
         static let bloodhoundProximityVibrationEnabled = "WearTAK.bloodhoundProximityVibrationEnabled"
+        static let bloodhoundProximityIntensity = "WearTAK.bloodhoundProximityIntensity"
         static let birthYear = "WearTAK.birthYear"
         static let heightInches = "WearTAK.heightInches"
         static let weightPounds = "WearTAK.weightPounds"
@@ -52,11 +54,16 @@ final class AppSettings: ObservableObject {
     static let bloodTypeOptions = ["Unknown", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
     static let allergyOptions = ["N/A", "Antibiotics", "Anti-Inflammatory (Ibuprofen)", "Antiseizure", "Aspirin", "Insulin", "Muscle Relaxers", "Sulfa Drugs"]
     static let userTypeOptions = ["N/A", "Child", "Coalition Civilian", "Coalition Military", "Non-Coalition Civilian", "Non-Coalition Military", "Opposing Force Detainee"]
+    static let bloodhoundProximityIntensityOptions = ["Single Burst", "Triple Burst", "Until In Position"]
 
     private let defaults: UserDefaults
 
     @Published var watchLabel: String {
         didSet { defaults.set(watchLabel, forKey: Keys.watchLabel) }
+    }
+
+    @Published var chatEnabled: Bool {
+        didSet { defaults.set(chatEnabled, forKey: Keys.chatEnabled) }
     }
 
     @Published var relayProvider: RelayProvider {
@@ -165,7 +172,7 @@ final class AppSettings: ObservableObject {
 
     @Published var highPressureThreshold: Int {
         didSet {
-            let clamped = min(max(highPressureThreshold, 1000), 3000)
+            let clamped = min(max(highPressureThreshold, 1000), 1100)
             guard clamped == highPressureThreshold else { highPressureThreshold = clamped; return }
             guard highPressureThreshold >= lowPressureThreshold else {
                 highPressureThreshold = lowPressureThreshold + 25
@@ -187,6 +194,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(immersionAlertsEnabled, forKey: Keys.immersionAlertsEnabled) }
     }
 
+    var environmentalAlertsEnabled: Bool {
+        lowPressureAlertsEnabled || highPressureAlertsEnabled || immersionAlertsEnabled
+    }
+
     @Published var batteryAlertsEnabled: Bool {
         didSet { defaults.set(batteryAlertsEnabled, forKey: Keys.batteryAlertsEnabled) }
     }
@@ -205,6 +216,10 @@ final class AppSettings: ObservableObject {
 
     @Published var bloodhoundProximityVibrationEnabled: Bool {
         didSet { defaults.set(bloodhoundProximityVibrationEnabled, forKey: Keys.bloodhoundProximityVibrationEnabled) }
+    }
+
+    @Published var bloodhoundProximityIntensity: String {
+        didSet { defaults.set(bloodhoundProximityIntensity, forKey: Keys.bloodhoundProximityIntensity) }
     }
 
     @Published var birthYear: Int {
@@ -282,6 +297,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
+        chatEnabled = defaults.object(forKey: Keys.chatEnabled) as? Bool ?? true
         let storedRelayProvider = defaults.string(forKey: Keys.relayProvider)
         if storedRelayProvider == "TAK Aware Relay" {
             relayProvider = .takAwareRelay
@@ -300,14 +316,20 @@ final class AppSettings: ObservableObject {
         exertionAlertThreshold = defaults.object(forKey: Keys.exertionAlertThreshold) as? Int ?? 90
         exertionAlertLengthSeconds = defaults.object(forKey: Keys.exertionAlertLengthSeconds) as? Int ?? 120
         lowPressureThreshold = defaults.object(forKey: Keys.lowPressureThreshold) as? Int ?? 950
-        highPressureThreshold = defaults.object(forKey: Keys.highPressureThreshold) as? Int ?? 2000
-        lowPressureAlertsEnabled = defaults.object(forKey: Keys.lowPressureAlertsEnabled) as? Bool ?? true
-        highPressureAlertsEnabled = defaults.object(forKey: Keys.highPressureAlertsEnabled) as? Bool ?? true
-        immersionAlertsEnabled = defaults.object(forKey: Keys.immersionAlertsEnabled) as? Bool ?? true
+        let storedHighPressureThreshold = defaults.object(forKey: Keys.highPressureThreshold) as? Int
+        if let storedHighPressureThreshold, storedHighPressureThreshold != 2000 {
+            highPressureThreshold = min(max(storedHighPressureThreshold, 1000), 1100)
+        } else {
+            highPressureThreshold = 1050
+        }
+        lowPressureAlertsEnabled = defaults.object(forKey: Keys.lowPressureAlertsEnabled) as? Bool ?? false
+        highPressureAlertsEnabled = defaults.object(forKey: Keys.highPressureAlertsEnabled) as? Bool ?? false
+        immersionAlertsEnabled = defaults.object(forKey: Keys.immersionAlertsEnabled) as? Bool ?? false
         batteryAlertsEnabled = defaults.object(forKey: Keys.batteryAlertsEnabled) as? Bool ?? false
         physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? false
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true
+        bloodhoundProximityIntensity = defaults.string(forKey: Keys.bloodhoundProximityIntensity) ?? "Single Burst"
         birthYear = defaults.object(forKey: Keys.birthYear) as? Int ?? 1990
         heightInches = defaults.object(forKey: Keys.heightInches) as? Int ?? 68
         weightPounds = defaults.object(forKey: Keys.weightPounds) as? Int ?? 155

@@ -15,8 +15,10 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
-                NavigationLink { ChatView() } label: {
-                    Label("Chat", systemImage: "message")
+                if settings.chatEnabled {
+                    NavigationLink { ChatView() } label: {
+                        Label("Chat", systemImage: "message")
+                    }
                 }
                 Button(role: .destructive) {
                     showClearPointsConfirmation = true
@@ -34,7 +36,7 @@ struct ContentView: View {
                     Label("Drop 2525D Point", systemImage: "mappin.and.ellipse")
                 }
                 NavigationLink {
-                    EnvironmentView(monitor: environment)
+                    EnvironmentView(monitor: environment, settings: settings)
                 } label: {
                     Label("Environment", systemImage: "barometer")
                 }
@@ -99,13 +101,28 @@ struct ContentView: View {
         .task {
             model.connect()
             model.requestLocation()
+            if settings.physiologicalAlertsEnabled {
+                await physiology.startMonitoring()
+            }
+            if settings.environmentalAlertsEnabled {
+                environment.startMonitoring()
+            }
         }
         .onChange(of: physiology.activeAutomaticAlert) { _, category in
             model.updateAutomaticAlert(category)
         }
         .onChange(of: settings.physiologicalAlertsEnabled) { _, enabled in
-            if !enabled {
+            if enabled {
+                Task { await physiology.startMonitoring() }
+            } else {
                 physiology.stopMonitoring()
+            }
+        }
+        .onChange(of: settings.environmentalAlertsEnabled) { _, enabled in
+            if enabled && scenePhase == .active {
+                environment.startMonitoring()
+            } else if !enabled {
+                environment.stopMonitoring()
             }
         }
         .onChange(of: environment.activePressureCategory) { oldValue, newValue in
@@ -123,6 +140,13 @@ struct ContentView: View {
             if phase == .background {
                 physiology.stopMonitoring()
                 environment.stopMonitoring()
+            } else if phase == .active {
+                if settings.physiologicalAlertsEnabled {
+                    Task { await physiology.startMonitoring() }
+                }
+                if settings.environmentalAlertsEnabled {
+                    environment.startMonitoring()
+                }
             }
         }
     }
@@ -174,26 +198,6 @@ private struct PhysiologyView: View {
                     }
                 }
             }
-            Section("Automatic alerts") {
-                Toggle("Monitor", isOn: Binding(
-                    get: { monitor.automaticEnabled },
-                    set: { enabled in
-                        if enabled {
-                            Task { await monitor.startMonitoring() }
-                        } else {
-                            monitor.stopMonitoring()
-                        }
-                    }
-                ))
-                .disabled(monitor.isStarting)
-                if let category = monitor.activeAutomaticAlert {
-                    Text("ALERT: \(category.rawValue)")
-                        .foregroundStyle(.red)
-                } else if let category = monitor.warningCategory {
-                    Text("Warning: \(category.rawValue)")
-                        .foregroundStyle(.orange)
-                }
-            }
             Button {
                 Task { await monitor.refresh() }
             } label: {
@@ -207,6 +211,7 @@ private struct PhysiologyView: View {
 
 private struct EnvironmentView: View {
     @ObservedObject var monitor: EnvironmentalMonitor
+    @ObservedObject var settings: AppSettings
 
     var body: some View {
         List {
@@ -233,30 +238,14 @@ private struct EnvironmentView: View {
                 Text("Unavailable on Apple Watch")
                     .foregroundStyle(.secondary)
             }
-            Section("Automatic alerts") {
-                Toggle("Monitor", isOn: Binding(
-                    get: { monitor.isMonitoring },
-                    set: { enabled in
-                        if enabled {
-                            monitor.startMonitoring()
-                        } else {
-                            monitor.stopMonitoring()
-                        }
-                    }
-                ))
-                if let category = monitor.activePressureCategory {
-                    Text("ALERT: \(category.rawValue)")
-                        .foregroundStyle(.red)
-                }
-                if monitor.immersionActive {
-                    Text("ALERT: Immersion")
-                        .foregroundStyle(.red)
-                }
-            }
         }
         .navigationTitle("Environment")
         .onAppear { monitor.startMonitoring() }
-        .onDisappear { monitor.stopMonitoring() }
+        .onDisappear {
+            if !settings.environmentalAlertsEnabled {
+                monitor.stopMonitoring()
+            }
+        }
     }
 }
 

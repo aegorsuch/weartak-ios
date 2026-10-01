@@ -14,6 +14,9 @@ final class EnvironmentalMonitor: ObservableObject {
     private let altimeter = CMAltimeter()
     private let settings: AppSettings
     private var evaluator = EnvironmentalAlertEvaluator()
+    private var freshnessTimer: Timer?
+    private var monitoringStartedAt: Date?
+    private var lastReadingAt: Date?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -27,8 +30,15 @@ final class EnvironmentalMonitor: ObservableObject {
         }
         isMonitoring = true
         status = "Monitoring pressure"
+        monitoringStartedAt = Date()
+        lastReadingAt = nil
         altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, error in
-            guard let self, let data, error == nil else { return }
+            guard let self else { return }
+            if let error {
+                Task { @MainActor in self.handleBarometerError(error) }
+                return
+            }
+            guard let data else { return }
             Task { @MainActor in
                 self.process(
                     pressureKilopascals: data.pressure.doubleValue,
@@ -36,11 +46,18 @@ final class EnvironmentalMonitor: ObservableObject {
                 )
             }
         }
+        freshnessTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.expireStaleReadings() }
+        }
     }
 
     func stopMonitoring() {
         altimeter.stopRelativeAltitudeUpdates()
+        freshnessTimer?.invalidate()
+        freshnessTimer = nil
         isMonitoring = false
+        monitoringStartedAt = nil
+        lastReadingAt = nil
         evaluator.reset()
         activePressureCategory = nil
         immersionActive = false
@@ -49,6 +66,13 @@ final class EnvironmentalMonitor: ObservableObject {
 
     private func process(pressureKilopascals: Double, relativeAltitudeMeters: Double) {
         let hpa = pressureKilopascals * 10
+        guard hpa.isFinite, hpa > 0, relativeAltitudeMeters.isFinite else {
+            clearAlerts()
+            status = "Invalid barometer reading"
+            return
+        }
+        lastReadingAt = Date()
+        status = "Monitoring pressure"
         pressureHpa = hpa
         self.relativeAltitudeMeters = relativeAltitudeMeters
         evaluator.evaluate(
@@ -63,5 +87,36 @@ final class EnvironmentalMonitor: ObservableObject {
         )
         activePressureCategory = evaluator.activePressureCategory
         immersionActive = evaluator.immersionActive
+    }
+
+    private func expireStaleReadings() {
+        let now = Date()
+        if evaluator.expire(at: now) {
+            activePressureCategory = nil
+            immersionActive = false
+            status = "Pressure readings stale"
+            lastReadingAt = nil
+        } else if lastReadingAt == nil, let monitoringStartedAt,
+                  now.timeIntervalSince(monitoringStartedAt) > 30 {
+            status = "No pressure readings"
+        }
+    }
+
+    private func handleBarometerError(_ error: Error) {
+        altimeter.stopRelativeAltitudeUpdates()
+        freshnessTimer?.invalidate()
+        freshnessTimer = nil
+        isMonitoring = false
+        monitoringStartedAt = nil
+        lastReadingAt = nil
+        clearAlerts()
+        let code = (error as NSError).code
+        status = "Barometer error (\(code))"
+    }
+
+    private func clearAlerts() {
+        evaluator.reset()
+        activePressureCategory = nil
+        immersionActive = false
     }
 }

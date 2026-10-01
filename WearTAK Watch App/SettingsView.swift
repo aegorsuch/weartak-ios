@@ -11,6 +11,12 @@ struct SettingsView: View {
         _sitxClient = StateObject(wrappedValue: SitxClient(settings: settings))
     }
 
+    private var versionLabel: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        let revision = Bundle.main.infoDictionary?["WearTAKGitCommit"] as? String ?? "unknown"
+        return "\(version)-\(revision)"
+    }
+
     var body: some View {
         List {
             NavigationLink("Device Preferences") {
@@ -25,7 +31,7 @@ struct SettingsView: View {
             NavigationLink("Tool Preferences") {
                 ToolPreferencesView(settings: settings)
             }
-            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")")
+            Text("Version \(versionLabel)")
                 .foregroundStyle(.secondary)
         }
         .navigationTitle("Settings")
@@ -470,23 +476,61 @@ private struct EnvironmentalAlertsView: View {
 
     var body: some View {
         List {
-            Section("Atm Pressure Alerts") {
-                Toggle("Low Pressure Alert", isOn: $settings.lowPressureAlertsEnabled)
-                Stepper(
-                    "Pressure Threshold: \(settings.lowPressureThreshold) hPa",
-                    value: $settings.lowPressureThreshold, in: 800...1100, step: 5
-                )
-                Toggle("High Pressure Alert", isOn: $settings.highPressureAlertsEnabled)
-                Stepper(
-                    "Pressure Threshold: \(settings.highPressureThreshold) hPa",
-                    value: $settings.highPressureThreshold, in: 1000...3000, step: 5
-                )
+            Toggle(isOn: $settings.immersionAlertsEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Immersion Alerts")
+                    Text(settings.immersionAlertsEnabled ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
-            Section("Immersion Alerts") {
-                Toggle("Immersion Alerts", isOn: $settings.immersionAlertsEnabled)
+            NavigationLink("Atm Pressure Alerts") {
+                AtmosphericPressureAlertsView(settings: settings)
             }
         }
         .navigationTitle("Environmental Alerts")
+    }
+}
+
+private struct AtmosphericPressureAlertsView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            Toggle(isOn: $settings.lowPressureAlertsEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Low Pressure Alert")
+                    Text(settings.lowPressureAlertsEnabled ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Pressure Threshold", selection: $settings.lowPressureThreshold,
+                    values: Array(stride(from: 800, through: 1100, by: 5)), valueLabel: { "\($0) hPa" }
+                )
+            } label: {
+                LabeledContent("Pressure Threshold", value: "\(settings.lowPressureThreshold) hPa")
+            }
+            Toggle(isOn: $settings.highPressureAlertsEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("High Pressure Alert")
+                    Text(settings.highPressureAlertsEnabled ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Pressure Threshold", selection: $settings.highPressureThreshold,
+                    values: Array(stride(from: 1000, through: 1100, by: 5)), valueLabel: { "\($0) hPa" }
+                )
+            } label: {
+                LabeledContent("Pressure Threshold", value: "\(settings.highPressureThreshold) hPa")
+            }
+        }
+        .navigationTitle("Atm Pressure Alerts")
     }
 }
 
@@ -495,7 +539,15 @@ private struct ToolPreferencesView: View {
 
     var body: some View {
         List {
-            NavigationLink("Bloodhound") {
+            Toggle(isOn: $settings.chatEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Chat")
+                    Text(settings.chatEnabled ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            NavigationLink("Navigation") {
                 BloodhoundPreferencesView(settings: settings)
             }
         }
@@ -508,11 +560,30 @@ private struct BloodhoundPreferencesView: View {
 
     var body: some View {
         List {
-            Toggle("Bloodhound Proximity Vibration", isOn: $settings.bloodhoundProximityVibrationEnabled)
-            Stepper(
-                "Bloodhound Proximity Radius: \(settings.bloodhoundProximityRadius) meters",
-                value: $settings.bloodhoundProximityRadius, in: 10...200, step: 10
-            )
+            Toggle(isOn: $settings.bloodhoundProximityVibrationEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Bloodhound Proximity Vibration")
+                    Text(settings.bloodhoundProximityVibrationEnabled ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            NavigationLink {
+                ProfileNumberPickerView(
+                    title: "Bloodhound Proximity Radius", selection: $settings.bloodhoundProximityRadius,
+                    values: Array(stride(from: 10, through: 200, by: 10)), valueLabel: { "\($0) meters" }
+                )
+            } label: {
+                LabeledContent("Bloodhound Proximity Radius", value: "\(settings.bloodhoundProximityRadius) meters")
+            }
+            NavigationLink {
+                ProfileStringPickerView(
+                    title: "Bloodhound Proximity Intensity", selection: $settings.bloodhoundProximityIntensity,
+                    values: AppSettings.bloodhoundProximityIntensityOptions
+                )
+            } label: {
+                LabeledContent("Bloodhound Proximity Intensity", value: settings.bloodhoundProximityIntensity)
+            }
         }
         .navigationTitle("Navigation")
     }

@@ -39,6 +39,13 @@ struct EnvironmentalAlertEvaluator {
         immersionSince = nil
     }
 
+    mutating func expire(at now: Date) -> Bool {
+        guard let lastSampleAt,
+              now.timeIntervalSince(lastSampleAt) > 30 || now < lastSampleAt else { return false }
+        reset()
+        return true
+    }
+
     mutating func evaluate(pressureHpa: Double, at time: Date, settings: EnvironmentalAlertSettings) {
         if let lastSampleAt, time.timeIntervalSince(lastSampleAt) > 30 || time < lastSampleAt {
             reset()
