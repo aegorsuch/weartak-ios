@@ -169,26 +169,13 @@ private struct PhysiologyView: View {
     var body: some View {
         List {
             Section("Heart Rate") {
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    if let heartRate = monitor.heartRate {
-                        Text("\(heartRate)")
-                            .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        Text("BPM")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                HStack {
+                    Text(monitor.heartRate.map { "\($0) BPM" } ?? "Unavailable")
+                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    Spacer(minLength: 0)
+                    if monitor.heartRate != nil {
                         Image(systemName: "heart.fill")
                             .foregroundStyle(.red)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(monitor.status)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    if let readingDate = monitor.readingDate {
-                        Text(readingDate, style: .time)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     }
                 }
             }
