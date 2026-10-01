@@ -2,8 +2,8 @@
 
 ## Repository
 
-- Canonical: https://git.tak.gov/core/weartak-core/weartak-ios
-- Backup mirror: https://github.com/aegorsuch/weartak-ios
+- Temporary canonical: https://github.com/aegorsuch/weartak-ios
+- TAK Forge destination: https://git.tak.gov/core/weartak-core/weartak-ios
 
 ## Rights and contacts
 
@@ -17,7 +17,8 @@ Alex Gorsuch on chat.tak.gov or Signal.
 
 ### Repositories
 
-The TAK Forge repository is canonical. GitHub is a secondary repository.
+GitHub is temporarily canonical for this project. TAK Forge is the secondary
+destination until the repository workflow is reverted.
 
 ## WearTAK Apple Watch rebuild
 
