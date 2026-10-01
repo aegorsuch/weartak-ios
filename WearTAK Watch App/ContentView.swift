@@ -168,28 +168,32 @@ private struct PhysiologyView: View {
 
     var body: some View {
         List {
+            Section("Exertion") {
+                if let exertion = monitor.exertionPercent {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("\(exertion)%")
+                            .font(.system(size: 22, weight: .medium, design: .rounded))
+                        Gauge(value: Double(exertion), in: 0...100) {
+                            Text("Exertion")
+                        } currentValueLabel: {
+                            Text("\(exertion)%")
+                        }
+                        .gaugeStyle(.linearCapacity)
+                    }
+                } else {
+                    Text("Unavailable")
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Heart Rate") {
                 HStack {
                     Text(monitor.heartRate.map { "\($0) BPM" } ?? "Unavailable")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(.system(size: 22, weight: .medium, design: .rounded))
                     Spacer(minLength: 0)
                     if monitor.heartRate != nil {
                         Image(systemName: "heart.fill")
                             .foregroundStyle(.red)
                     }
-                }
-            }
-            Section("Exertion") {
-                if let exertion = monitor.exertionPercent {
-                    Gauge(value: Double(exertion), in: 0...100) {
-                        Text("Exertion")
-                    } currentValueLabel: {
-                        Text("\(exertion)%")
-                    }
-                    .gaugeStyle(.linearCapacity)
-                } else {
-                    Text("Unavailable")
-                        .foregroundStyle(.secondary)
                 }
             }
         }
