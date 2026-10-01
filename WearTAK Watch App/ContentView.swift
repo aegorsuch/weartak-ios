@@ -9,7 +9,6 @@ struct ContentView: View {
     @ObservedObject var settings: AppSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var showClearPointsConfirmation = false
-    @State private var showExitInstructions = false
     @State private var toastMessage: String?
 
     var body: some View {
@@ -39,11 +38,6 @@ struct ContentView: View {
                     EnvironmentView(monitor: environment, settings: settings)
                 } label: {
                     Label("Environment", systemImage: "barometer")
-                }
-                Button {
-                    showExitInstructions = true
-                } label: {
-                    Label("Exit", systemImage: "rectangle.portrait.and.arrow.right")
                 }
                 if let activeAlertType = model.activeAlertType {
                     Button(role: .destructive) {
@@ -80,11 +74,6 @@ struct ContentView: View {
                     model.clearAllPoints()
                     showToast("Old points cleared")
                 }
-            }
-            .alert("Exit WearTAK", isPresented: $showExitInstructions) {
-                Button("Done", role: .cancel) {}
-            } message: {
-                Text("Press the Digital Crown to leave WearTAK.")
             }
             .overlay(alignment: .bottom) {
                 if let toastMessage {
@@ -138,11 +127,14 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
+                physiology.stopViewing()
                 physiology.stopMonitoring()
                 environment.stopMonitoring()
             } else if phase == .active {
                 if settings.physiologicalAlertsEnabled {
                     Task { await physiology.startMonitoring() }
+                } else if physiology.isViewing {
+                    Task { await physiology.startViewing() }
                 }
                 if settings.environmentalAlertsEnabled {
                     environment.startMonitoring()
@@ -172,6 +164,7 @@ private struct ChatView: View {
 
 private struct PhysiologyView: View {
     @ObservedObject var monitor: PhysiologyMonitor
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         List {
@@ -212,14 +205,15 @@ private struct PhysiologyView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Button {
-                Task { await monitor.refresh() }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
         }
         .navigationTitle("Physiology")
-        .task { await monitor.refresh() }
+        .task { await monitor.startViewing() }
+        .onDisappear { monitor.stopViewing() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await monitor.startViewing() }
+            }
+        }
     }
 }
 
@@ -239,13 +233,12 @@ private struct EnvironmentView: View {
                 }
             }
             Section("Pressure") {
-                VStack(alignment: .leading, spacing: 4) {
-                    if let pressure = monitor.pressureHpa {
-                        Text(String(format: "%.1f hPa", pressure))
-                            .font(.headline)
-                    }
-                    Text(monitor.status)
-                        .font(.caption2)
+                if let pressure = monitor.pressureHpa {
+                    Text(String(format: "%.1f hPa", pressure))
+                        .font(.headline)
+                } else {
+                    Text("Unavailable")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }

@@ -8,6 +8,7 @@ final class PhysiologyMonitor: ObservableObject {
     @Published private(set) var heartRate: Int?
     @Published private(set) var readingDate: Date?
     @Published private(set) var status = "Health access not requested"
+    @Published private(set) var isViewing = false
     @Published private(set) var automaticEnabled = false
     @Published private(set) var isStarting = false
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
@@ -68,10 +69,31 @@ final class PhysiologyMonitor: ObservableObject {
 
         automaticEnabled = true
         status = heartRate == nil ? "Waiting for heart rate or access" : "Monitoring for new readings"
+        startObservingSamples()
+    }
+
+    func startViewing() async {
+        guard !isViewing else { return }
+        isViewing = true
+        await refresh()
+        guard isViewing, HKHealthStore.isHealthDataAvailable() else { return }
+        startObservingSamples()
+    }
+
+    func stopViewing() {
+        isViewing = false
+        if !automaticEnabled {
+            stopObservingSamples()
+        }
+    }
+
+    private func startObservingSamples() {
+        guard observerQuery == nil else { return }
         let query = HKObserverQuery(sampleType: heartRateType, predicate: nil) { [weak self] _, completion, error in
             Task { @MainActor [weak self] in
                 if error != nil {
                     self?.stopMonitoring()
+                    self?.stopViewing()
                     self?.status = "Heart rate updates unavailable"
                 } else {
                     await self?.loadLatestReading()
@@ -81,14 +103,26 @@ final class PhysiologyMonitor: ObservableObject {
         }
         observerQuery = query
         healthStore.execute(query)
-        freshnessTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.expireReading()
+        if freshnessTimer == nil {
+            freshnessTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.expireReading() }
             }
         }
     }
 
     func stopMonitoring() {
+        automaticEnabled = false
+        evaluator.reset()
+        activeAutomaticAlert = nil
+        warningCategory = nil
+        if !isViewing {
+            stopObservingSamples()
+        } else {
+            status = "Live heart-rate updates"
+        }
+    }
+
+    private func stopObservingSamples() {
         monitoringGeneration += 1
         if let observerQuery {
             healthStore.stop(observerQuery)
@@ -96,12 +130,13 @@ final class PhysiologyMonitor: ObservableObject {
         observerQuery = nil
         freshnessTimer?.invalidate()
         freshnessTimer = nil
-        automaticEnabled = false
         lastProcessedSampleID = nil
         evaluator.reset()
         activeAutomaticAlert = nil
         warningCategory = nil
-        status = "Monitoring stopped"
+        if !isViewing && !automaticEnabled {
+            status = "Monitoring stopped"
+        }
     }
 
     private func loadLatestReading() async {
@@ -130,7 +165,7 @@ final class PhysiologyMonitor: ObservableObject {
                 readingDate = sample.endDate
                 status = automaticEnabled
                     ? (Date().timeIntervalSince(sample.endDate) <= 60 ? "Monitoring for new readings" : "Waiting for fresh heart rate")
-                    : "Latest reading"
+                    : (isViewing ? "Live heart-rate updates" : "Latest reading")
                 if automaticEnabled && sample.uuid != lastProcessedSampleID {
                     lastProcessedSampleID = sample.uuid
                     await evaluate(sample: sample, beatsPerMinute: beatsPerMinute)
