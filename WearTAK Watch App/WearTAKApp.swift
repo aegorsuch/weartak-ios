@@ -1,17 +1,12 @@
-//
-//  WearTAKApp.swift
-//  WearTAK Watch App
-//
-//  Created by user955575 on 9/30/26.
-//
-
 import SwiftUI
 
 @main
-struct WearTAK_Watch_AppApp: App {
+struct WearTAKApp: App {
+    @StateObject private var model = WatchSessionModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(model: model)
         }
     }
 }
