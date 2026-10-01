@@ -41,7 +41,17 @@ struct WatchMarker: Identifiable, Codable {
     }
 
     var displayTitle: String {
-        title.flatMap { $0.isEmpty ? nil : $0 } ?? kind.rawValue
+        title.flatMap { $0.isEmpty ? nil : $0 } ?? defaultLabel
+    }
+
+    // Matches Garmin's "<Type> 2525D point" default label.
+    private var defaultLabel: String {
+        switch kind {
+        case .friendly: return "Friendly 2525D point"
+        case .neutral: return "Neutral 2525D point"
+        case .unknown: return "Unknown 2525D point"
+        case .hostile: return "Hostile 2525D point"
+        }
     }
 }
 
@@ -104,6 +114,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var lastLocation: CLLocation?
     @Published private(set) var markers: [WatchMarker] = []
     @Published private(set) var incomingEntities: [IncomingMapEntity] = []
+    @Published private(set) var bloodhoundTargetID: UUID?
     @Published private(set) var activeAlertType: ManualAlertType?
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
     @Published private(set) var automaticAlertDeliveryFailed = false
@@ -204,10 +215,51 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func deleteMarker(id: UUID) {
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
         markers.remove(at: index)
+        if bloodhoundTargetID == id {
+            bloodhoundTargetID = nil
+        }
         saveMarkers()
         Task {
             try? await transport.deleteMarker(uid: id.uuidString)
         }
+    }
+
+    func clearAllPoints() {
+        let ids = markers.map(\.id)
+        markers.removeAll()
+        bloodhoundTargetID = nil
+        saveMarkers()
+        Task {
+            for id in ids {
+                try? await transport.deleteMarker(uid: id.uuidString)
+            }
+        }
+    }
+
+    func toggleBloodhound(id: UUID) {
+        bloodhoundTargetID = (bloodhoundTargetID == id) ? nil : id
+    }
+
+    var bloodhoundTarget: WatchMarker? {
+        guard let bloodhoundTargetID else { return nil }
+        return markers.first { $0.id == bloodhoundTargetID }
+    }
+
+    func bloodhoundReading(from location: CLLocation) -> (bearingDegrees: Double, rangeMeters: Double)? {
+        guard let target = bloodhoundTarget else { return nil }
+        let targetLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
+        let bearing = Self.bearingDegrees(from: location.coordinate, to: target.coordinate)
+        return (bearing, location.distance(from: targetLocation))
+    }
+
+    private static func bearingDegrees(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) -> Double {
+        let lat1 = start.latitude * .pi / 180
+        let lat2 = end.latitude * .pi / 180
+        let deltaLon = (end.longitude - start.longitude) * .pi / 180
+        let y = sin(deltaLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(deltaLon)
+        let bearing = atan2(y, x) * 180 / .pi
+        return (bearing + 360).truncatingRemainder(dividingBy: 360)
     }
 
     func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date()) {

@@ -35,7 +35,7 @@ struct ContentView: View {
                     NavigationLink {
                         PointEditorView(model: model, coordinate: model.lastLocation?.coordinate)
                     } label: {
-                        Label("Drop marker", systemImage: "mappin.and.ellipse")
+                        Label("Drop 2525D Point", systemImage: "mappin.and.ellipse")
                     }
                     .disabled(model.lastLocation == nil)
 
@@ -44,7 +44,7 @@ struct ContentView: View {
                             model.cancelEmergencyAlert()
                         } label: {
                             Label {
-                                Text("Manual Alert (\(activeAlertType.rawValue) Active)")
+                                Text("Clear Manual Alert (\(activeAlertType.rawValue) Active)")
                                     .fixedSize(horizontal: false, vertical: true)
                             } icon: {
                                 Image(systemName: "xmark.circle.fill")
@@ -224,6 +224,14 @@ private struct TacticalMapView: View {
                 }
                 .accessibilityLabel("Points")
 
+                NavigationLink {
+                    BloodhoundView(model: model)
+                } label: {
+                    Image(systemName: "location.viewfinder")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .accessibilityLabel("Navigation")
+
                 Button {
                     isPlacingPoint.toggle()
                 } label: {
@@ -274,6 +282,38 @@ private struct MapPointDraft: Identifiable {
     let coordinate: CLLocationCoordinate2D
 }
 
+private struct BloodhoundView: View {
+    @ObservedObject var model: WatchSessionModel
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if let target = model.bloodhoundTarget {
+                if let location = model.lastLocation, let reading = model.bloodhoundReading(from: location) {
+                    Image(systemName: "location.north.fill")
+                        .font(.largeTitle)
+                        .rotationEffect(.degrees(reading.bearingDegrees))
+                    Text(target.displayTitle)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                    Text("Range: \(Int(reading.rangeMeters)) m")
+                        .font(.caption2)
+                    Text("Bearing: \(Int(reading.bearingDegrees)) deg")
+                        .font(.caption2)
+                } else {
+                    Text("Location unavailable")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("No Bloodhound target")
+                Text("Tap a map point to start")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("Navigation")
+    }
+}
+
 private struct ManualAlertView: View {
     @ObservedObject var model: WatchSessionModel
     @Environment(\.dismiss) private var dismiss
@@ -285,12 +325,13 @@ private struct ManualAlertView: View {
                 dismiss()
             }
         }
-        .navigationTitle("Alert Type")
+        .navigationTitle("Manual Alert")
     }
 }
 
 private struct PointListView: View {
     @ObservedObject var model: WatchSessionModel
+    @State private var confirmClearAll = false
 
     var body: some View {
         List {
@@ -311,6 +352,11 @@ private struct PointListView: View {
                         }
                     }
                 }
+                if !model.markers.isEmpty {
+                    Button("Clear 2525D Points", role: .destructive) {
+                        confirmClearAll = true
+                    }
+                }
             }
             if !model.incomingEntities.isEmpty {
                 Section("Incoming") {
@@ -326,6 +372,11 @@ private struct PointListView: View {
             }
         }
         .navigationTitle("Points")
+        .confirmationDialog("Clear app points?", isPresented: $confirmClearAll) {
+            Button("Clear 2525D Points", role: .destructive) {
+                model.clearAllPoints()
+            }
+        }
     }
 }
 
@@ -352,19 +403,27 @@ private struct PointEditorView: View {
     var body: some View {
         List {
             if let coordinate {
-                Section("Location") {
+                Section("Lat/Lon") {
                     Text(coordinate.formatted)
                         .font(.caption2)
                 }
             }
             Section("Details") {
-                Picker("Type", selection: $kind) {
+                Picker("Set Type", selection: $kind) {
                     ForEach(MarkerKind.allCases) { option in
                         Text(option.rawValue).tag(option)
                     }
                 }
-                TextField("Title", text: $title)
-                TextField("Remark", text: $remark)
+                TextField("Set Title", text: $title)
+                TextField("Set Remark", text: $remark)
+            }
+
+            if let markerID {
+                Section {
+                    Button(model.bloodhoundTargetID == markerID ? "Stop Bloodhound" : "Bloodhound") {
+                        model.toggleBloodhound(id: markerID)
+                    }
+                }
             }
 
             Section {
