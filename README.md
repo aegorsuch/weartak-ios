@@ -172,6 +172,10 @@ automatic alerts have separate preferences. Alert thresholds and durations are
 configurable. The watch target requires the HealthKit capability when signing
 for a device. Sensor monitoring and direct reporting stop in the background.
 
+The watch Info.plist includes both HealthKit read and update purpose strings
+required by App Store validation. The current monitor requests read access only
+and does not save or modify Health data; the update-purpose text states this.
+
 ### Dashboard
 
 The dashboard uses the watchOS status-area clock; it has no duplicate bottom

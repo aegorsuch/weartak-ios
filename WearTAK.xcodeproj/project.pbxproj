@@ -108,7 +108,8 @@
 				99A200000000000000000007 /* Resources */,
 				99A200000000000000000006 /* Embed Watch Content */,
 			);
-			buildRules = ();
+			buildRules = (
+			);
 			dependencies = (
 				99A200000000000000000008 /* PBXTargetDependency */,
 			);
@@ -163,7 +164,8 @@
 		99A200000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
@@ -347,6 +349,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "WearTAK uses HealthKit for heart-rate monitoring and physiological alerts you enable. This version does not save or modify your Health data.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
@@ -390,6 +393,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "WearTAK uses HealthKit for heart-rate monitoring and physiological alerts you enable. This version does not save or modify your Health data.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
@@ -421,15 +425,19 @@
 		99A200000000000000000004 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = H284X28FTP;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;
 				PRODUCT_NAME = WearTAK;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -441,15 +449,18 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Distribution";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = H284X28FTP;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;
 				PRODUCT_NAME = WearTAK;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
