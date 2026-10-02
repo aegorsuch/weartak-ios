@@ -473,7 +473,7 @@ final class AppSettings: ObservableObject {
         let storedSitxHost = defaults.string(forKey: Keys.sitxApiHost) ?? ""
         sitxApiHost = storedSitxHost
         sitxEnabled = defaults.object(forKey: Keys.sitxEnabled) as? Bool ?? !storedSitxHost.isEmpty
-        multicastEnabled = defaults.object(forKey: Keys.multicastEnabled) as? Bool ?? false
+        multicastEnabled = defaults.object(forKey: Keys.multicastEnabled) as? Bool ?? true
         multicastAddress = defaults.string(forKey: Keys.multicastAddress) ?? "239.2.3.1"
         multicastPort = min(max(defaults.object(forKey: Keys.multicastPort) as? Int ?? 6969, 1), 65535)
         multicastOutputProtocol = MulticastOutputProtocol(rawValue: defaults.string(forKey: Keys.multicastOutputProtocol) ?? "UDP") ?? .udp

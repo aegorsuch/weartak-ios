@@ -107,7 +107,7 @@ struct SitxProtocolChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
-        precondition(!settings.multicastEnabled)
+        precondition(settings.multicastEnabled)
         precondition(settings.multicastAddress == "239.2.3.1" && settings.multicastPort == 6969)
         precondition(settings.multicastOutputProtocol == .udp)
         precondition(AppSettings.isMulticastAddress("239.2.3.1"))
@@ -126,6 +126,7 @@ struct SitxProtocolChecks {
         settings.multicastPort = 70_000
         precondition(settings.multicastPort == 65535)
         settings.multicastEnabled = false
+        precondition(!AppSettings(defaults: defaults).multicastEnabled)
         let multicast = MulticastTAKTransport(settings: settings)
         multicast.setAppActive(true)
         precondition(!multicast.isReady && multicast.status == "Disabled")

@@ -35,7 +35,8 @@ for a device. Sensor monitoring and direct reporting stop in the background.
 ## TAK SA Multicast
 
 Open Settings > Network Preferences > TAK SA Multicast. The entry appears
-above Sit(x) TAK and shows Enabled or Disabled. Multicast defaults to Disabled.
+above Sit(x) TAK and shows Enabled or Disabled. Multicast defaults to Enabled;
+an explicitly saved Disabled selection is preserved.
 The submenu contains a toggle, Address, Output Protocol, Port, and Back.
 Defaults are `239.2.3.1`, `UDP`, and port `6969`.
 
