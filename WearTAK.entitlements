@@ -4,8 +4,6 @@
 <dict>
 	<key>com.apple.developer.healthkit</key>
 	<true/>
-	<key>com.apple.developer.networking.multicast</key>
-	<true/>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>

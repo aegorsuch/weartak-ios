@@ -39,8 +39,9 @@ The link is not available until the Apple distribution steps below are done.
   invitation/public link there, and accept the beta invitation.
 3. In TestFlight, use the WearTAK Apple Watch installation option. Keep the
   watch paired, nearby, charged, and connected while installation completes.
-4. Open WearTAK on the watch. Grant location, HealthKit heart-rate, motion, and
-  local-network access when requested for the features you choose to use.
+4. Open WearTAK on the watch. Grant location, HealthKit heart-rate, and motion
+  access when requested for the features you choose to use. watchOS does not
+  use the iOS Local Network privacy prompt.
 5. Keep WearTAK foregrounded during testing. Configure Sit(x) in Network
   Preferences or use TAK SA Multicast on a trusted multicast-capable WiFi
   network. Multicast is enabled by default and sends unencrypted CoT on the
@@ -54,8 +55,8 @@ does not connect the watch to those apps.
 
 This path requires a Mac, Xcode with the watchOS 26.2 SDK or newer, and an Apple
 Developer team/provisioning profile authorized for this app's capabilities.
-A simulator build or a Personal Team profile without the required multicast
-entitlement is not a substitute for an authorized device build.
+A simulator build is not a substitute for a signed device build. Your team and
+profile must support the app's HealthKit and Keychain capabilities.
 
 1. Download the Source code ZIP from a GitHub release, or clone this repository
   and check out the desired release tag. For the latest development code:
@@ -70,10 +71,11 @@ entitlement is not a substitute for an authorized device build.
   WearTAK Watch App target, open Signing & Capabilities, and select your team.
   If your team cannot use the repository's bundle ID, use a unique bundle ID
   and matching profiles for your own development build.
-3. Ensure the app ID/profile includes HealthKit, Keychain access, and Apple's
-  approved `com.apple.developer.networking.multicast` entitlement. Resolve
-  signing errors before attempting to install; disabling the preference does
-  not remove an entitlement from the binary.
+3. Ensure the app ID/profile includes HealthKit and Keychain access. Use a
+  development certificate/profile for Product > Run on a physical watch; an
+  App Store Connect distribution profile is for archives and uploads, not
+  direct development installation. Do not add the iOS-family-only
+  `com.apple.developer.networking.multicast` entitlement to the watch target.
 4. Pair/connect the physical watch through Xcode's Devices and Simulators
   setup. Enable Developer Mode on the watch when Xcode requires it and follow
   the device trust/pairing prompts. A paired iPhone may be needed for setup.
@@ -82,7 +84,7 @@ entitlement is not a substitute for an authorized device build.
   Launch it from the watch's app list and grant the requested permissions.
 
 For simulator-only testing, select a watch simulator instead. This verifies UI
-and simulated behavior, not hardware sensors, LAN multicast permission, or
+and simulated behavior, not hardware sensors, LAN multicast behavior, or
 real-device signing. If you do not have approved provisioning, use an approved
 TestFlight build once available rather than trying to install an unsigned app.
 
@@ -98,8 +100,11 @@ Before the first distribution archive:
 
 - Enroll/configure an Apple Developer Program team and register the bundle ID
   `com.aegorsuch.weartak.watchkitapp` (or your approved replacement).
-- Obtain multicast entitlement approval and compatible distribution profiles;
-  configure the signing team and certificates in Xcode.
+- Configure the signing team, Apple Distribution certificate, and a compatible
+  App Store Connect distribution profile for HealthKit and Keychain. The
+  watch-only target must not request the iOS-only multicast entitlement.
+- Set Skip Install to No for the app target's Release configuration. An archive
+  without an application bundle is not a distributable app archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
 - The project uses Version `5.8.0`, Build `3`, with separate Apple-compatible
@@ -250,12 +255,14 @@ Disabling Sit(x) does not disable multicast, and vice versa.
 Multicast sends tactical data in plaintext on the local network. Enable it
 only on a trusted network. The watch and other TAK devices must share a WiFi
 network that permits multicast; access-point/client isolation can block it.
-Device signing requires Apple's restricted
-`com.apple.developer.networking.multicast` entitlement to be approved and
-included in the provisioning profile. The project declares that entitlement
-and a local-network usage description. The maintainer reports physical-watch
-verification; repeat LAN checks for distribution builds and use approved device
-provisioning. Simulator builds do not prove entitlement approval.
+Apple documents `com.apple.developer.networking.multicast` for iOS, iPadOS,
+and visionOS, not watchOS. It is intentionally absent from this watch-only
+target's entitlements; watchOS also does not implement iOS local-network
+privacy. This does not prove multicast works in every watch/network condition:
+the maintainer reports physical-watch verification, and LAN checks should be
+repeated for distribution builds. Keep HealthKit/Keychain provisioning valid.
+See [Apple's local-network guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+and [multicast entitlement platforms](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.networking.multicast).
 
 ## Sit(x) TAK
 

@@ -55,7 +55,7 @@
 				12858C85306DD75A002BB8CC /* Sources */,
 				12858C86306DD75A002BB8CC /* Frameworks */,
 				12858C87306DD75A002BB8CC /* Resources */,
-					99A1C3E70000000000000001 /* Embed Git commit */,
+				99A1C3E70000000000000001 /* Embed Git commit */,
 			);
 			buildRules = (
 			);
@@ -276,14 +276,17 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = WearTAK.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=watchos*]" = H284X28FTP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
-							INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
@@ -294,6 +297,8 @@
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=watchos*]" = "WearTAK App Store";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -313,14 +318,17 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = WearTAK.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=watchos*]" = H284X28FTP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
-							INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
@@ -331,8 +339,10 @@
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=watchos*]" = "WearTAK App Store";
 				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
+				SKIP_INSTALL = NO;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
