@@ -323,14 +323,14 @@ private struct TacticalMapView: View {
                 Button {
                     zoom(by: 0.5)
                 } label: {
-                    mapControl("plus.magnifyingglass", label: "Zoom in")
+                    mapControl("plus", label: "Zoom in")
                 }
                 Spacer(minLength: 8)
 
                 Button {
                     centerOnLocation()
                 } label: {
-                    mapControl("location.north.fill", label: "Snap to self")
+                    mapControl("scope", label: "Snap to self")
                 }
                 .disabled(model.lastLocation == nil)
                 Spacer(minLength: 8)
@@ -338,7 +338,7 @@ private struct TacticalMapView: View {
                 Button {
                     zoom(by: 2)
                 } label: {
-                    mapControl("minus.magnifyingglass", label: "Zoom out")
+                    mapControl("minus", label: "Zoom out")
                 }
             }
             .padding(.leading, 5)
@@ -350,7 +350,7 @@ private struct TacticalMapView: View {
                 Button {
                     dismiss()
                 } label: {
-                    mapControl("arrow.right", label: "Back to menu")
+                    mapControl("arrow.left", label: "Back to menu")
                 }
             }
             .padding(.trailing, 5)
