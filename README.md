@@ -100,7 +100,8 @@ Before the first distribution archive:
   `com.aegorsuch.weartak.watchkitapp` (or your approved replacement).
 - Obtain multicast entitlement approval and compatible distribution profiles;
   configure the signing team and certificates in Xcode.
-- Supply the missing 1024x1024 watch app-icon image in the AppIcon asset set.
+- Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
+  set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
 - Replace the current four-part marketing version `5.8.0.3` with an Apple-
   compatible three-component version, such as `5.8.0`, and
   use a separate build number. Increment the build number for each upload.
@@ -129,9 +130,9 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout has no selected signing team, no valid signing identity
-on the development machine, and no app-icon image. It is not yet ready for an
-installable public beta; the prerequisites above must be completed first.
+The current checkout includes its app-icon image, but has no selected signing
+team or valid signing identity on the development machine. It is not yet ready
+for an installable public beta; the prerequisites above must be completed first.
 
 Apple references:
 [TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview)
