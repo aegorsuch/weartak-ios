@@ -133,7 +133,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
     @Published private(set) var activeEnvironmentalAlerts: Set<EnvironmentalAlertCategory> = []
     @Published private(set) var automaticAlertDeliveryFailed = false
-    @Published var selectedMarkerKind: MarkerKind = .unknown
+    @Published var selectedMarkerKind: MarkerKind = .unknown {
+        didSet { UserDefaults.standard.set(selectedMarkerKind.rawValue, forKey: "WearTAK.lastMarkerKind") }
+    }
 
     private let locationManager = CLLocationManager()
     private let transport: TAKTransport
@@ -169,6 +171,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         self.transport = transport ?? client
         self.settings = settings
         super.init()
+        selectedMarkerKind = MarkerKind(rawValue: UserDefaults.standard.string(forKey: "WearTAK.lastMarkerKind") ?? "") ?? .unknown
         sitxClient.onReady = { [weak self] in self?.connect() }
         sitxClient.onDisconnected = { [weak self] in
             guard let self, !self.sitxClient.hasReadyOutput else { return }
@@ -309,6 +312,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @discardableResult
     func addMarker(at coordinate: CLLocationCoordinate2D, kind: MarkerKind, title: String, remark: String) -> Bool {
         guard CLLocationCoordinate2DIsValid(coordinate) else { return false }
+        selectedMarkerKind = kind
         let marker = WatchMarker(
             id: UUID(),
             kind: kind,
@@ -328,6 +332,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func updateMarker(id: UUID, kind: MarkerKind, title: String, remark: String) {
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        if markers[index].kind != kind { selectedMarkerKind = kind }
         markers[index].kind = kind
         markers[index].title = title
         markers[index].remark = remark

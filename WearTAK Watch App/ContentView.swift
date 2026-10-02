@@ -10,6 +10,7 @@ struct ContentView: View {
     @ObservedObject var settings: AppSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var showClearPointsConfirmation = false
+    @State private var showPointTypePicker = false
     @State private var toastMessage: String?
 
     var body: some View {
@@ -20,12 +21,8 @@ struct ContentView: View {
                 environment: environment,
                 settings: settings,
                 dropPoint: {
-                    if model.dropMarker() {
-                        showToast("2525D point dropped")
-                    } else {
-                        model.requestLocation()
-                        showToast("Location unavailable")
-                    }
+                    model.requestLocation()
+                    showPointTypePicker = true
                 },
                 clearPoints: { showClearPointsConfirmation = true }
             )
@@ -41,6 +38,19 @@ struct ContentView: View {
                 }
             }
         }
+        .sheet(isPresented: $showPointTypePicker) {
+            NavigationStack {
+                PointTypePickerView(model: model) { kind in
+                    guard let coordinate = model.lastLocation?.coordinate else {
+                        model.requestLocation()
+                        return false
+                    }
+                    guard model.addMarker(at: coordinate, kind: kind, title: model.defaultPointTitle(), remark: "") else { return false }
+                    showToast("\(kind.rawValue) point dropped")
+                    return true
+                }
+            }
+        }
         .confirmationDialog("Clear app points?", isPresented: $showClearPointsConfirmation) {
             Button("Clear 2525D Points", role: .destructive) {
                 model.clearAllPoints()
@@ -50,6 +60,11 @@ struct ContentView: View {
         .task {
             model.setAppActive(true)
             model.requestLocation()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--preview-point-picker") {
+                showPointTypePicker = true
+            }
+            #endif
             if settings.physiologicalAlertsEnabled {
                 await physiology.startMonitoring()
             }
@@ -659,7 +674,7 @@ private struct TacticalMapView: View {
                                           CLLocationCoordinate2DIsValid(coordinate) else { return }
                                     model.addMarker(
                                         at: coordinate,
-                                        kind: .unknown,
+                                        kind: model.selectedMarkerKind,
                                         title: model.defaultPointTitle(),
                                         remark: ""
                                     )
@@ -893,7 +908,7 @@ private extension TeamColor {
     }
 }
 
-private struct MapPointSymbol: View {
+struct MapPointSymbol: View {
     let kind: MarkerKind
 
     var body: some View {
@@ -916,10 +931,10 @@ private struct MapPointSymbol: View {
                     .overlay(Rectangle().stroke(.white, lineWidth: 1))
                     .frame(width: 14, height: 14)
             case .unknown:
-                Image(systemName: "plus")
-                    .font(.system(size: 21, weight: .black))
-                    .foregroundStyle(.yellow)
-                    .shadow(color: .black, radius: 1)
+                UnknownPointShape()
+                    .fill(.yellow)
+                    .overlay(UnknownPointShape().stroke(.black, lineWidth: 1))
+                    .frame(width: 22, height: 22)
             }
         }
         .frame(width: 24, height: 24)
@@ -1002,53 +1017,145 @@ private struct ManualAlertView: View {
     }
 }
 
-private struct PointListView: View {
+private struct UnknownPointShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.width * 0.5, y: 0))
+        path.addCurve(to: CGPoint(x: rect.width * 0.75, y: rect.height * 0.25), control1: CGPoint(x: rect.width * 0.66, y: 0), control2: CGPoint(x: rect.width * 0.75, y: rect.height * 0.12))
+        path.addCurve(to: CGPoint(x: rect.width, y: rect.height * 0.5), control1: CGPoint(x: rect.width * 0.88, y: rect.height * 0.25), control2: CGPoint(x: rect.width, y: rect.height * 0.34))
+        path.addCurve(to: CGPoint(x: rect.width * 0.75, y: rect.height * 0.75), control1: CGPoint(x: rect.width, y: rect.height * 0.66), control2: CGPoint(x: rect.width * 0.88, y: rect.height * 0.75))
+        path.addCurve(to: CGPoint(x: rect.width * 0.5, y: rect.height), control1: CGPoint(x: rect.width * 0.75, y: rect.height * 0.88), control2: CGPoint(x: rect.width * 0.66, y: rect.height))
+        path.addCurve(to: CGPoint(x: rect.width * 0.25, y: rect.height * 0.75), control1: CGPoint(x: rect.width * 0.34, y: rect.height), control2: CGPoint(x: rect.width * 0.25, y: rect.height * 0.88))
+        path.addCurve(to: CGPoint(x: 0, y: rect.height * 0.5), control1: CGPoint(x: rect.width * 0.12, y: rect.height * 0.75), control2: CGPoint(x: 0, y: rect.height * 0.66))
+        path.addCurve(to: CGPoint(x: rect.width * 0.25, y: rect.height * 0.25), control1: CGPoint(x: 0, y: rect.height * 0.34), control2: CGPoint(x: rect.width * 0.12, y: rect.height * 0.25))
+        path.addCurve(to: CGPoint(x: rect.width * 0.5, y: 0), control1: CGPoint(x: rect.width * 0.25, y: rect.height * 0.12), control2: CGPoint(x: rect.width * 0.34, y: 0))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct PointListView: View {
     @ObservedObject var model: WatchSessionModel
+    @Environment(\.dismiss) private var dismiss
     @State private var confirmClearAll = false
+    @State private var expandedMarkerID: UUID?
+    @State private var markerToDelete: WatchMarker?
+    @State private var confirmDelete = false
 
     var body: some View {
-        List {
-            Section("Dropped points") {
-                if model.markers.isEmpty {
-                    Text("No points")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.markers) { marker in
-                    NavigationLink {
-                        PointDetailView(model: model, marker: marker)
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(marker.displayTitle)
-                            Text(marker.kind.rawValue)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+        GeometryReader { geometry in
+            let compact = geometry.size.height < 210
+            VStack(spacing: compact ? 4 : 8) {
+            ScrollView {
+                VStack(spacing: 8) {
+                    if model.markers.isEmpty {
+                        Text("No dropped markers")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 20)
                     }
-                }
-                if !model.markers.isEmpty {
-                    Button("Clear 2525D Points", role: .destructive) {
-                        confirmClearAll = true
+                    ForEach(model.markers) { marker in
+                        HStack(spacing: 5) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    expandedMarkerID = expandedMarkerID == marker.id ? nil : marker.id
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    MapPointSymbol(kind: marker.kind)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(marker.displayTitle)
+                                            .font(.system(size: compact ? 12 : 14, weight: .semibold))
+                                            .lineLimit(expandedMarkerID == marker.id ? 1 : 2)
+                                            .minimumScaleFactor(0.8)
+                                            .multilineTextAlignment(.leading)
+                                        Text(marker.kind.rawValue)
+                                            .font(.system(size: compact ? 11 : 12))
+                                            .lineLimit(1)
+                                        Text(marker.createdAt, format: .dateTime.hour().minute().second())
+                                            .font(.system(size: compact ? 11 : 12))
+                                            .lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(compact ? 6 : 10)
+                                .frame(maxWidth: .infinity, minHeight: compact ? 64 : 80, alignment: .leading)
+                                .background(Color(white: 0.26), in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            .accessibilityLabel("\(marker.displayTitle), \(marker.kind.rawValue). Marker actions")
+                            if expandedMarkerID == marker.id {
+                                NavigationLink {
+                                    PointDetailView(model: model, marker: marker)
+                                } label: {
+                                    Image(systemName: "ellipsis")
+                                        .rotationEffect(.degrees(90))
+                                        .font(.system(size: 23, weight: .bold))
+                                        .frame(width: 34, height: compact ? 64 : 80)
+                                        .background(Color(white: 0.19), in: Capsule())
+                                }
+                                .accessibilityLabel("Edit \(marker.displayTitle)")
+                                Button {
+                                    markerToDelete = marker
+                                    confirmDelete = true
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 21))
+                                        .foregroundStyle(.black)
+                                        .frame(width: 34, height: compact ? 64 : 80)
+                                        .background(Color(red: 0.94, green: 0.39, blue: 0.35), in: Capsule())
+                                }
+                                .accessibilityLabel("Delete \(marker.displayTitle)")
+                            }
+                        }
                     }
                 }
             }
-            if !model.incomingEntities.isEmpty {
-                Section("Incoming") {
-                    ForEach(model.incomingEntities) { entity in
-                        VStack(alignment: .leading) {
-                            Text(entity.id)
-                            Text(entity.coordinate.formatted)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+            Button { confirmClearAll = true } label: {
+                Text("Clear All Markers")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: compact ? 30 : 42)
+                    .background(model.markers.isEmpty ? Color(white: 0.26) : .red, in: Capsule())
+            }
+            .padding(.horizontal, 10)
+            .disabled(model.markers.isEmpty)
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 22, weight: .medium))
+                    .frame(width: 72, height: compact ? 30 : 40)
+                    .background(Color(white: 0.5), in: Capsule())
+            }
+            .accessibilityLabel("Back")
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
+        }
+        .background(.black)
+        .foregroundStyle(.white)
+        .buttonStyle(.plain)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .confirmationDialog("Clear all dropped markers?", isPresented: $confirmClearAll) {
+            Button("Clear All Markers", role: .destructive) {
+                model.clearAllPoints()
+                expandedMarkerID = nil
+            }
+        }
+        .confirmationDialog("Delete marker?", isPresented: $confirmDelete) {
+            Button("Delete Marker", role: .destructive) {
+                if let markerToDelete {
+                    model.deleteMarker(id: markerToDelete.id)
+                    self.markerToDelete = nil
+                    expandedMarkerID = nil
                 }
             }
         }
-        .navigationTitle("Points")
-        .confirmationDialog("Clear app points?", isPresented: $confirmClearAll) {
-            Button("Clear 2525D Points", role: .destructive) {
-                model.clearAllPoints()
+        .onAppear {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--preview-marker-actions") {
+                expandedMarkerID = model.markers.first?.id
             }
+            #endif
         }
     }
 }

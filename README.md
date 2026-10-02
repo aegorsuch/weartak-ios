@@ -52,6 +52,25 @@ A selected phone-relay provider does not imply a working BLE TAK connection;
 that integration remains incomplete. The TAK indicator also opens Network
 Preferences.
 
+### Dropped markers
+
+The dashboard point-drop button opens a radial Hostile, Neutral, Friendly,
+and Unknown picker. Selecting a type drops a point at the current location;
+missing location is reported without creating a point. Tap the center X to
+cancel, or hold it to open marker tools: Dropped Markers, Back, and Clear Last
+Marker. Clear Last Marker removes the newest saved point after confirmation.
+
+Dropped Markers shows each point's symbol, title, type, and local drop time.
+Tap a row to reveal the three-dot button for the existing point editor and
+the trash button for deleting that point. Clear All Markers removes all saved
+points after confirmation. Incoming network entities remain on the map and
+are not included in these local-marker deletion actions.
+
+Map long-press starts with Unknown and then uses the most recently dropped or
+changed marker type, remembered across launches. Dropping or changing a point
+to Unknown restores Unknown as the default. Title/remark-only edits do not
+change the default type.
+
 ## TAK Relay
 
 TAK Relay integration with iTAK and TAK Aware is not complete. The project
