@@ -6,8 +6,37 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		99A20000000000000000000A /* WearTAK Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 12858C89306DD75A002BB8CC /* WearTAK Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		99A200000000000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 12858C81306DD75A002BB8CC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 12858C88306DD75A002BB8CC;
+			remoteInfo = "WearTAK Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		99A200000000000000000006 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				99A20000000000000000000A /* WearTAK Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		12858C89306DD75A002BB8CC /* WearTAK Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WearTAK Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		99A200000000000000000001 /* WearTAK.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WearTAK.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -41,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				12858C89306DD75A002BB8CC /* WearTAK Watch App.app */,
+				99A200000000000000000001 /* WearTAK.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +100,22 @@
 			productName = "WearTAK Watch App";
 			productReference = 12858C89306DD75A002BB8CC /* WearTAK Watch App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		99A200000000000000000002 /* WearTAK Distribution */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 99A200000000000000000003 /* Build configuration list for PBXNativeTarget "WearTAK Distribution" */;
+			buildPhases = (
+				99A200000000000000000007 /* Resources */,
+				99A200000000000000000006 /* Embed Watch Content */,
+			);
+			buildRules = ();
+			dependencies = (
+				99A200000000000000000008 /* PBXTargetDependency */,
+			);
+			name = "WearTAK Distribution";
+			productName = WearTAK;
+			productReference = 99A200000000000000000001 /* WearTAK.app */;
+			productType = "com.apple.product-type.application.watchapp2-container";
 		};
 /* End PBXNativeTarget section */
 
@@ -101,6 +147,7 @@
 			projectRoot = "";
 			targets = (
 				12858C88306DD75A002BB8CC /* WearTAK Watch App */,
+				99A200000000000000000002 /* WearTAK Distribution */,
 			);
 		};
 /* End PBXProject section */
@@ -111,6 +158,12 @@
 			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		99A200000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
@@ -154,6 +207,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		99A200000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 12858C88306DD75A002BB8CC /* WearTAK Watch App */;
+			targetProxy = 99A200000000000000000009 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		12858C92306DD75B002BB8CC /* Debug */ = {
@@ -276,6 +337,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = WearTAK.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
@@ -318,6 +380,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = WearTAK.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
@@ -342,7 +405,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=watchos*]" = "WearTAK App Store";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -352,6 +415,46 @@
 				TARGETED_DEVICE_FAMILY = 4;
 				VALIDATE_PRODUCT = YES;
 				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Release;
+		};
+		99A200000000000000000004 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = H284X28FTP;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 5.8.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;
+				PRODUCT_NAME = WearTAK;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		99A200000000000000000005 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = H284X28FTP;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 5.8.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;
+				PRODUCT_NAME = WearTAK;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -372,6 +475,15 @@
 			buildConfigurations = (
 				12858C95306DD75B002BB8CC /* Debug */,
 				12858C96306DD75B002BB8CC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		99A200000000000000000003 /* Build configuration list for PBXNativeTarget "WearTAK Distribution" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99A200000000000000000004 /* Debug */,
+				99A200000000000000000005 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

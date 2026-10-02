@@ -98,13 +98,19 @@ it is not the recommended public-beta route.
 
 Before the first distribution archive:
 
-- Enroll/configure an Apple Developer Program team and register the bundle ID
-  `com.aegorsuch.weartak.watchkitapp` (or your approved replacement).
-- Configure the signing team, Apple Distribution certificate, and a compatible
-  App Store Connect distribution profile for HealthKit and Keychain. The
-  watch-only target must not request the iOS-only multicast entitlement.
-- Set Skip Install to No for the app target's Release configuration. An archive
-  without an application bundle is not a distributable app archive.
+- Register the App Store container ID `com.aegorsuch.weartak` and watch app ID
+  `com.aegorsuch.weartak.watchkitapp` with your Apple Developer Program team.
+  The App Store Connect record uses the container ID.
+- Use an Apple Distribution certificate and separate App Store Connect profiles:
+  `WearTAK Container App Store` for `com.aegorsuch.weartak`, and the existing
+  `WearTAK App Store` for `com.aegorsuch.weartak.watchkitapp`. The watch profile
+  must support HealthKit and Keychain; the container does not implement them.
+  Neither target should request the iOS-only multicast entitlement.
+- Select the container profile in WearTAK Distribution > Signing & Capabilities
+  > Release. Keep the watch profile on WearTAK Watch App. Both profiles can use
+  the same Apple Distribution certificate; registered devices are not needed.
+- The packaging target uses Skip Install No; the embedded watch target uses
+  Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
 - The project uses Version `5.8.0`, Build `3`, with separate Apple-compatible
@@ -118,9 +124,11 @@ Before the first distribution archive:
 
 Then:
 
-1. Run the protocol checks below and the watch build. Select a generic physical
-  watch destination and choose Product > Archive in Xcode. Simulator artifacts
-  cannot be uploaded as device builds.
+1. Run the protocol checks below and the watch build. For upload, choose the
+  shared scheme WearTAK App Store and destination Any iOS Device, then Product
+  > Archive. The iOS target is Apple's watch-only packaging stub, not an iPhone
+  UI or phone relay. It embeds the existing watch app under `WearTAK.app/Watch/`.
+  Continue using WearTAK Watch App for watch simulator/device development.
 2. In Organizer, validate the archive and use Distribute App > App Store
   Connect to upload it. Resolve signing or validation failures; never upload
   the simulator/ad-hoc-signed build used during development.
@@ -139,6 +147,13 @@ The current checkout includes its app-icon image and Version `5.8.0`, Build `3`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
+
+The container archive structure has been verified locally. A bare watch
+archive can be signed correctly but still be rejected for App Store distribution
+and fall back to Ad Hoc export, which asks for devices. Do not resolve that by
+registering devices for TestFlight: use the container scheme and profiles above.
+Unsigned packaging checks are not uploadable builds, and no upload or App Store
+validation is implied by a successful local archive build.
 
 Apple references:
 [TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview)
