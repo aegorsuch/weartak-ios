@@ -495,12 +495,12 @@ struct NetworkPreferencesView: View {
     var body: some View {
         List {
             NavigationLink {
-                RelayProviderView(settings: settings)
+                RelayProviderView(model: model, settings: settings)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("TAK Relay (\(settings.relayProvider.rawValue))")
-                    if settings.relayProvider == .companion {
-                        Text("Requires TAK server setup in Companion")
+                    if settings.relayProvider == .companion && !model.companionServerConfigured {
+                        Text("Configure on phone")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -619,14 +619,12 @@ private struct MulticastPortView: View {
 }
 
 private struct RelayProviderView: View {
+    @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         List {
-            Text("WearTAK Companion requires a TAK server address and a client certificate or certificate-enrollment account. It does not provide a TAK server. Ask your server administrator for access if you do not have it.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
             ForEach(RelayProvider.allCases) { provider in
                 Button {
                     settings.relayProvider = provider
@@ -642,8 +640,8 @@ private struct RelayProviderView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            if provider == .companion {
-                                Text("TAK server required")
+                            if provider == .companion && !model.companionServerConfigured {
+                                Text("Configure on phone")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }

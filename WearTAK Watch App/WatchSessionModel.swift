@@ -129,6 +129,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private static let markerStorageKey = "WearTAK.droppedPoints"
 
     @Published private(set) var connectionState: ConnectionState = .disconnected
+    @Published private(set) var companionServerConfigured = false
     @Published private(set) var lastLocation: CLLocation?
     @Published private(set) var markers: [WatchMarker] = []
     @Published private(set) var incomingEntities: [IncomingMapEntity] = []
@@ -640,8 +641,17 @@ extension WatchSessionModel: CLLocationManagerDelegate {
 extension WatchSessionModel: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         let reachable = activationState == .activated && session.isReachable
+        let configured = session.receivedApplicationContext["WearTAKCompanion.serverConfigured"] as? Bool ?? false
         Task { @MainActor [weak self] in
             self?.sitxClient.isPhoneReachable = reachable
+            self?.companionServerConfigured = configured
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        guard let configured = applicationContext["WearTAKCompanion.serverConfigured"] as? Bool else { return }
+        Task { @MainActor [weak self] in
+            self?.companionServerConfigured = configured
         }
     }
 
