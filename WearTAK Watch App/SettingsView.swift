@@ -497,7 +497,12 @@ private struct NetworkPreferencesView: View {
             NavigationLink {
                 RelayProviderView(settings: settings)
             } label: {
-                Text("TAK Relay (\(settings.relayProvider.rawValue))")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TAK Relay (\(settings.relayProvider.rawValue))")
+                    Text("Incomplete - partner integration in progress")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
             }
             NavigationLink {
                 MulticastPreferencesView(settings: settings)
@@ -616,16 +621,21 @@ private struct RelayProviderView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        List(RelayProvider.allCases) { provider in
-            Button {
-                settings.relayProvider = provider
-                dismiss()
-            } label: {
-                HStack {
-                    Text(provider.rawValue)
-                    Spacer()
-                    if settings.relayProvider == provider {
-                        Image(systemName: "checkmark")
+        List {
+            Text("TAK Relay is not complete. Integration work with the iTAK and TAK Aware partners is in progress. Selecting a provider does not enable relay delivery.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            ForEach(RelayProvider.allCases) { provider in
+                Button {
+                    settings.relayProvider = provider
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(provider.rawValue)
+                        Spacer()
+                        if settings.relayProvider == provider {
+                            Image(systemName: "checkmark")
+                        }
                     }
                 }
             }

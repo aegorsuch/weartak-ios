@@ -32,6 +32,14 @@ automatic alerts have separate preferences. Alert thresholds and durations are
 configurable. The watch target requires the HealthKit capability when signing
 for a device. Sensor monitoring and direct reporting stop in the background.
 
+## TAK Relay
+
+TAK Relay integration with iTAK and TAK Aware is not complete. The project
+developer is working with those partners to complete integration. The provider
+selector currently saves a preference only; choosing iTAK or TAK Aware does not
+establish a relay connection or enable phone-relayed delivery. Both relay menus
+identify this as incomplete and note the ongoing partner integration work.
+
 ## TAK SA Multicast
 
 Open Settings > Network Preferences > TAK SA Multicast. The entry appears
