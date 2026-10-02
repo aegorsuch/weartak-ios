@@ -256,6 +256,7 @@ private struct TacticalMapView: View {
     @ObservedObject var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var cameraHeading: Double = 0
     @State private var selectedMapPoint: MapPointSelection?
     @State private var visibleRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
@@ -271,16 +272,24 @@ private struct TacticalMapView: View {
             MapReader { proxy in
                 Map(position: $cameraPosition, selection: $selectedMapPoint) {
                     if let location = model.lastLocation {
-                        let bloodhoundReading = model.bloodhoundTarget.map {
-                            model.mapPointReading(to: $0.coordinate, from: location)
-                        }
                         Annotation("Self", coordinate: location.coordinate, anchor: .center) {
-                            Image(systemName: bloodhoundReading == nil ? "location.fill" : "location.north.fill")
-                                .font(.title3)
-                                .rotationEffect(.degrees(bloodhoundReading?.relativeBearingDegrees ?? 0))
-                                .foregroundStyle(settings.teamColor.mapColor)
-                                .padding(4)
-                                .background(.ultraThinMaterial, in: Circle())
+                            ZStack {
+                                Image(systemName: "location.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(settings.teamColor.mapColor)
+                                    .padding(4)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                if let reading = model.bloodhoundReading(from: location) {
+                                    Image(systemName: "arrow.up")
+                                        .font(.system(size: 24, weight: .heavy))
+                                        .foregroundStyle(settings.teamColor.mapColor)
+                                        .shadow(color: .black, radius: 2)
+                                        .offset(y: -32)
+                                        .rotationEffect(.degrees(reading.bearingDegrees - cameraHeading))
+                                        .allowsHitTesting(false)
+                                        .accessibilityLabel("Direction to Bloodhound target")
+                                }
+                            }
                         }
                         .tag(MapPointSelection.selfMarker)
                     }
@@ -297,6 +306,7 @@ private struct TacticalMapView: View {
                 }
                 .onMapCameraChange(frequency: .continuous) { context in
                     visibleRegion = context.region
+                    cameraHeading = context.camera.heading
                 }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)

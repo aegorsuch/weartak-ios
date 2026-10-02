@@ -83,13 +83,23 @@ enum MarkerKind: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
 }
 
+enum PLIReportingRoute {
+    case phoneRelay
+    case standaloneSitx
+}
+
 protocol TAKTransport {
+    var pliReportingRoute: PLIReportingRoute { get }
     func connect() async throws
     func sendPLI(coordinate: CLLocationCoordinate2D) async throws
     func sendMarker(_ marker: WatchMarker) async throws
     func deleteMarker(uid: String) async throws
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws
     func incomingEntities() -> AsyncStream<EntityRelayPayload>
+}
+
+extension TAKTransport {
+    var pliReportingRoute: PLIReportingRoute { .phoneRelay }
 }
 
 enum TAKTransportError: Error {
@@ -191,7 +201,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
             do {
                 try await transport.connect()
                 connectionState = .connected
-                if locationManager.authorizationStatus == .authorizedAlways ||
+                if transport.pliReportingRoute == .standaloneSitx,
+                   locationManager.authorizationStatus == .authorizedAlways ||
                     locationManager.authorizationStatus == .authorizedWhenInUse {
                     locationManager.startUpdatingLocation()
                 }
@@ -460,7 +471,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         guard manager.authorizationStatus == .authorizedAlways ||
                 manager.authorizationStatus == .authorizedWhenInUse else { return }
-        if connectionState == .connected {
+        if connectionState == .connected, transport.pliReportingRoute == .standaloneSitx {
             manager.startUpdatingLocation()
         } else {
             manager.requestLocation()
@@ -476,6 +487,12 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     }
 
     private func sendPLIIfDue(for location: CLLocation) {
+        guard transport.pliReportingRoute == .standaloneSitx else {
+            Task {
+                try? await transport.sendPLI(coordinate: location.coordinate)
+            }
+            return
+        }
         let hasActiveAlert = activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
         let interval: TimeInterval
         if hasActiveAlert {
