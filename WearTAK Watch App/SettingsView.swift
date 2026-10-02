@@ -19,7 +19,7 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            NavigationLink("Device Preferences") {
+            NavigationLink("Callsign and Device Preferences") {
                 DevicePreferencesView(settings: settings)
             }
             NavigationLink("Network Preferences") {
