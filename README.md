@@ -190,6 +190,11 @@ Unavailable beside each option; there is no separate Physiology link. The alert
 toggle is independent of the Physiological Monitoring preference that controls
 sensing.
 
+The top Exertion/Heart Rate control gains a yellow outline for an active
+physiological warning and a red outline for an active physiological alert.
+Alerts take priority over warnings; the outline clears when neither is active.
+This does not change the compass/Bloodhound ring.
+
 The network icon reflects the active WiFi, cellular, unavailable, or other
 network path and opens Network Preferences. A cellular path does not expose its
 radio generation or signal strength. Phone-proxied paths may appear as another
@@ -245,8 +250,13 @@ when recognized and their contact callsign when available.
 TAK Relay integration with iTAK and TAK Aware is not complete. The project
 developer is working with those partners to complete integration. The provider
 selector currently saves a preference only; choosing iTAK or TAK Aware does not
-establish a relay connection or enable phone-relayed delivery. Both relay menus
-identify this as incomplete and note the ongoing partner integration work.
+establish a relay connection or enable phone-relayed delivery. Their submenu
+rows use a small Teaming label rather than a general integration warning.
+
+WearTAK Companion is also listed as an optional relay choice. It requires an
+existing TAK server and an administrator-provided client certificate or
+enrollment account; it does not supply a server. Its bridge backend is still
+under implementation, so selecting it alone does not establish a connection.
 
 ## TAK SA Multicast
 

@@ -21,6 +21,7 @@ enum RelayProvider: String, CaseIterable, Identifiable {
     case notSet = "N/A"
     case itak = "iTAK"
     case takAwareRelay = "TAK Aware"
+    case companion = "WearTAK Companion"
 
     var id: Self { self }
 }

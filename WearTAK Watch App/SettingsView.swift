@@ -499,9 +499,11 @@ struct NetworkPreferencesView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("TAK Relay (\(settings.relayProvider.rawValue))")
-                    Text("Incomplete - partner integration in progress")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
+                    if settings.relayProvider == .companion {
+                        Text("Requires TAK server setup in Companion")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             NavigationLink {
@@ -622,7 +624,7 @@ private struct RelayProviderView: View {
 
     var body: some View {
         List {
-            Text("TAK Relay is not complete. Integration work with the iTAK and TAK Aware partners is in progress. Selecting a provider does not enable relay delivery.")
+            Text("WearTAK Companion requires a TAK server address and a client certificate or certificate-enrollment account. It does not provide a TAK server. Ask your server administrator for access if you do not have it.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             ForEach(RelayProvider.allCases) { provider in
@@ -631,7 +633,21 @@ private struct RelayProviderView: View {
                     dismiss()
                 } label: {
                     HStack {
-                        Text(provider.rawValue)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(provider.rawValue)
+                                if provider == .itak || provider == .takAwareRelay {
+                                    Text("Teaming")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if provider == .companion {
+                                Text("TAK server required")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                         Spacer()
                         if settings.relayProvider == provider {
                             Image(systemName: "checkmark")

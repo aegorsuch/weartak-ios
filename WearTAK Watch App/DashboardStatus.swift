@@ -1,5 +1,15 @@
 import Foundation
 
+enum DashboardPhysiologySeverity {
+    case normal, warning, alert
+
+    static func resolve(warningActive: Bool, alertActive: Bool) -> Self {
+        if alertActive { return .alert }
+        if warningActive { return .warning }
+        return .normal
+    }
+}
+
 enum DashboardNetworkConnectivity: String {
     case wifi = "WiFi"
     case cellular = "Cellular"

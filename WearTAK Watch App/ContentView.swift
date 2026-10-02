@@ -188,6 +188,17 @@ private struct WatchDashboardView: View {
         }
     }
 
+    private var physiologyBorderColor: Color {
+        switch DashboardPhysiologySeverity.resolve(
+            warningActive: physiology.warningCategory != nil,
+            alertActive: physiology.activeAutomaticAlert != nil
+        ) {
+        case .normal: return .clear
+        case .warning: return .yellow
+        case .alert: return .red
+        }
+    }
+
     private func statusHeader(small: Bool) -> some View {
         HStack(spacing: 6) {
             VStack(spacing: small ? 2 : 3) {
@@ -221,6 +232,9 @@ private struct WatchDashboardView: View {
                             .monospacedDigit()
                     }
                 }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 3)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(physiologyBorderColor, lineWidth: 2))
             }
             .accessibilityLabel(settings.dashboardMetric == .exertion
                 ? "Select metric. Exertion \(physiology.exertionPercent.map { "\($0) percent" } ?? "unavailable")"

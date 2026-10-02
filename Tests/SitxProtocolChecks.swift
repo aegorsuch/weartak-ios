@@ -107,6 +107,11 @@ struct SitxProtocolChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
+        precondition(DashboardPhysiologySeverity.resolve(warningActive: false, alertActive: false) == .normal)
+        precondition(DashboardPhysiologySeverity.resolve(warningActive: true, alertActive: false) == .warning)
+        precondition(DashboardPhysiologySeverity.resolve(warningActive: false, alertActive: true) == .alert)
+        precondition(DashboardPhysiologySeverity.resolve(warningActive: true, alertActive: true) == .alert)
+        print("PASS: top physiological indicator warning/alert priority and reset")
         let userCoordinate = CLLocationCoordinate2D(latitude: 38, longitude: -77)
         let userXML = SitxCoT.event(uid: "incoming-user", type: "a-f-G-U-C", coordinate: userCoordinate,
             detail: "<contact callsign=\"ALPHA\"/><__group name=\" Red \" role=\"Team Lead\"/>", lifetime: 300)
