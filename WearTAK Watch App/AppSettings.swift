@@ -9,12 +9,32 @@ enum RelayProvider: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
+enum TeamColor: String, CaseIterable, Identifiable {
+    case white = "White"
+    case yellow = "Yellow"
+    case orange = "Orange"
+    case magenta = "Magenta"
+    case red = "Red"
+    case maroon = "Maroon"
+    case purple = "Purple"
+    case darkBlue = "Dark Blue"
+    case blue = "Blue"
+    case cyan = "Cyan"
+    case teal = "Teal"
+    case green = "Green"
+    case darkGreen = "Dark Green"
+    case brown = "Brown"
+
+    var id: Self { self }
+}
+
 /// Persisted preferences mirroring Garmin's Device/Network/Alerting/Tool Preferences menus.
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let watchLabel = "WearTAK.watchLabel"
         static let callSign = "WearTAK.callSign"
+        static let teamColor = "WearTAK.teamColor"
         static let chatEnabled = "WearTAK.chatEnabled"
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
@@ -65,6 +85,10 @@ final class AppSettings: ObservableObject {
 
     @Published var callSign: String {
         didSet { defaults.set(callSign, forKey: Keys.callSign) }
+    }
+
+    @Published var teamColor: TeamColor {
+        didSet { defaults.set(teamColor.rawValue, forKey: Keys.teamColor) }
     }
 
     @Published var chatEnabled: Bool {
@@ -303,6 +327,7 @@ final class AppSettings: ObservableObject {
         self.defaults = defaults
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
         callSign = defaults.string(forKey: Keys.callSign) ?? ""
+        teamColor = TeamColor(rawValue: defaults.string(forKey: Keys.teamColor) ?? "White") ?? .white
         chatEnabled = defaults.object(forKey: Keys.chatEnabled) as? Bool ?? true
         let storedRelayProvider = defaults.string(forKey: Keys.relayProvider)
         if storedRelayProvider == "TAK Aware Relay" {

@@ -46,11 +46,62 @@ private struct DevicePreferencesView: View {
             TextField("Callsign", text: $settings.callSign)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
+            NavigationLink("My Team") {
+                MyTeamView(settings: settings)
+            }
             NavigationLink("My User Metrics") {
                 UserMetricsView(settings: settings)
             }
         }
         .navigationTitle("Callsign and Device Preferences")
+    }
+}
+
+private struct MyTeamView: View {
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List(TeamColor.allCases) { color in
+            Button {
+                settings.teamColor = color
+                dismiss()
+            } label: {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(color.swatchColor)
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(.gray.opacity(0.7), lineWidth: 1))
+                    Text(color.rawValue)
+                    Spacer()
+                    if settings.teamColor == color {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle("My Team")
+    }
+}
+
+private extension TeamColor {
+    var swatchColor: Color {
+        switch self {
+        case .white: return .white
+        case .yellow: return .yellow
+        case .orange: return .orange
+        case .magenta: return Color(red: 1, green: 0, blue: 1)
+        case .red: return .red
+        case .maroon: return Color(red: 0.5, green: 0, blue: 0)
+        case .purple: return .purple
+        case .darkBlue: return Color(red: 0, green: 0.15, blue: 0.45)
+        case .blue: return .blue
+        case .cyan: return .cyan
+        case .teal: return .teal
+        case .green: return .green
+        case .darkGreen: return Color(red: 0, green: 0.35, blue: 0.12)
+        case .brown: return .brown
+        }
     }
 }
 

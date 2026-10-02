@@ -53,7 +53,7 @@ struct ContentView: View {
                     }
                 }
                 NavigationLink {
-                    TacticalMapView(model: model)
+                    TacticalMapView(model: model, settings: settings)
                 } label: {
                     Label("Map", systemImage: "map")
                 }
@@ -246,9 +246,10 @@ private struct EnvironmentView: View {
 
 private struct TacticalMapView: View {
     @ObservedObject var model: WatchSessionModel
+    @ObservedObject var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: MapCameraPosition = .automatic
-    @State private var selectedPointID: UUID?
+    @State private var selectedMapPoint: MapPointSelection?
     @State private var visibleRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
         span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
@@ -261,16 +262,26 @@ private struct TacticalMapView: View {
     var body: some View {
         ZStack {
             MapReader { proxy in
-                Map(position: $cameraPosition, selection: $selectedPointID) {
-                    if let coordinate = model.lastLocation?.coordinate {
-                        Marker("You", systemImage: "location.fill", coordinate: coordinate)
-                            .tint(.blue)
+                Map(position: $cameraPosition, selection: $selectedMapPoint) {
+                    if let location = model.lastLocation {
+                        let bloodhoundReading = model.bloodhoundTarget.map {
+                            model.mapPointReading(to: $0.coordinate, from: location)
+                        }
+                        Annotation("Self", coordinate: location.coordinate, anchor: .center) {
+                            Image(systemName: bloodhoundReading == nil ? "location.fill" : "location.north.fill")
+                                .font(.title3)
+                                .rotationEffect(.degrees(bloodhoundReading?.relativeBearingDegrees ?? 0))
+                                .foregroundStyle(settings.teamColor.mapColor)
+                                .padding(4)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        .tag(MapPointSelection.selfMarker)
                     }
                     ForEach(model.markers) { marker in
                         Annotation(marker.displayTitle, coordinate: marker.coordinate, anchor: .center) {
                             MapPointSymbol(kind: marker.kind)
                         }
-                            .tag(marker.id)
+                            .tag(MapPointSelection.marker(marker.id))
                     }
                     ForEach(model.incomingEntities) { entity in
                         Marker(entity.id, systemImage: "person.fill", coordinate: entity.coordinate)
@@ -315,10 +326,19 @@ private struct TacticalMapView: View {
             .onChange(of: model.lastLocation?.timestamp) { _, _ in
                 centerOnce()
             }
-            .onChange(of: selectedPointID) { _, id in
-                guard let id, let marker = model.markers.first(where: { $0.id == id }) else { return }
-                pointDraft = MapPointDraft(marker: marker)
-                selectedPointID = nil
+            .onChange(of: selectedMapPoint) { _, selection in
+                guard let selection else { return }
+                switch selection {
+                case .selfMarker:
+                    if let location = model.lastLocation {
+                        pointDraft = MapPointDraft(coordinate: location.coordinate)
+                    }
+                case .marker(let id):
+                    if let marker = model.markers.first(where: { $0.id == id }) {
+                        pointDraft = MapPointDraft(marker: marker)
+                    }
+                }
+                selectedMapPoint = nil
             }
 
             VStack(spacing: 0) {
@@ -363,7 +383,11 @@ private struct TacticalMapView: View {
         .navigationTitle("Map")
         .sheet(item: $pointDraft) { draft in
             NavigationStack {
-                PointDetailView(model: model, marker: draft.marker)
+                if let marker = draft.marker {
+                    PointDetailView(model: model, marker: marker)
+                } else {
+                    SelfCoordinateView(coordinate: draft.coordinate)
+                }
             }
         }
     }
@@ -403,9 +427,63 @@ private struct TacticalMapView: View {
     }
 }
 
+private enum MapPointSelection: Hashable {
+    case selfMarker
+    case marker(UUID)
+}
+
 private struct MapPointDraft: Identifiable {
-    let marker: WatchMarker
-    var id: UUID { marker.id }
+    let id: String
+    let coordinate: CLLocationCoordinate2D
+    let marker: WatchMarker?
+
+    init(marker: WatchMarker) {
+        id = marker.id.uuidString
+        coordinate = marker.coordinate
+        self.marker = marker
+    }
+
+    init(coordinate: CLLocationCoordinate2D) {
+        id = "self"
+        self.coordinate = coordinate
+        marker = nil
+    }
+}
+
+private struct SelfCoordinateView: View {
+    let coordinate: CLLocationCoordinate2D
+
+    var body: some View {
+        List {
+            Text(String(format: "Lat: %.5f", coordinate.latitude))
+            Text(String(format: "Lon: %.5f", coordinate.longitude))
+            Text(MapCoordinateFormatter.mgrs(coordinate) ?? "Unavailable")
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .navigationTitle("Self")
+    }
+}
+
+private extension TeamColor {
+    var mapColor: Color {
+        switch self {
+        case .white: return .white
+        case .yellow: return .yellow
+        case .orange: return .orange
+        case .magenta: return Color(red: 1, green: 0, blue: 1)
+        case .red: return .red
+        case .maroon: return Color(red: 0.5, green: 0, blue: 0)
+        case .purple: return .purple
+        case .darkBlue: return Color(red: 0, green: 0.15, blue: 0.45)
+        case .blue: return .blue
+        case .cyan: return .cyan
+        case .teal: return .teal
+        case .green: return .green
+        case .darkGreen: return Color(red: 0, green: 0.35, blue: 0.12)
+        case .brown: return .brown
+        }
+    }
 }
 
 private struct MapPointSymbol: View {
