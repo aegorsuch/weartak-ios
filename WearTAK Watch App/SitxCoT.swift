@@ -2,6 +2,10 @@ import CoreLocation
 import Foundation
 
 enum SitxCoT {
+    static func isUser(type: String) -> Bool {
+        type.hasPrefix("a-") && type.split(separator: "-").dropFirst(2).starts(with: ["G", "U", "C"])
+    }
+
     static func escape(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
@@ -35,6 +39,9 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     private var eventUID: String?
     private var eventType: String?
     private var point: CLLocationCoordinate2D?
+    private var callSign: String?
+    private var team: String?
+    private var role: String?
     private var expired = false
 
     init(excludedUID: String, now: Date) {
@@ -48,6 +55,9 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             eventUID = attributes["uid"]
             eventType = attributes["type"]
             point = nil
+            callSign = nil
+            team = nil
+            role = nil
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             var stale = attributes["stale"].flatMap { formatter.date(from: $0) }
@@ -56,6 +66,11 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                 stale = attributes["stale"].flatMap { formatter.date(from: $0) }
             }
             expired = stale.map { $0 <= now } ?? true
+        } else if elementName == "contact" {
+            callSign = attributes["callsign"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if elementName == "__group" {
+            team = attributes["name"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            role = attributes["role"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         } else if elementName == "point",
                   let latitude = attributes["lat"].flatMap(Double.init),
                   let longitude = attributes["lon"].flatMap(Double.init),
@@ -69,7 +84,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
         guard elementName == "event" else { return }
         if let eventUID, eventUID != excludedUID, !eventUID.isEmpty,
            let eventType, eventType.hasPrefix("a-"), let point, !expired {
-            entities.append(EntityRelayPayload(uid: eventUID, lat: point.latitude, lon: point.longitude, type: eventType))
+            entities.append(EntityRelayPayload(uid: eventUID, lat: point.latitude, lon: point.longitude, type: eventType,
+                                               callSign: callSign, team: team, role: role))
         }
         eventUID = nil
         point = nil

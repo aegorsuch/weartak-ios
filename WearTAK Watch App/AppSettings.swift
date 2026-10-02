@@ -80,6 +80,9 @@ enum WiFiBatteryPolicy: String, CaseIterable, Identifiable {
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let dashboardMetric = "WearTAK.dashboardMetric"
+        static let mapButtonsVisible = "WearTAK.mapButtonsVisible"
+        static let hiddenMapTeams = "WearTAK.hiddenMapTeams"
+        static let hiddenMapRoles = "WearTAK.hiddenMapRoles"
         static let watchLabel = "WearTAK.watchLabel"
         static let callSign = "WearTAK.callSign"
         static let teamColor = "WearTAK.teamColor"
@@ -144,6 +147,24 @@ final class AppSettings: ObservableObject {
 
     @Published var dashboardMetric: DashboardMetric {
         didSet { defaults.set(dashboardMetric.rawValue, forKey: Keys.dashboardMetric) }
+    }
+
+    @Published var mapButtonsVisible: Bool {
+        didSet { defaults.set(mapButtonsVisible, forKey: Keys.mapButtonsVisible) }
+    }
+
+    @Published var hiddenMapTeams: Set<String> {
+        didSet { defaults.set(hiddenMapTeams.sorted(), forKey: Keys.hiddenMapTeams) }
+    }
+
+    @Published var hiddenMapRoles: Set<String> {
+        didSet { defaults.set(hiddenMapRoles.sorted(), forKey: Keys.hiddenMapRoles) }
+    }
+
+    func isMapUserVisible(team: String?, role: String?) -> Bool {
+        let teamKey = team?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let roleKey = role?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        return !hiddenMapTeams.contains(teamKey) && !hiddenMapRoles.contains(roleKey)
     }
 
     @Published var watchLabel: String {
@@ -467,6 +488,9 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         dashboardMetric = DashboardMetric(rawValue: defaults.string(forKey: Keys.dashboardMetric) ?? "") ?? .exertion
+        mapButtonsVisible = defaults.object(forKey: Keys.mapButtonsVisible) as? Bool ?? true
+        hiddenMapTeams = Set(defaults.stringArray(forKey: Keys.hiddenMapTeams) ?? [])
+        hiddenMapRoles = Set(defaults.stringArray(forKey: Keys.hiddenMapRoles) ?? [])
         reportingStrategy = ReportingStrategy(rawValue: defaults.string(forKey: Keys.reportingStrategy) ?? ReportingStrategy.dynamic.rawValue) ?? .dynamic
         wifiBatteryPolicy = WiFiBatteryPolicy(rawValue: defaults.string(forKey: Keys.wifiBatteryPolicy) ?? WiFiBatteryPolicy.none.rawValue) ?? .none
         stationaryReportingInterval = defaults.object(forKey: Keys.stationaryReportingInterval) as? Int ?? 3600

@@ -9,8 +9,8 @@ struct ContentView: View {
     @ObservedObject var environment: EnvironmentalMonitor
     @ObservedObject var settings: AppSettings
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showClearPointsConfirmation = false
     @State private var showPointTypePicker = false
+    @State private var showMapPreview = false
     @State private var toastMessage: String?
 
     var body: some View {
@@ -23,9 +23,11 @@ struct ContentView: View {
                 dropPoint: {
                     model.requestLocation()
                     showPointTypePicker = true
-                },
-                clearPoints: { showClearPointsConfirmation = true }
+                }
             )
+            .navigationDestination(isPresented: $showMapPreview) {
+                TacticalMapView(model: model, settings: settings)
+            }
             .overlay(alignment: .bottom) {
                 if let toastMessage {
                     Text(toastMessage)
@@ -51,18 +53,18 @@ struct ContentView: View {
                 }
             }
         }
-        .confirmationDialog("Clear app points?", isPresented: $showClearPointsConfirmation) {
-            Button("Clear 2525D Points", role: .destructive) {
-                model.clearAllPoints()
-                showToast("Old points cleared")
-            }
-        }
         .task {
             model.setAppActive(true)
             model.requestLocation()
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--preview-point-picker") {
                 showPointTypePicker = true
+            }
+            if ProcessInfo.processInfo.arguments.contains("--preview-map-filters") {
+                model.receiveEntity(EntityRelayPayload(uid: "preview-alpha", lat: 41.8801, lon: -87.6410, type: "a-f-G-U-C", callSign: "ALPHA", team: "Red", role: "Team Lead"))
+                model.receiveEntity(EntityRelayPayload(uid: "preview-bravo", lat: 41.8802, lon: -87.6412, type: "a-f-G-U-C", callSign: "BRAVO", team: "Red", role: "Team Lead"))
+                model.receiveEntity(EntityRelayPayload(uid: "preview-charlie", lat: 41.8803, lon: -87.6414, type: "a-f-G-U-C", callSign: "CHARLIE", team: "Green", role: "Team Member"))
+                showMapPreview = true
             }
             #endif
             if settings.physiologicalAlertsEnabled {
@@ -142,34 +144,34 @@ private struct WatchDashboardView: View {
     @ObservedObject var environment: EnvironmentalMonitor
     @ObservedObject var settings: AppSettings
     let dropPoint: () -> Void
-    let clearPoints: () -> Void
 
     private let accent = Color(red: 0.67, green: 0.80, blue: 0.98)
 
     var body: some View {
         GeometryReader { geometry in
-            let compact = geometry.size.height < 240
-            let small = geometry.size.height < 205
+            let small = geometry.size.height < 180
+            let spacing = min(12, max(6, geometry.size.height * 0.04))
+            let rowHeight = max(0, geometry.size.height - 20 - spacing * 3)
             ScrollView {
-                VStack(spacing: small ? 2 : compact ? 4 : 6) {
+                VStack(spacing: spacing) {
                     statusHeader(small: small)
-                        .frame(height: small ? 34 : compact ? 40 : 48)
+                        .frame(height: rowHeight * 0.26)
                     actionRow
-                        .frame(height: small ? 36 : compact ? 44 : 52)
+                        .frame(height: rowHeight * 0.30)
                     shortcutRow(small: small)
-                        .frame(height: small ? 28 : compact ? 34 : 40)
+                        .frame(height: rowHeight * 0.20)
                     navigationRow(small: small)
-                        .frame(height: small ? 30 : compact ? 40 : 46)
-                    clockRow
-                        .frame(height: small ? 18 : compact ? 20 : 24)
+                        .frame(height: rowHeight * 0.24)
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, small ? 2 : 4)
+                .padding(.horizontal, 4)
+                .padding(.top, 4)
+                .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
             .scrollIndicators(.hidden)
         }
         .background(.black)
+        .ignoresSafeArea(.container, edges: .bottom)
         .buttonStyle(.plain)
         .toolbar(.hidden, for: .navigationBar)
         .task {
@@ -192,7 +194,7 @@ private struct WatchDashboardView: View {
                     NetworkPreferencesView(model: model, settings: settings, sitxClient: model.sitxClient)
                 } label: {
                     Image(systemName: model.networkConnectivity.symbol)
-                        .font(.system(size: small ? 11 : 13, weight: .semibold))
+                        .font(.system(size: small ? 12 : 15, weight: .semibold))
                         .frame(width: 28, height: small ? 12 : 16)
                 }
                 .accessibilityLabel("Network preferences: \(model.networkConnectivity.rawValue)")
@@ -223,7 +225,7 @@ private struct WatchDashboardView: View {
             Spacer(minLength: 0)
             VStack(spacing: small ? 2 : 3) {
                 Button { model.requestLocation() } label: {
-                    Image(systemName: "mappin.circle.fill")
+                    Image(systemName: "location.fill")
                         .font(.system(size: small ? 18 : 20))
                         .foregroundStyle(model.lastLocation == nil ? .gray : .white)
                         .frame(width: 28, height: small ? 20 : 24)
@@ -252,7 +254,7 @@ private struct WatchDashboardView: View {
             Button(action: dropPoint) {
                 PointDropSymbol()
                     .stroke(.white, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
-                    .frame(width: 27, height: 30)
+                    .frame(width: 31, height: 34)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(Capsule().stroke(.white, lineWidth: 3))
             }
@@ -329,44 +331,9 @@ private struct WatchDashboardView: View {
         }
     }
 
-    private var clockRow: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            Text(context.date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
-                .font(.system(size: 19, weight: .regular, design: .rounded))
-                .italic()
-                .monospacedDigit()
-                .frame(maxWidth: .infinity)
-        }
-        .overlay(alignment: .trailing) {
-            NavigationLink {
-                List {
-                    NavigationLink {
-                        EnvironmentView(monitor: environment, settings: settings)
-                    } label: {
-                        Label("Environment", systemImage: "barometer")
-                    }
-                    NavigationLink {
-                        PointListView(model: model)
-                    } label: {
-                        Label("2525D Points", systemImage: "mappin.and.ellipse")
-                    }
-                    Button(role: .destructive, action: clearPoints) {
-                        Label("Clear 2525D Points", systemImage: "trash")
-                    }
-                }
-                .navigationTitle("More")
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 28, height: 24)
-            }
-            .accessibilityLabel("More tools")
-        }
-    }
-
     private func outlinedControl(_ symbol: String, color: Color) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 26, weight: .regular))
+            .font(.system(size: 30, weight: .regular))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(Capsule().stroke(color, lineWidth: 3))
     }
@@ -401,9 +368,18 @@ private struct DashboardMetricPreferencesView: View {
                         settings.dashboardMetric = metric
                         dismiss()
                     } label: {
-                        HStack {
+                        HStack(spacing: 4) {
                             Label(metric.rawValue, systemImage: metric.symbol)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Spacer()
+                            Text(reading(for: metric))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                             if settings.dashboardMetric == metric {
                                 Image(systemName: "checkmark")
                             }
@@ -411,13 +387,19 @@ private struct DashboardMetricPreferencesView: View {
                     }
                 }
             }
-            NavigationLink {
-                PhysiologyView(monitor: monitor)
-            } label: {
-                Label("Physiology", systemImage: "heart.text.square")
-            }
         }
         .navigationTitle("Metric")
+        .task { await monitor.startViewing() }
+        .onDisappear { monitor.stopViewing() }
+    }
+
+    private func reading(for metric: DashboardMetric) -> String {
+        switch metric {
+        case .exertion:
+            return monitor.exertionPercent.map { "\($0)%" } ?? "Unavailable"
+        case .heartRate:
+            return monitor.heartRate.map { "\($0) BPM" } ?? "Unavailable"
+        }
     }
 }
 
@@ -611,6 +593,7 @@ private struct TacticalMapView: View {
     )
     @State private var hasCentered = false
     @State private var pointDraft: MapPointDraft?
+    @State private var showLayersMenu = false
     @State private var longPressStart: CGPoint?
     @State private var longPressTask: Task<Void, Never>?
 
@@ -653,8 +636,11 @@ private struct TacticalMapView: View {
                             .tag(MapPointSelection.marker(marker.id))
                     }
                     ForEach(model.incomingEntities) { entity in
-                        Marker(entity.id, systemImage: "person.fill", coordinate: entity.coordinate)
-                            .tint(entity.kind == .hostile ? .red : entity.kind == .friendly ? .blue : .yellow)
+                        if !entity.isUser || settings.isMapUserVisible(team: entity.team, role: entity.role) {
+                            Marker(entity.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? entity.id,
+                                   systemImage: entity.isUser ? "person.fill" : "mappin", coordinate: entity.coordinate)
+                                .tint(incomingMapColor(entity))
+                        }
                     }
                 }
                 .onMapCameraChange(frequency: .continuous) { context in
@@ -711,31 +697,48 @@ private struct TacticalMapView: View {
                 selectedMapPoint = nil
             }
 
-            VStack(spacing: 0) {
-                Button {
-                    zoom(by: 0.5)
-                } label: {
-                    mapControl("plus", label: "Zoom in")
-                }
-                Spacer(minLength: 8)
+            if settings.mapButtonsVisible {
+                VStack(spacing: 0) {
+                    Button {
+                        zoom(by: 0.5)
+                    } label: {
+                        mapControl("plus", label: "Zoom in")
+                    }
+                    Spacer(minLength: 8)
 
-                Button {
-                    centerOnLocation()
-                } label: {
-                    mapControl("scope", label: "Snap to self")
-                }
-                .disabled(model.lastLocation == nil)
-                Spacer(minLength: 8)
+                    Button {
+                        centerOnLocation()
+                    } label: {
+                        mapControl("scope", label: "Snap to self")
+                    }
+                    .disabled(model.lastLocation == nil)
+                    Spacer(minLength: 8)
 
-                Button {
-                    zoom(by: 2)
-                } label: {
-                    mapControl("minus", label: "Zoom out")
+                    Button {
+                        zoom(by: 2)
+                    } label: {
+                        mapControl("minus", label: "Zoom out")
+                    }
                 }
+                .padding(.leading, 5)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
-            .padding(.leading, 5)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+            VStack {
+                Button {
+                    showLayersMenu = true
+                } label: {
+                    Image(systemName: "square.3.layers.3d")
+                        .font(.system(size: 22))
+                        .frame(width: 40, height: 36)
+                        .background(.regularMaterial, in: Circle())
+                }
+                .accessibilityLabel("Layers Menu")
+                Spacer()
+            }
+            .padding(.top, 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             HStack {
                 Spacer()
@@ -754,7 +757,12 @@ private struct TacticalMapView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bloodhoundPanel
         }
-        .onAppear { updateBloodhoundHeading() }
+        .onAppear {
+            updateBloodhoundHeading()
+            #if DEBUG
+            showLayersMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-filters")
+            #endif
+        }
         .onDisappear { model.stopHeadingUpdates() }
         .onChange(of: model.bloodhoundTargetID) { _, _ in
             updateBloodhoundHeading()
@@ -766,6 +774,11 @@ private struct TacticalMapView: View {
                 } else {
                     SelfCoordinateView(coordinate: draft.coordinate)
                 }
+            }
+        }
+        .sheet(isPresented: $showLayersMenu, onDismiss: updateBloodhoundHeading) {
+            NavigationStack {
+                MapLayersMenuView(model: model, settings: settings)
             }
         }
     }
@@ -814,6 +827,14 @@ private struct TacticalMapView: View {
         }
     }
 
+    private func incomingMapColor(_ entity: IncomingMapEntity) -> Color {
+        if entity.isUser, let team = entity.team,
+           let color = TeamColor.allCases.first(where: { $0.rawValue.caseInsensitiveCompare(team.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame }) {
+            return color.mapColor
+        }
+        return entity.kind == .hostile ? .red : entity.kind == .friendly ? .blue : .yellow
+    }
+
     private func mapControl(_ systemName: String, label: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 15, weight: .semibold))
@@ -846,6 +867,57 @@ private struct TacticalMapView: View {
         let region = MKCoordinateRegion(center: visibleRegion.center, span: span)
         visibleRegion = region
         cameraPosition = .region(region)
+    }
+}
+
+private struct MapLayersMenuView: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Toggle("Map Buttons", isOn: $settings.mapButtonsVisible)
+            if !model.incomingUserTeams.isEmpty {
+                Section("Team Colors (\(model.incomingUserTeams.count))") {
+                    ForEach(model.incomingUserTeams) { group in
+                        Toggle(isOn: Binding(
+                            get: { !settings.hiddenMapTeams.contains(group.id) },
+                            set: { visible in
+                                if visible { settings.hiddenMapTeams.remove(group.id) }
+                                else { settings.hiddenMapTeams.insert(group.id) }
+                            }
+                        )) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(TeamColor.allCases.first { $0.rawValue.caseInsensitiveCompare(group.name) == .orderedSame }?.mapColor ?? .gray)
+                                    .frame(width: 10, height: 10)
+                                Text("\(group.name) (\(group.count))")
+                            }
+                        }
+                    }
+                }
+            }
+            if !model.incomingUserRoles.isEmpty {
+                Section("Roles (\(model.incomingUserRoles.count))") {
+                    ForEach(model.incomingUserRoles) { group in
+                        Toggle("\(group.name) (\(group.count))", isOn: Binding(
+                            get: { !settings.hiddenMapRoles.contains(group.id) },
+                            set: { visible in
+                                if visible { settings.hiddenMapRoles.remove(group.id) }
+                                else { settings.hiddenMapRoles.insert(group.id) }
+                            }
+                        ))
+                    }
+                }
+            }
+            Button {
+                dismiss()
+            } label: {
+                Label("Back", systemImage: "arrow.left")
+            }
+        }
+        .navigationTitle("Layers Menu")
     }
 }
 

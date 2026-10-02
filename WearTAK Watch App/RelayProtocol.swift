@@ -45,6 +45,22 @@ struct EntityRelayPayload: Codable {
     let lat: Double
     let lon: Double
     let type: String
+    var callSign: String? = nil
+    var team: String? = nil
+    var role: String? = nil
+}
+
+struct MapUserGroup: Identifiable {
+    let id: String
+    let name: String
+    let count: Int
+
+    static func make(values: [String]) -> [Self] {
+        let names = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return Dictionary(grouping: names, by: { $0.lowercased() }).map { key, names in
+            Self(id: key, name: names.sorted()[0], count: names.count)
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
 }
 
 enum RelayMessages {

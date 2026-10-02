@@ -34,11 +34,17 @@ for a device. Sensor monitoring and direct reporting stop in the background.
 
 ### Dashboard
 
+The dashboard uses the watchOS status-area clock; it has no duplicate bottom
+clock or More button. Marker tools remain available by holding the point
+picker's center button.
+
 Tap the center metric to choose Exertion or Heart Rate. Exertion is the default;
 the selection is remembered. Heart Rate uses a heartbeat waveform icon and
 displays BPM. The selection menu has the existing Physiological Alerts On/Off
-toggle at the top, plus access to the full Physiology view. The alert toggle is
-independent of the Physiological Monitoring preference that controls sensing.
+toggle at the top. Exertion and Heart Rate show their current readings or
+Unavailable beside each option; there is no separate Physiology link. The alert
+toggle is independent of the Physiological Monitoring preference that controls
+sensing.
 
 The network icon reflects the active WiFi, cellular, unavailable, or other
 network path and opens Network Preferences. A cellular path does not expose its
@@ -70,6 +76,23 @@ Map long-press starts with Unknown and then uses the most recently dropped or
 changed marker type, remembered across launches. Dropping or changing a point
 to Unknown restores Unknown as the default. Title/remark-only edits do not
 change the default type.
+
+### Map Layers Menu
+
+The stacked-layers icon at the top of the map opens Layers Menu. Map Buttons
+shows or hides zoom and snap controls; layers and Back remain available.
+Below it, Team Colors and Roles list only groups present among received users,
+with incoming-user counts. These groups come from CoT `__group name/role`
+metadata received through multicast or Sit(x), not from a fixed option list.
+
+All groups start visible. Switching a team or role off hides its users on the
+map; both filters must allow a user for that user to appear. Hidden selections
+are remembered across launches. Reception continues, and hidden users remain
+in group counts so they can be shown again. Groups disappear from the menu as
+their users are pruned from the incoming list. Missing team/role metadata does
+not create an empty toggle. Filters do not hide your own location, saved points,
+or incoming non-user markers. Incoming users use their reported team color
+when recognized and their contact callsign when available.
 
 ## TAK Relay
 

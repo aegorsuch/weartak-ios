@@ -107,6 +107,39 @@ struct SitxProtocolChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
+        let userCoordinate = CLLocationCoordinate2D(latitude: 38, longitude: -77)
+        let userXML = SitxCoT.event(uid: "incoming-user", type: "a-f-G-U-C", coordinate: userCoordinate,
+            detail: "<contact callsign=\"ALPHA\"/><__group name=\" Red \" role=\"Team Lead\"/>", lifetime: 300)
+        let incomingUser = SitxCoT.parse(Data(userXML.utf8), excluding: "self")
+        precondition(incomingUser.count == 1 && incomingUser[0].callSign == "ALPHA")
+        precondition(incomingUser[0].team == "Red" && incomingUser[0].role == "Team Lead")
+        let pointXML = SitxCoT.event(uid: "incoming-point", type: "a-n-G", coordinate: userCoordinate, detail: "", lifetime: 300)
+        precondition(SitxCoT.parse(Data(pointXML.utf8), excluding: "self").first?.team == nil)
+        precondition(SitxCoT.isUser(type: "a-f-G-U-C") && SitxCoT.isUser(type: "a-h-G-U-C-I"))
+        precondition(!SitxCoT.isUser(type: "a-n-G") && !SitxCoT.isUser(type: "b-a-o"))
+        print("PASS: incoming CoT callsign/team/role parsing and user classification")
+        let teamGroups = MapUserGroup.make(values: ["Red", " red ", "Green", " "])
+        precondition(teamGroups.count == 2 && teamGroups.first { $0.id == "red" }?.count == 2)
+        precondition(MapUserGroup.make(values: []).isEmpty)
+        precondition(settings.isMapUserVisible(team: "Red", role: "Team Lead"))
+        settings.hiddenMapTeams.insert("red")
+        precondition(!settings.isMapUserVisible(team: " RED ", role: "Team Lead"))
+        precondition(settings.isMapUserVisible(team: "Green", role: "Team Lead"))
+        settings.hiddenMapRoles.insert("team lead")
+        precondition(!settings.isMapUserVisible(team: "Green", role: "Team Lead"))
+        precondition(settings.isMapUserVisible(team: "Green", role: "Team Member"))
+        precondition(settings.isMapUserVisible(team: nil, role: nil))
+        let restoredFilters = AppSettings(defaults: defaults)
+        precondition(restoredFilters.hiddenMapTeams == ["red"] && restoredFilters.hiddenMapRoles == ["team lead"])
+        settings.hiddenMapTeams = []
+        settings.hiddenMapRoles = []
+        print("PASS: present-user grouping, independent team/role filters and persistence")
+        precondition(settings.mapButtonsVisible)
+        settings.mapButtonsVisible = false
+        precondition(!AppSettings(defaults: defaults).mapButtonsVisible)
+        settings.mapButtonsVisible = true
+        precondition(AppSettings(defaults: defaults).mapButtonsVisible)
+        print("PASS: map-buttons default and visibility persistence")
         precondition(settings.dashboardMetric == .exertion)
         settings.dashboardMetric = .heartRate
         precondition(AppSettings(defaults: defaults).dashboardMetric == .heartRate)

@@ -63,6 +63,11 @@ struct IncomingMapEntity: Identifiable {
     let longitude: Double
     let type: String
     let lastSeen: Date
+    let callSign: String?
+    let team: String?
+    let role: String?
+
+    var isUser: Bool { SitxCoT.isUser(type: type) }
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -127,6 +132,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var lastLocation: CLLocation?
     @Published private(set) var markers: [WatchMarker] = []
     @Published private(set) var incomingEntities: [IncomingMapEntity] = []
+    var incomingUserTeams: [MapUserGroup] {
+        MapUserGroup.make(values: incomingEntities.filter(\.isUser).compactMap(\.team))
+    }
+    var incomingUserRoles: [MapUserGroup] {
+        MapUserGroup.make(values: incomingEntities.filter(\.isUser).compactMap(\.role))
+    }
     @Published private(set) var bloodhoundTargetID: UUID?
     @Published private(set) var headingDegrees: Double?
     @Published private(set) var activeAlertType: ManualAlertType?
@@ -432,7 +443,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
         let entity = IncomingMapEntity(
             id: payload.uid, latitude: payload.lat, longitude: payload.lon,
-            type: payload.type, lastSeen: now
+            type: payload.type, lastSeen: now,
+            callSign: payload.callSign, team: payload.team, role: payload.role
         )
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
             incomingEntities[index] = entity
