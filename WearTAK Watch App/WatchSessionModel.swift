@@ -539,6 +539,6 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             headingDegrees = nil
             return
         }
-        headingDegrees = newHeading.magneticHeading
+        headingDegrees = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
     }
 }

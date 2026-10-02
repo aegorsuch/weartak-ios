@@ -404,7 +404,15 @@ private struct TacticalMapView: View {
         .buttonStyle(.plain)
         .navigationBarBackButtonHidden(true)
         .navigationTitle("Map")
-        .sheet(item: $pointDraft) { draft in
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bloodhoundPanel
+        }
+        .onAppear { updateBloodhoundHeading() }
+        .onDisappear { model.stopHeadingUpdates() }
+        .onChange(of: model.bloodhoundTargetID) { _, _ in
+            updateBloodhoundHeading()
+        }
+        .sheet(item: $pointDraft, onDismiss: updateBloodhoundHeading) { draft in
             NavigationStack {
                 if let marker = draft.marker {
                     PointDetailView(model: model, marker: marker)
@@ -412,6 +420,50 @@ private struct TacticalMapView: View {
                     SelfCoordinateView(coordinate: draft.coordinate)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var bloodhoundPanel: some View {
+        if model.bloodhoundTarget != nil {
+            HStack(spacing: 10) {
+                if let location = model.lastLocation,
+                   let reading = model.bloodhoundCompassReading(from: location) {
+                    Image(systemName: "location.north.fill")
+                        .font(.system(size: 28, weight: .semibold))
+                        .rotationEffect(.degrees(reading.relativeBearingDegrees))
+                        .foregroundStyle(settings.teamColor.mapColor)
+                        .frame(width: 40, height: 40)
+                        .accessibilityLabel("Direction to Bloodhound target")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(reading.rangeMeters < 1000
+                             ? "\(Int(reading.rangeMeters)) m"
+                             : "\((reading.rangeMeters / 1000).formatted(.number.precision(.fractionLength(2)))) km")
+                            .font(.headline)
+                            .monospacedDigit()
+                        Text(reading.isCompassRelative ? "To target" : "Compass unavailable")
+                            .font(.caption2)
+                            .foregroundStyle(reading.isCompassRelative ? Color.secondary : Color.orange)
+                    }
+                } else {
+                    Text("Location unavailable")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(.regularMaterial)
+        }
+    }
+
+    private func updateBloodhoundHeading() {
+        if model.bloodhoundTarget != nil {
+            model.startHeadingUpdates()
+        } else {
+            model.stopHeadingUpdates()
         }
     }
 
