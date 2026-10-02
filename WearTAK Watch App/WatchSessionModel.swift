@@ -155,7 +155,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var isUpdatingHeading = false
     private var lastPLISentAt: Date?
     private let networkPathMonitor = NWPathMonitor()
-    private var isOnWiFi = false
+    @Published private(set) var isOnWiFi = false
 
     init(transport: TAKTransport? = nil, settings: AppSettings) {
         let client = SitxClient(settings: settings)

@@ -1,6 +1,7 @@
 import CoreLocation
 import MapKit
 import SwiftUI
+import WatchKit
 
 struct ContentView: View {
     @ObservedObject var model: WatchSessionModel
@@ -13,68 +14,21 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if settings.chatEnabled {
-                    NavigationLink { ChatView(model: model, settings: settings) } label: {
-                        Label("Chat", systemImage: "message")
-                    }
-                }
-                Button(role: .destructive) {
-                    showClearPointsConfirmation = true
-                } label: {
-                    Label("Clear 2525D Points", systemImage: "trash")
-                }
-                Button {
+            WatchDashboardView(
+                model: model,
+                physiology: physiology,
+                environment: environment,
+                settings: settings,
+                dropPoint: {
                     if model.dropMarker() {
                         showToast("2525D point dropped")
                     } else {
                         model.requestLocation()
                         showToast("Location unavailable")
                     }
-                } label: {
-                    Label("Drop 2525D Point", systemImage: "mappin.and.ellipse")
-                }
-                NavigationLink {
-                    EnvironmentView(monitor: environment, settings: settings)
-                } label: {
-                    Label("Environment", systemImage: "barometer")
-                }
-                if let activeAlertType = model.activeAlertType {
-                    Button(role: .destructive) {
-                        model.cancelEmergencyAlert()
-                    } label: {
-                        Label("Clear Manual Alert (\(activeAlertType.rawValue) Active)", systemImage: "xmark.circle.fill")
-                    }
-                } else {
-                    NavigationLink {
-                        ManualAlertView(model: model)
-                    } label: {
-                        Label("Manual Alert", systemImage: "exclamationmark.triangle.fill")
-                    }
-                }
-                NavigationLink {
-                    TacticalMapView(model: model, settings: settings)
-                } label: {
-                    Label("Map", systemImage: "map")
-                }
-                NavigationLink {
-                    PhysiologyView(monitor: physiology)
-                } label: {
-                    Label("Physiology", systemImage: "heart.text.square")
-                }
-                NavigationLink {
-                    SettingsView(model: model, settings: settings)
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-            }
-            .navigationTitle("WearTAK")
-            .confirmationDialog("Clear app points?", isPresented: $showClearPointsConfirmation) {
-                Button("Clear 2525D Points", role: .destructive) {
-                    model.clearAllPoints()
-                    showToast("Old points cleared")
-                }
-            }
+                },
+                clearPoints: { showClearPointsConfirmation = true }
+            )
             .overlay(alignment: .bottom) {
                 if let toastMessage {
                     Text(toastMessage)
@@ -85,6 +39,12 @@ struct ContentView: View {
                         .padding(.bottom, 8)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+            }
+        }
+        .confirmationDialog("Clear app points?", isPresented: $showClearPointsConfirmation) {
+            Button("Clear 2525D Points", role: .destructive) {
+                model.clearAllPoints()
+                showToast("Old points cleared")
             }
         }
         .task {
@@ -158,6 +118,290 @@ struct ContentView: View {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             withAnimation { toastMessage = nil }
         }
+    }
+}
+
+private struct WatchDashboardView: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var physiology: PhysiologyMonitor
+    @ObservedObject var environment: EnvironmentalMonitor
+    @ObservedObject var settings: AppSettings
+    let dropPoint: () -> Void
+    let clearPoints: () -> Void
+
+    private let accent = Color(red: 0.67, green: 0.80, blue: 0.98)
+
+    var body: some View {
+        GeometryReader { geometry in
+            let compact = geometry.size.height < 240
+            let small = geometry.size.height < 205
+            ScrollView {
+                VStack(spacing: small ? 2 : compact ? 4 : 6) {
+                    statusHeader(small: small)
+                        .frame(height: small ? 34 : compact ? 40 : 48)
+                    actionRow
+                        .frame(height: small ? 36 : compact ? 44 : 52)
+                    shortcutRow(small: small)
+                        .frame(height: small ? 28 : compact ? 34 : 40)
+                    navigationRow(small: small)
+                        .frame(height: small ? 30 : compact ? 40 : 46)
+                    clockRow
+                        .frame(height: small ? 18 : compact ? 20 : 24)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, small ? 2 : 4)
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(.black)
+        .buttonStyle(.plain)
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            WKInterfaceDevice.current().isBatteryMonitoringEnabled = true
+            model.startHeadingUpdates()
+            await physiology.startViewing()
+        }
+        .onDisappear {
+            model.stopHeadingUpdates()
+            physiology.stopViewing()
+        }
+    }
+
+    private func statusHeader(small: Bool) -> some View {
+        HStack(spacing: 6) {
+            VStack(spacing: small ? 2 : 3) {
+                NavigationLink {
+                    SettingsView(model: model, settings: settings)
+                } label: {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: small ? 18 : 21))
+                            .foregroundStyle(accent)
+                        Image(systemName: model.connectionState == .connected ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(model.connectionState == .connected ? .green : .orange)
+                            .background(.black, in: Circle())
+                            .offset(x: 4, y: 2)
+                    }
+                    .frame(width: 28, height: small ? 20 : 24)
+                }
+                .accessibilityLabel("TAK connection: \(model.connectionState.rawValue)")
+                Image(systemName: model.isOnWiFi ? "wifi" : "wifi.slash")
+                    .font(.system(size: small ? 11 : 13, weight: .semibold))
+                    .accessibilityLabel(model.isOnWiFi ? "WiFi active" : "WiFi inactive")
+            }
+            Spacer(minLength: 0)
+            NavigationLink {
+                PhysiologyView(monitor: physiology)
+            } label: {
+                VStack(spacing: 2) {
+                    Text("Exertion")
+                        .font(.system(size: small ? 10 : 12))
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        Image(systemName: "figure.strengthtraining.traditional")
+                            .font(.system(size: 16))
+                            .foregroundStyle(accent)
+                        Text(physiology.exertionPercent.map { "\($0)%" } ?? "--%")
+                            .font(.system(size: small ? 21 : 24, weight: .semibold))
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .accessibilityLabel("Physiology. Exertion \(physiology.exertionPercent.map { "\($0) percent" } ?? "unavailable")")
+            Spacer(minLength: 0)
+            VStack(spacing: small ? 2 : 3) {
+                Button { model.requestLocation() } label: {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: small ? 18 : 20))
+                        .foregroundStyle(model.lastLocation == nil ? .gray : .white)
+                        .frame(width: 28, height: small ? 20 : 24)
+                }
+                .accessibilityLabel("Refresh location")
+                TimelineView(.periodic(from: .now, by: 30)) { _ in
+                    let battery = WKInterfaceDevice.current().batteryLevel
+                    Image(systemName: battery < 0 ? "battery.0percent" : battery < 0.25 ? "battery.25percent" : battery < 0.5 ? "battery.50percent" : battery < 0.75 ? "battery.75percent" : "battery.100percent")
+                        .font(.system(size: small ? 11 : 14))
+                        .foregroundStyle(battery >= 0 && battery < 0.25 ? .red : .white)
+                        .accessibilityLabel(battery < 0 ? "Battery unavailable" : "Battery \(Int(battery * 100)) percent")
+                }
+            }
+        }
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            if model.activeAlertType != nil {
+                Button { model.cancelEmergencyAlert() } label: {
+                    outlinedControl("xmark", color: .red)
+                }
+                .accessibilityLabel("Clear manual alert")
+            } else {
+                NavigationLink {
+                    ManualAlertView(model: model)
+                } label: {
+                    outlinedControl("exclamationmark.triangle", color: .red)
+                }
+                .accessibilityLabel("Manual alert")
+            }
+            Button(action: dropPoint) {
+                PointDropSymbol()
+                    .stroke(.white, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
+                    .frame(width: 27, height: 30)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(Capsule().stroke(.white, lineWidth: 3))
+            }
+            .accessibilityLabel("Drop 2525D point")
+        }
+    }
+
+    private func shortcutRow(small: Bool) -> some View {
+        HStack(spacing: 10) {
+            if settings.chatEnabled {
+                NavigationLink {
+                    ChatView(model: model, settings: settings)
+                } label: {
+                    roundControl("message.fill", color: accent, size: small ? 28 : 34)
+                }
+                .accessibilityLabel("Chat")
+            }
+            NavigationLink {
+                SettingsView(model: model, settings: settings)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: small ? 19 : 22))
+                    Text(settings.callSign)
+                        .font(.system(size: small ? 12 : 14))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(Capsule().stroke(.gray, lineWidth: 1.5))
+            }
+            .accessibilityLabel("Settings\(settings.callSign.isEmpty ? "" : ", \(settings.callSign)")")
+        }
+    }
+
+    private func navigationRow(small: Bool) -> some View {
+        HStack(spacing: 8) {
+            NavigationLink {
+                BloodhoundView(model: model)
+            } label: {
+                HStack(spacing: 6) {
+                    let reading = model.lastLocation.flatMap { model.bloodhoundCompassReading(from: $0) }
+                    let hasTarget = model.bloodhoundTarget != nil
+                    let northRotation = model.headingDegrees.map { (360 - $0).truncatingRemainder(dividingBy: 360) } ?? 0
+                    let hasHeading = hasTarget ? reading?.isCompassRelative == true : model.headingDegrees != nil
+                    Image(systemName: "location.north.fill")
+                        .font(.system(size: 19))
+                        .rotationEffect(.degrees(hasTarget ? reading?.relativeBearingDegrees ?? 0 : northRotation))
+                        .foregroundStyle(hasHeading ? .red : .gray)
+                        .frame(width: small ? 28 : 32, height: small ? 28 : 32)
+                        .overlay(Circle().stroke(.gray, lineWidth: 2))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(model.bloodhoundTarget?.displayTitle ?? "Compass")
+                            .font(.system(size: small ? 10 : 11, weight: .medium))
+                            .lineLimit(1)
+                        Text(reading.map { "\(Int($0.rangeMeters)) m" } ?? "___")
+                            .font(.system(size: small ? 13 : 15, weight: .semibold))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .accessibilityLabel(model.bloodhoundTarget == nil ? "Compass" : "Bloodhound navigation")
+            NavigationLink {
+                TacticalMapView(model: model, settings: settings)
+            } label: {
+                roundControl("map", color: Color(red: 0.81, green: 0.81, blue: 0.73), size: small ? 28 : 34)
+            }
+            .accessibilityLabel("Map")
+        }
+    }
+
+    private var clockRow: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(context.date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
+                .font(.system(size: 19, weight: .regular, design: .rounded))
+                .italic()
+                .monospacedDigit()
+                .frame(maxWidth: .infinity)
+        }
+        .overlay(alignment: .trailing) {
+            NavigationLink {
+                List {
+                    NavigationLink {
+                        EnvironmentView(monitor: environment, settings: settings)
+                    } label: {
+                        Label("Environment", systemImage: "barometer")
+                    }
+                    NavigationLink {
+                        PointListView(model: model)
+                    } label: {
+                        Label("2525D Points", systemImage: "mappin.and.ellipse")
+                    }
+                    Button(role: .destructive, action: clearPoints) {
+                        Label("Clear 2525D Points", systemImage: "trash")
+                    }
+                }
+                .navigationTitle("More")
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 28, height: 24)
+            }
+            .accessibilityLabel("More tools")
+        }
+    }
+
+    private func outlinedControl(_ symbol: String, color: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 26, weight: .regular))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(Capsule().stroke(color, lineWidth: 3))
+    }
+
+    private func roundControl(_ symbol: String, color: Color, size: CGFloat) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 20))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+            .background(Color(white: 0.22), in: Circle())
+    }
+}
+
+private struct PointDropSymbol: Shape {
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width
+        let height = rect.height
+        var path = Path()
+        path.move(to: CGPoint(x: width * 0.63, y: height * 0.82))
+        path.addLine(to: CGPoint(x: width * 0.5, y: height * 0.99))
+        path.addCurve(to: CGPoint(x: width * 0.04, y: height * 0.36),
+                      control1: CGPoint(x: width * 0.33, y: height * 0.8),
+                      control2: CGPoint(x: width * 0.04, y: height * 0.53))
+        path.addCurve(to: CGPoint(x: width * 0.5, y: height * 0.02),
+                      control1: CGPoint(x: width * 0.04, y: height * 0.17),
+                      control2: CGPoint(x: width * 0.24, y: height * 0.02))
+        path.addCurve(to: CGPoint(x: width * 0.96, y: height * 0.36),
+                      control1: CGPoint(x: width * 0.76, y: height * 0.02),
+                      control2: CGPoint(x: width * 0.96, y: height * 0.17))
+        path.addCurve(to: CGPoint(x: width * 0.89, y: height * 0.57),
+                      control1: CGPoint(x: width * 0.96, y: height * 0.43),
+                      control2: CGPoint(x: width * 0.94, y: height * 0.5))
+        path.addEllipse(in: CGRect(x: width * 0.39, y: height * 0.33 - width * 0.11,
+                                  width: width * 0.22, height: width * 0.22))
+        path.move(to: CGPoint(x: width * 0.65, y: height * 0.73))
+        path.addLine(to: CGPoint(x: width, y: height * 0.73))
+        path.move(to: CGPoint(x: width * 0.825, y: height * 0.56))
+        path.addLine(to: CGPoint(x: width * 0.825, y: height * 0.9))
+        return path
     }
 }
 
@@ -630,13 +874,17 @@ private struct BloodhoundView: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Text("No Bloodhound target")
-                Text("Tap a map point to start")
+                Image(systemName: "location.north.fill")
+                    .font(.system(size: 54))
+                    .rotationEffect(.degrees(model.headingDegrees.map { (360 - $0).truncatingRemainder(dividingBy: 360) } ?? 0))
+                    .foregroundStyle(model.headingDegrees == nil ? .gray : .red)
+                Text("Compass")
+                Text(model.headingDegrees == nil ? "Compass unavailable" : "North")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("Navigation")
+        .navigationTitle(model.bloodhoundTarget == nil ? "Compass" : "Navigation")
         .onAppear { model.startHeadingUpdates() }
         .onDisappear { model.stopHeadingUpdates() }
     }
