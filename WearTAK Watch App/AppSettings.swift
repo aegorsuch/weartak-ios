@@ -28,6 +28,22 @@ enum TeamColor: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
+enum UserRoleGroup: String, CaseIterable, Identifiable {
+    case military = "MIL"
+    case lawEnforcement = "LEO"
+
+    var id: Self { self }
+
+    var roles: [String] {
+        switch self {
+        case .military:
+            return ["Forward Observer", "HQ", "K9", "Medic", "RTO", "Sniper", "Team Lead", "Team Member"]
+        case .lawEnforcement:
+            return ["Armed Surveillance", "Assistant Team Leader", "Aviation", "Bomb Tech", "Command Post", "Critical Response", "Hazards", "Negotiator", "Surveillance", "Tactical Communicator", "TOC"]
+        }
+    }
+}
+
 /// Persisted preferences mirroring Garmin's Device/Network/Alerting/Tool Preferences menus.
 @MainActor
 final class AppSettings: ObservableObject {
@@ -35,6 +51,8 @@ final class AppSettings: ObservableObject {
         static let watchLabel = "WearTAK.watchLabel"
         static let callSign = "WearTAK.callSign"
         static let teamColor = "WearTAK.teamColor"
+        static let roleGroup = "WearTAK.roleGroup"
+        static let role = "WearTAK.role"
         static let chatEnabled = "WearTAK.chatEnabled"
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
@@ -89,6 +107,14 @@ final class AppSettings: ObservableObject {
 
     @Published var teamColor: TeamColor {
         didSet { defaults.set(teamColor.rawValue, forKey: Keys.teamColor) }
+    }
+
+    @Published var roleGroup: UserRoleGroup? {
+        didSet { defaults.set(roleGroup?.rawValue, forKey: Keys.roleGroup) }
+    }
+
+    @Published var role: String {
+        didSet { defaults.set(role, forKey: Keys.role) }
     }
 
     @Published var chatEnabled: Bool {
@@ -328,6 +354,8 @@ final class AppSettings: ObservableObject {
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
         callSign = defaults.string(forKey: Keys.callSign) ?? ""
         teamColor = TeamColor(rawValue: defaults.string(forKey: Keys.teamColor) ?? "White") ?? .white
+        roleGroup = defaults.string(forKey: Keys.roleGroup).flatMap(UserRoleGroup.init(rawValue:))
+        role = defaults.string(forKey: Keys.role) ?? ""
         chatEnabled = defaults.object(forKey: Keys.chatEnabled) as? Bool ?? true
         let storedRelayProvider = defaults.string(forKey: Keys.relayProvider)
         if storedRelayProvider == "TAK Aware Relay" {

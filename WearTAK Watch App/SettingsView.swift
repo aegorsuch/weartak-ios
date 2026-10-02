@@ -70,6 +70,16 @@ private struct DevicePreferencesView: View {
                         .overlay(Circle().stroke(.gray.opacity(0.7), lineWidth: 1))
                 }
             }
+            NavigationLink {
+                MyRoleView(settings: settings)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("My Role")
+                    Text(settings.roleGroup.map { "\($0.rawValue) · \(settings.role)" } ?? "Not Set")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
             NavigationLink("My User Metrics") {
                 UserMetricsView(settings: settings)
             }
@@ -136,6 +146,53 @@ private extension TeamColor {
         case .darkGreen: return Color(red: 0, green: 0.35, blue: 0.12)
         case .brown: return .brown
         }
+    }
+}
+
+private struct MyRoleView: View {
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedGroup: UserRoleGroup?
+
+    var body: some View {
+        List {
+            Section("Role Group") {
+                ForEach(UserRoleGroup.allCases) { group in
+                    Button {
+                        selectedGroup = group
+                    } label: {
+                        HStack {
+                            Text(group.rawValue)
+                            Spacer()
+                            if selectedGroup == group || settings.roleGroup == group {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+            if let selectedGroup {
+                Section(selectedGroup.rawValue) {
+                    ForEach(selectedGroup.roles, id: \.self) { role in
+                        Button {
+                            settings.roleGroup = selectedGroup
+                            settings.role = role
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(role)
+                                Spacer()
+                                if settings.roleGroup == selectedGroup && settings.role == role {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("My Role")
+        .onAppear { selectedGroup = settings.roleGroup }
     }
 }
 
