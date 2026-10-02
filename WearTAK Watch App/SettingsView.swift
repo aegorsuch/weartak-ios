@@ -502,7 +502,12 @@ private struct NetworkPreferencesView: View {
             NavigationLink {
                 SitxDeviceAPIView(settings: settings, client: sitxClient)
             } label: {
-                Text(sitxClient.menuLabel)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sit(x) TAK")
+                    Text(sitxClient.status)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("Network Preferences")
@@ -535,68 +540,127 @@ private struct RelayProviderView: View {
 private struct SitxDeviceAPIView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var client: SitxClient
-    @State private var confirmForget = false
+    @Environment(\.dismiss) private var dismiss
+    @State private var showAuthorization = false
 
     var body: some View {
         List {
-            TextField("Sit(x) Host", text: $settings.sitxApiHost)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            HStack {
-                Button {
-                    client.refreshAuthorizationCode()
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Auth Code")
-                        Text(client.authorizationCode.isEmpty ? "Tap to refresh" : client.authorizationCode)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                if !client.verificationURL.isEmpty, let url = URL(string: client.verificationURL) {
-                    Link(destination: url) {
-                        Image(systemName: "arrow.up.right.square")
-                    }
-                    .accessibilityLabel("Open authorization page")
+            Toggle("Sit(x) TAK", isOn: Binding(
+                get: { settings.sitxEnabled },
+                set: { client.setTAKEnabled($0) }
+            ))
+            NavigationLink {
+                SitxAddressView(settings: settings, client: client)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Address")
+                    Text(settings.sitxApiHost.isEmpty ? "Not set" : settings.sitxApiHost.replacingOccurrences(of: "https://", with: ""))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
-            LabeledContent("Status", value: client.status)
-            LabeledContent("Pending Events", value: "\(client.pendingEvents.count)")
-            if !client.groups.isEmpty {
-                NavigationLink {
-                    List(client.groups) { group in
-                        Button {
-                            client.selectGroup(group)
-                        } label: {
-                            HStack {
-                                Text(group.name)
-                                Spacer()
-                                if client.selectedGroupID == group.id {
-                                    Image(systemName: "checkmark")
-                                }
+            NavigationLink {
+                List(client.groups) { group in
+                    Button {
+                        client.selectGroup(group)
+                    } label: {
+                        HStack {
+                            Text(group.name)
+                            Spacer()
+                            if client.selectedGroupID == group.id {
+                                Image(systemName: "checkmark")
                             }
                         }
                     }
-                    .navigationTitle("TAK Group")
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("TAK Group")
-                        Text(client.groups.first { $0.id == client.selectedGroupID }?.name ?? "Not selected")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                }
+                .navigationTitle("Group")
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Group")
+                    Text(client.groups.first { $0.id == client.selectedGroupID }?.name ?? "Not selected")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
-            Button("Clear Sit(x)", role: .destructive) {
-                confirmForget = true
+            .disabled(client.groups.isEmpty || !settings.sitxEnabled)
+            LabeledContent("Sit(x) State", value: client.status)
+            Button {
+                client.refreshAuthorizationCode()
+            } label: {
+                Label("Re-auth", systemImage: "arrow.clockwise")
+            }
+            .disabled(!settings.sitxEnabled || settings.sitxApiHost.isEmpty)
+            Button {
+                dismiss()
+            } label: {
+                Label("Back", systemImage: "arrow.left")
             }
         }
-        .navigationTitle("Sit(x) Device API")
-        .confirmationDialog("Clear Sit(x)?", isPresented: $confirmForget) {
-            Button("Clear Sit(x)", role: .destructive) {
-                client.forgetAuthorization()
+        .navigationTitle("Sit(x) TAK")
+        .navigationBarBackButtonHidden(true)
+        .onAppear { showAuthorization = !client.authorizationCode.isEmpty }
+        .onChange(of: client.authorizationCode) { _, code in
+            showAuthorization = !code.isEmpty
+        }
+        .sheet(isPresented: $showAuthorization) {
+            NavigationStack {
+                List {
+                    LabeledContent("Auth Code", value: client.authorizationCode)
+                    if let url = URL(string: client.verificationURL), !client.verificationURL.isEmpty {
+                        Link(destination: url) {
+                            Label("Authorize", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                    Text(client.status)
+                    Button {
+                        showAuthorization = false
+                    } label: {
+                        Label("Back", systemImage: "arrow.left")
+                    }
+                }
+                .navigationTitle("Authorization")
             }
         }
+    }
+}
+
+private struct SitxAddressView: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var client: SitxClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var address: String
+
+    init(settings: AppSettings, client: SitxClient) {
+        self.settings = settings
+        self.client = client
+        var organization = settings.sitxApiHost.replacingOccurrences(of: "https://", with: "")
+        if organization.hasSuffix(".sitx.io") { organization.removeLast(".sitx.io".count) }
+        _address = State(initialValue: organization)
+    }
+
+    var body: some View {
+        List {
+            TextField("Organization", text: $address)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit(saveAddress)
+            Text(SitxClient.normalizedHost(address)?.replacingOccurrences(of: "https://", with: "") ?? ".sitx.io")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Button(action: saveAddress) {
+                Label("Save", systemImage: "checkmark")
+            }
+            .disabled(SitxClient.normalizedHost(address) == nil)
+        }
+        .navigationTitle("Address")
+    }
+
+    private func saveAddress() {
+        guard let host = SitxClient.normalizedHost(address) else { return }
+        let changed = settings.sitxApiHost != host
+        settings.sitxApiHost = host
+        if settings.sitxEnabled, changed { client.setTAKEnabled(true) }
+        dismiss()
     }
 }
 

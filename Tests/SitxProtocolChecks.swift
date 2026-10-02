@@ -32,7 +32,7 @@ protocol TAKTransport {
 }
 
 final class MemoryTokens: SitxTokenStore {
-    var values = ["refresh": "fixture-refresh", "host": "https://sitx.invalid"]
+    var values = ["refresh": "fixture-refresh", "host": "https://fixture.sitx.io"]
     func read(account: String) -> String? { values[account] }
     func save(_ value: String, account: String) throws { values[account] = value }
     func delete(account: String) { values.removeValue(forKey: account) }
@@ -95,8 +95,18 @@ struct SitxProtocolChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
-        settings.sitxApiHost = "https://sitx.invalid"
+        settings.sitxApiHost = "https://fixture.sitx.io"
+        settings.sitxEnabled = true
         settings.callSign = "ODIN <& \"TEAM\">"
+        precondition(SitxClient.normalizedHost(" Team ") == "https://team.sitx.io")
+        precondition(SitxClient.normalizedHost("team.sitx.io") == "https://team.sitx.io")
+        precondition(SitxClient.normalizedHost("https://team.sitx.io/") == "https://team.sitx.io")
+        precondition(SitxClient.normalizedHost("http://team.sitx.io") == "https://team.sitx.io")
+        precondition(SitxClient.normalizedHost("") == nil)
+        precondition(SitxClient.normalizedHost("bad name") == nil)
+        precondition(SitxClient.normalizedHost("https://team.sitx.io/path") == nil)
+        precondition(SitxClient.normalizedHost("https://user:password@team.sitx.io") == nil)
+        print("PASS: organization suffix normalization and invalid-address rejection")
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSitxHTTP.self]
         let session = URLSession(configuration: configuration)
@@ -172,6 +182,19 @@ struct SitxProtocolChecks {
         client.selectGroup(SitxGroup(flowTag: "another", name: "Other Team"))
         precondition(client.pendingEvents.isEmpty)
         print("PASS: marker encoding, deletion, incoming CoT, self/expired rejection and group isolation")
+
+        client.setTAKEnabled(false)
+        precondition(!settings.sitxEnabled && client.status == "Off")
+        precondition(tokens.values["refresh"] == "group-refresh")
+        precondition(AppSettings(defaults: defaults).sitxEnabled == false)
+        try? await client.sendEmergencyAlert(state: .alert, type: "Off test")
+        precondition(client.pendingEvents.isEmpty)
+        do {
+            _ = try await client.groupConnectionRequest()
+            fatalError("Off must block data-session provisioning")
+        } catch {}
+        settings.sitxEnabled = true
+        print("PASS: persisted TAK toggle blocks delivery without removing credentials")
 
         MockSitxHTTP.lock.withLock { MockSitxHTTP.failRefresh = true }
         let failureClient = SitxClient(settings: settings, session: session, defaults: defaults, tokenStore: tokens)

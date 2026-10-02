@@ -61,7 +61,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             disconnect()
             if isPhoneReachable {
                 status = "Phone relay reachable; Sit(x) paused"
-            } else if !selectedGroupID.isEmpty {
+            } else if settings.sitxEnabled, !selectedGroupID.isEmpty {
                 onReady?()
             }
         }
@@ -79,11 +79,11 @@ final class SitxClient: ObservableObject, TAKTransport {
         disconnect()
         selectedGroupID = group.id
         defaults.set(group.id, forKey: "WearTAK.sitxGroup")
-        onReady?()
+        if settings.sitxEnabled { onReady?() }
     }
 
     func resumeAuthorization() {
-        guard isAppActive, refreshToken != nil, !isPhoneReachable, socket == nil, pairingTask == nil else { return }
+        guard settings.sitxEnabled, isAppActive, refreshToken != nil, !isPhoneReachable, socket == nil, pairingTask == nil else { return }
         pairingTask = Task {
             await beginPairing()
             pairingTask = nil
@@ -93,18 +93,34 @@ final class SitxClient: ObservableObject, TAKTransport {
         }
     }
 
+    func setTAKEnabled(_ enabled: Bool) {
+        settings.sitxEnabled = enabled
+        if enabled {
+            if refreshToken != nil { resumeAuthorization() }
+            else { refreshAuthorizationCode() }
+        } else {
+            pairingTask?.cancel()
+            pairingTask = nil
+            disconnect()
+            pendingEvents = [:]
+            authorizationCode = ""
+            verificationURL = ""
+            status = "Off"
+        }
+    }
+
     func setAppActive(_ active: Bool) {
         isAppActive = active
         if !active {
             pairingTask?.cancel()
             pairingTask = nil
             disconnect()
-            status = refreshToken == nil ? State.unconfigured : "Authorized; app inactive"
+            status = !settings.sitxEnabled ? "Off" : refreshToken == nil ? State.unconfigured : "Authorized; app inactive"
         }
     }
 
     func connect() async throws {
-        guard isAppActive, !isPhoneReachable, !selectedGroupID.isEmpty else { throw TAKTransportError.notConfigured }
+        guard settings.sitxEnabled, isAppActive, !isPhoneReachable, !selectedGroupID.isEmpty else { throw TAKTransportError.notConfigured }
         if socket != nil { return }
         let generation = connectionGeneration
         reconnectTask?.cancel()
@@ -169,7 +185,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     private func scheduleReconnect() {
-        guard isAppActive, !isPhoneReachable, refreshToken != nil else { return }
+        guard settings.sitxEnabled, isAppActive, !isPhoneReachable, refreshToken != nil else { return }
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
             do { try await Task.sleep(for: .seconds(10)) } catch { return }
@@ -179,7 +195,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     private func sendXML(_ xml: String) async throws {
-                guard isAppActive, !isPhoneReachable,
+                guard settings.sitxEnabled, isAppActive, !isPhoneReachable,
                             tokenHost == Self.normalizedHost(settings.sitxApiHost), let socket else { throw TAKTransportError.notConfigured }
         do { try await socket.send(.string(xml)) }
         catch {
@@ -189,7 +205,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     private func sendEvent(_ xml: String, key: String) async throws {
-          guard refreshToken != nil, tokenHost == Self.normalizedHost(settings.sitxApiHost),
+          guard settings.sitxEnabled, refreshToken != nil, tokenHost == Self.normalizedHost(settings.sitxApiHost),
               !selectedGroupID.isEmpty else { throw TAKTransportError.notConfigured }
         guard pendingEvents[key] != nil || pendingEvents.count < 200 else { throw SitxError.invalidResponse }
         pendingEvents[key] = xml
@@ -240,7 +256,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     func groupConnectionRequest() async throws -> URLRequest {
-        guard let host = Self.normalizedHost(settings.sitxApiHost), tokenHost == host,
+        guard settings.sitxEnabled, let host = Self.normalizedHost(settings.sitxApiHost), tokenHost == host,
               let refreshToken else { throw SitxError.invalidResponse }
         var request = URLRequest(url: URL(string: host + "/api/v1/access/token")!)
         request.httpMethod = "POST"
@@ -296,10 +312,12 @@ final class SitxClient: ObservableObject, TAKTransport {
                   self.tokenHost != Self.normalizedHost(host) else { return }
             self.forgetAuthorization()
         }
+        if !settings.sitxEnabled { status = "Off" }
     }
 
     func refreshAuthorizationCode() {
-        pairingTask?.cancel()
+        guard settings.sitxEnabled else { return }
+        forgetAuthorization()
         pairingTask = Task {
             await beginPairing()
             pairingTask = nil
@@ -321,6 +339,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     private func beginPairing() async {
+        guard settings.sitxEnabled else { return }
         guard let host = Self.normalizedHost(settings.sitxApiHost) else {
             status = settings.sitxApiHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "Enter Sit(x) API host"
@@ -532,15 +551,30 @@ final class SitxClient: ObservableObject, TAKTransport {
         return value
     }
 
-    private static func normalizedHost(_ value: String) -> String? {
-        var host = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !host.isEmpty else { return nil }
-        if host.hasPrefix("http://") { host = "https://" + host.dropFirst(7) }
-        else if !host.hasPrefix("https://") { host = "https://" + host }
-        while host.hasSuffix("/") { host.removeLast() }
-        guard let components = URLComponents(string: host), components.scheme == "https",
-              components.host != nil, components.query == nil, components.fragment == nil else { return nil }
-        return host
+    static func normalizedHost(_ value: String) -> String? {
+        let input = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !input.isEmpty else { return nil }
+        let urlText = input.contains("://") ? input : "https://" + input
+        guard var components = URLComponents(string: urlText),
+              components.scheme == "https" || components.scheme == "http",
+              components.user == nil, components.password == nil, components.port == nil,
+              components.query == nil, components.fragment == nil,
+              components.path.isEmpty || components.path == "/",
+              var hostname = components.host else { return nil }
+        if hostname != "sitx.io", !hostname.hasSuffix(".sitx.io") {
+            hostname += ".sitx.io"
+        }
+        let labels = hostname.split(separator: ".", omittingEmptySubsequences: false)
+        guard hostname.count <= 253, labels.allSatisfy({ label in
+            !label.isEmpty && label.count <= 63 && label.first != "-" && label.last != "-" &&
+            label.utf8.allSatisfy { byte in
+                (97...122).contains(byte) || (48...57).contains(byte) || byte == 45
+            }
+        }) else { return nil }
+        components.scheme = "https"
+        components.host = hostname
+        components.path = ""
+        return components.string
     }
 
     private func saveToken(_ value: String, account: String) throws {

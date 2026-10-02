@@ -78,6 +78,7 @@ final class AppSettings: ObservableObject {
         static let chatEnabled = "WearTAK.chatEnabled"
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
+        static let sitxEnabled = "WearTAK.sitxEnabled"
         static let highRestingHeartRate = "WearTAK.highRestingHeartRate"
         static let lowRestingHeartRate = "WearTAK.lowRestingHeartRate"
         static let highRestingWarningMinutes = "WearTAK.highRestingWarningMinutes"
@@ -183,6 +184,10 @@ final class AppSettings: ObservableObject {
 
     @Published var sitxApiHost: String {
         didSet { defaults.set(sitxApiHost, forKey: Keys.sitxApiHost) }
+    }
+
+    @Published var sitxEnabled: Bool {
+        didSet { defaults.set(sitxEnabled, forKey: Keys.sitxEnabled) }
     }
 
     @Published var highRestingHeartRate: Int {
@@ -430,7 +435,9 @@ final class AppSettings: ObservableObject {
         } else {
             relayProvider = RelayProvider(rawValue: storedRelayProvider ?? "N/A") ?? .notSet
         }
-        sitxApiHost = defaults.string(forKey: Keys.sitxApiHost) ?? ""
+        let storedSitxHost = defaults.string(forKey: Keys.sitxApiHost) ?? ""
+        sitxApiHost = storedSitxHost
+        sitxEnabled = defaults.object(forKey: Keys.sitxEnabled) as? Bool ?? !storedSitxHost.isEmpty
         highRestingHeartRate = defaults.object(forKey: Keys.highRestingHeartRate) as? Int ?? 120
         lowRestingHeartRate = defaults.object(forKey: Keys.lowRestingHeartRate) as? Int ?? 40
         highRestingWarningMinutes = defaults.object(forKey: Keys.highRestingWarningMinutes) as? Int ?? 5
