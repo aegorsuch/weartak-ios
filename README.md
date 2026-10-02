@@ -102,14 +102,14 @@ Before the first distribution archive:
   configure the signing team and certificates in Xcode.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- Replace the current four-part marketing version `5.8.0.3` with an Apple-
-  compatible three-component version, such as `5.8.0`, and
-  use a separate build number. Increment the build number for each upload.
+- The project uses Version `5.8.0`, Build `3`, with separate Apple-compatible
+  version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
   answers, and any review instructions needed for Sit(x) authorization.
-- Verify on a physical watch: PLI, alert activation/cancellation, marker
-  updates/deletes, incoming users, compass, permissions, and battery behavior.
+- Physical-watch verification has been reported by the maintainer. Recheck
+  PLI, alert activation/cancellation, marker updates/deletes, incoming users,
+  compass, permissions, and battery behavior for each distribution build.
 
 Then:
 
@@ -130,9 +130,10 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image, but has no selected signing
-team or valid signing identity on the development machine. It is not yet ready
-for an installable public beta; the prerequisites above must be completed first.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `3`.
+The maintainer reports physical-watch verification. Public-beta distribution
+still requires the signing team, approved capabilities/profiles, App Store
+Connect setup, and TestFlight processing/review described above.
 
 Apple references:
 [TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview)
@@ -252,8 +253,9 @@ network that permits multicast; access-point/client isolation can block it.
 Device signing requires Apple's restricted
 `com.apple.developer.networking.multicast` entitlement to be approved and
 included in the provisioning profile. The project declares that entitlement
-and a local-network usage description. Physical-watch LAN testing and device
-provisioning remain required; simulator builds do not prove device approval.
+and a local-network usage description. The maintainer reports physical-watch
+verification; repeat LAN checks for distribution builds and use approved device
+provisioning. Simulator builds do not prove entitlement approval.
 
 ## Sit(x) TAK
 
@@ -328,7 +330,8 @@ phone-relay transport. Chat delivery is not implemented.
 
 watchOS cannot identify connected WiFi SSIDs or list saved networks. All WiFi
 Connections and No WiFi Connections are supported; Some WiFi Connections is
-disabled. Live Sit(x) WebSocket and physical-watch testing remain required.
+disabled. The maintainer reports physical-watch verification; repeat device
+and live Sit(x) WebSocket checks for distribution builds.
 
 ## Protocol checks
 
