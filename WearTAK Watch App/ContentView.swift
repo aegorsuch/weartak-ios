@@ -272,30 +272,36 @@ private struct TacticalMapView: View {
             MapReader { proxy in
                 Map(position: $cameraPosition, selection: $selectedMapPoint) {
                     if let location = model.lastLocation {
+                        if let target = model.bloodhoundTarget {
+                            MapPolyline(coordinates: [location.coordinate, target.coordinate])
+                                .stroke(settings.teamColor.mapColor, lineWidth: 3)
+                        }
                         Annotation("Self", coordinate: location.coordinate, anchor: .center) {
-                            ZStack {
-                                Image(systemName: "location.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(settings.teamColor.mapColor)
-                                    .padding(4)
-                                    .background(.ultraThinMaterial, in: Circle())
-                                if let reading = model.bloodhoundReading(from: location) {
-                                    Image(systemName: "arrow.up")
-                                        .font(.system(size: 24, weight: .heavy))
-                                        .foregroundStyle(settings.teamColor.mapColor)
-                                        .shadow(color: .black, radius: 2)
-                                        .offset(y: -32)
-                                        .rotationEffect(.degrees(reading.bearingDegrees - cameraHeading))
-                                        .allowsHitTesting(false)
-                                        .accessibilityLabel("Direction to Bloodhound target")
-                                }
-                            }
+                            Image(systemName: "location.fill")
+                                .font(.title3)
+                                .foregroundStyle(settings.teamColor.mapColor)
+                                .padding(4)
+                                .background(.ultraThinMaterial, in: Circle())
                         }
                         .tag(MapPointSelection.selfMarker)
                     }
                     ForEach(model.markers) { marker in
                         Annotation(marker.displayTitle, coordinate: marker.coordinate, anchor: .center) {
-                            MapPointSymbol(kind: marker.kind)
+                            ZStack {
+                                if marker.id == model.bloodhoundTargetID,
+                                   let location = model.lastLocation,
+                                   let reading = model.bloodhoundReading(from: location) {
+                                    Image(systemName: "arrowtriangle.up.fill")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundStyle(settings.teamColor.mapColor)
+                                        .shadow(color: .black, radius: 2)
+                                        .offset(y: 22)
+                                        .rotationEffect(.degrees(reading.bearingDegrees - cameraHeading))
+                                        .allowsHitTesting(false)
+                                        .accessibilityLabel("Direction to Bloodhound target")
+                                }
+                                MapPointSymbol(kind: marker.kind)
+                            }
                         }
                             .tag(MapPointSelection.marker(marker.id))
                     }
