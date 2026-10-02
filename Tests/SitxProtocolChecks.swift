@@ -38,6 +38,18 @@ final class MemoryTokens: SitxTokenStore {
     func delete(account: String) { values.removeValue(forKey: account) }
 }
 
+@MainActor
+final class FixtureCoTOutput: CoTOutput {
+    var isReady = true
+    var failSend = false
+    var messages: [String] = []
+
+    func send(_ xml: String) async throws {
+        if failSend { throw TAKTransportError.notConfigured }
+        messages.append(xml)
+    }
+}
+
 final class MockSitxHTTP: URLProtocol {
     static let lock = NSLock()
     static var requests: [URLRequest] = []
@@ -95,6 +107,33 @@ struct SitxProtocolChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
+        precondition(!settings.multicastEnabled)
+        precondition(settings.multicastAddress == "239.2.3.1" && settings.multicastPort == 6969)
+        precondition(settings.multicastOutputProtocol == .udp)
+        precondition(AppSettings.isMulticastAddress("239.2.3.1"))
+        precondition(AppSettings.isMulticastAddress("224.0.0.1"))
+        precondition(!AppSettings.isMulticastAddress("223.255.255.255"))
+        precondition(!AppSettings.isMulticastAddress("240.0.0.1"))
+        precondition(!AppSettings.isMulticastAddress("239.2.3.999"))
+        precondition(!AppSettings.isMulticastAddress("localhost"))
+        settings.multicastAddress = "239.2.3.2"
+        settings.multicastPort = 7000
+        settings.multicastEnabled = true
+        let restored = AppSettings(defaults: defaults)
+        precondition(restored.multicastEnabled && restored.multicastAddress == "239.2.3.2" && restored.multicastPort == 7000)
+        settings.multicastPort = 0
+        precondition(settings.multicastPort == 1)
+        settings.multicastPort = 70_000
+        precondition(settings.multicastPort == 65535)
+        settings.multicastEnabled = false
+        let multicast = MulticastTAKTransport(settings: settings)
+        multicast.setAppActive(true)
+        precondition(!multicast.isReady && multicast.status == "Disabled")
+        do {
+            try await multicast.send("<event/>")
+            fatalError("Disabled multicast must not send")
+        } catch {}
+        print("PASS: multicast defaults, persistence, address/port validation and disabled-send guard")
         settings.sitxApiHost = "https://fixture.sitx.io"
         settings.sitxEnabled = true
         settings.callSign = "ODIN <& \"TEAM\">"
@@ -195,6 +234,39 @@ struct SitxProtocolChecks {
         } catch {}
         settings.sitxEnabled = true
         print("PASS: persisted TAK toggle blocks delivery without removing credentials")
+
+        client.setTAKEnabled(false)
+        let output = FixtureCoTOutput()
+        client.additionalOutput = output
+        try await client.connect()
+        precondition(client.hasReadyOutput)
+        try await client.sendPLI(coordinate: marker.coordinate)
+        try await client.sendEmergencyAlert(state: .alert, type: "Multicast alert")
+        try await client.sendEmergencyAlert(state: .cancel, type: "Multicast alert")
+        try await client.sendMarker(marker)
+        try await client.deleteMarker(uid: marker.id.uuidString)
+        precondition(output.messages.count == 5 && client.pendingEvents.isEmpty)
+        let pli = try fields(output.messages[0])
+        precondition(pli.attributes["event"]?.first?["type"] == "a-f-G-U-C")
+        precondition(pli.attributes["contact"]?.first?["callsign"] == settings.callSign)
+        let multicastAlert = try fields(output.messages[1])
+        let multicastCancel = try fields(output.messages[2])
+        precondition(multicastAlert.attributes["event"]?.first?["uid"] == multicastCancel.attributes["event"]?.first?["uid"])
+        precondition(multicastCancel.attributes["emergency"]?.first?["cancel"] == "true")
+        output.failSend = true
+        do {
+            try await client.sendPLI(coordinate: marker.coordinate)
+            fatalError("All failed outputs must report a failure")
+        } catch {}
+        output.failSend = false
+        settings.sitxEnabled = true
+        try await client.sendEmergencyAlert(state: .alert, type: "Dual output alert")
+        precondition(client.pendingEvents.count == 1 && output.messages.count == 6)
+        precondition(output.messages.last == client.pendingEvents.values.first)
+        client.additionalOutput = nil
+        client.setTAKEnabled(false)
+        settings.sitxEnabled = true
+        print("PASS: multicast-only PLI/alerts/points and successful output despite offline Sit(x)")
 
         MockSitxHTTP.lock.withLock { MockSitxHTTP.failRefresh = true }
         let failureClient = SitxClient(settings: settings, session: session, defaults: defaults, tokenStore: tokens)

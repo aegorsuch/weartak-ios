@@ -500,6 +500,16 @@ private struct NetworkPreferencesView: View {
                 Text("TAK Relay (\(settings.relayProvider.rawValue))")
             }
             NavigationLink {
+                MulticastPreferencesView(settings: settings)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TAK SA Multicast")
+                    Text(settings.multicastEnabled ? "Enabled" : "Disabled")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            NavigationLink {
                 SitxDeviceAPIView(settings: settings, client: sitxClient)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
@@ -511,6 +521,93 @@ private struct NetworkPreferencesView: View {
             }
         }
         .navigationTitle("Network Preferences")
+    }
+}
+
+private struct MulticastPreferencesView: View {
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Toggle("TAK SA Multicast", isOn: $settings.multicastEnabled)
+                .disabled(!AppSettings.isMulticastAddress(settings.multicastAddress))
+            NavigationLink {
+                MulticastAddressView(settings: settings)
+            } label: {
+                LabeledContent("Address", value: settings.multicastAddress)
+            }
+            Picker("Output Protocol", selection: $settings.multicastOutputProtocol) {
+                ForEach(MulticastOutputProtocol.allCases) { output in
+                    Text(output.rawValue).tag(output)
+                }
+            }
+            NavigationLink {
+                MulticastPortView(settings: settings)
+            } label: {
+                LabeledContent("Port", value: "\(settings.multicastPort)")
+            }
+            Button { dismiss() } label: {
+                Label("Back", systemImage: "arrow.left")
+            }
+        }
+        .navigationTitle("TAK SA Multicast")
+        .navigationBarBackButtonHidden(true)
+    }
+}
+
+private struct MulticastAddressView: View {
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+    @State private var address: String
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        _address = State(initialValue: settings.multicastAddress)
+    }
+
+    var body: some View {
+        List {
+            TextField("Multicast IPv4", text: $address)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit(save)
+            Button(action: save) { Label("Save", systemImage: "checkmark") }
+                .disabled(!AppSettings.isMulticastAddress(address))
+        }
+        .navigationTitle("Address")
+    }
+
+    private func save() {
+        guard AppSettings.isMulticastAddress(address) else { return }
+        settings.multicastAddress = address
+        dismiss()
+    }
+}
+
+private struct MulticastPortView: View {
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+    @State private var port: String
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        _port = State(initialValue: String(settings.multicastPort))
+    }
+
+    var body: some View {
+        List {
+            TextField("Port", text: $port).onSubmit(save)
+            Button(action: save) { Label("Save", systemImage: "checkmark") }
+                .disabled(Int(port).map { !(1...65535).contains($0) } ?? true)
+        }
+        .navigationTitle("Port")
+    }
+
+    private func save() {
+        guard let number = Int(port), (1...65535).contains(number) else { return }
+        settings.multicastPort = number
+        dismiss()
     }
 }
 

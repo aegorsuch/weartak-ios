@@ -55,6 +55,11 @@ final class SitxClient: ObservableObject, TAKTransport {
     var onReady: (() -> Void)?
     var onDisconnected: (() -> Void)?
     var currentLocation: CLLocation?
+    var additionalOutput: (any CoTOutput)?
+    var hasReadyOutput: Bool {
+        additionalOutput?.isReady == true ||
+        (settings.sitxEnabled && !isPhoneReachable && socket != nil && status == State.connected)
+    }
     var isPhoneReachable = false {
         didSet {
             guard isPhoneReachable != oldValue else { return }
@@ -120,7 +125,10 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     func connect() async throws {
-        guard settings.sitxEnabled, isAppActive, !isPhoneReachable, !selectedGroupID.isEmpty else { throw TAKTransportError.notConfigured }
+        guard settings.sitxEnabled, isAppActive, !isPhoneReachable, !selectedGroupID.isEmpty else {
+            if additionalOutput?.isReady == true { return }
+            throw TAKTransportError.notConfigured
+        }
         if socket != nil { return }
         let generation = connectionGeneration
         reconnectTask?.cancel()
@@ -164,6 +172,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             }
         } catch {
             if generation == connectionGeneration { connectionFailed(error) }
+            if additionalOutput?.isReady == true { return }
             throw error
         }
     }
@@ -213,11 +222,28 @@ final class SitxClient: ObservableObject, TAKTransport {
         if pendingEvents[key] == xml { pendingEvents.removeValue(forKey: key) }
     }
 
+    private func deliver(_ xml: String, eventKey: String? = nil) async throws {
+        var delivered = false
+        var failure: Error = TAKTransportError.notConfigured
+        if let additionalOutput, additionalOutput.isReady {
+            do { try await additionalOutput.send(xml); delivered = true }
+            catch { failure = error }
+        }
+        if settings.sitxEnabled {
+            do {
+                if let eventKey { try await sendEvent(xml, key: eventKey) }
+                else { try await sendXML(xml) }
+                delivered = true
+            } catch { failure = error }
+        }
+        if !delivered { throw failure }
+    }
+
     func sendPLI(coordinate: CLLocationCoordinate2D) async throws {
         let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\" endpoint=\"*:-1:stcp\"/><__group name=\"\(SitxCoT.escape(settings.teamColor.rawValue))\" role=\"\(SitxCoT.escape(settings.role))\"/>"
         let lifetime = TimeInterval(max(settings.stationaryReportingInterval, settings.constantReportingInterval,
                                         settings.onFootReportingInterval, settings.vehicleReportingInterval)) * 6 + 120
-        try await sendXML(SitxCoT.event(uid: Self.deviceID(), type: "a-f-G-U-C", coordinate: coordinate,
+        try await deliver(SitxCoT.event(uid: Self.deviceID(), type: "a-f-G-U-C", coordinate: coordinate,
                                       detail: detail, lifetime: lifetime))
     }
 
@@ -230,14 +256,14 @@ final class SitxClient: ObservableObject, TAKTransport {
         case .unknown: affiliation = "u"
         }
         let detail = "<contact callsign=\"\(SitxCoT.escape(marker.displayTitle))\"/><remarks>\(SitxCoT.escape(marker.remark ?? ""))</remarks><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/>"
-        try await sendEvent(SitxCoT.event(uid: marker.id.uuidString, type: "a-\(affiliation)-G", coordinate: marker.coordinate,
-                                        detail: detail, lifetime: 86_400), key: marker.id.uuidString)
+        try await deliver(SitxCoT.event(uid: marker.id.uuidString, type: "a-\(affiliation)-G", coordinate: marker.coordinate,
+                          detail: detail, lifetime: 86_400), eventKey: marker.id.uuidString)
     }
 
     func deleteMarker(uid: String) async throws {
         let detail = "<link uid=\"\(SitxCoT.escape(uid))\" relation=\"p-p\"/><__forcedelete/>"
-        try await sendEvent(SitxCoT.event(uid: uid + "-delete", type: "t-x-d-d", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                                        detail: detail, lifetime: 300), key: uid)
+        try await deliver(SitxCoT.event(uid: uid + "-delete", type: "t-x-d-d", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                          detail: detail, lifetime: 300), eventKey: uid)
     }
 
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws {
@@ -246,8 +272,8 @@ final class SitxClient: ObservableObject, TAKTransport {
         let emergency = cancel ? "<emergency cancel=\"true\">\(SitxCoT.escape(settings.callSign))</emergency>"
             : "<emergency type=\"\(SitxCoT.escape(type))\">\(SitxCoT.escape(settings.callSign))</emergency>"
         let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\"/><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/><remarks>\(SitxCoT.escape(type))</remarks><biometrics alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertDescription=\"\(SitxCoT.escape(type))\"/>" + emergency
-        try await sendEvent(SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                                        detail: detail, lifetime: 86_400), key: uid)
+        try await deliver(SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                          detail: detail, lifetime: 86_400), eventKey: uid)
     }
 
     func incomingEntities() -> AsyncStream<EntityRelayPayload> {
@@ -543,7 +569,7 @@ final class SitxClient: ObservableObject, TAKTransport {
         for account in ["access", "refresh", "host"] { deleteToken(account: account) }
     }
 
-    private static func deviceID() -> String {
+    static func deviceID() -> String {
         let key = "WearTAK.sitxDeviceID"
         if let saved = UserDefaults.standard.string(forKey: key) { return saved }
         let value = UUID().uuidString.lowercased()

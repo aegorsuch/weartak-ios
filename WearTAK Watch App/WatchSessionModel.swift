@@ -138,6 +138,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private let transport: TAKTransport
     let sitxClient: SitxClient
+    let multicastClient: MulticastTAKTransport
     private let settings: AppSettings
     private var connectionTask: Task<Void, Never>?
     private var reportingTimer: Timer?
@@ -159,17 +160,29 @@ final class WatchSessionModel: NSObject, ObservableObject {
     init(transport: TAKTransport? = nil, settings: AppSettings) {
         let client = SitxClient(settings: settings)
         sitxClient = (transport as? SitxClient) ?? client
+        multicastClient = MulticastTAKTransport(settings: settings)
+        sitxClient.additionalOutput = multicastClient
         self.transport = transport ?? client
         self.settings = settings
         super.init()
         sitxClient.onReady = { [weak self] in self?.connect() }
         sitxClient.onDisconnected = { [weak self] in
-            guard let self else { return }
+            guard let self, !self.sitxClient.hasReadyOutput else { return }
             self.connectionTask?.cancel()
             self.connectionState = .disconnected
             self.locationManager.stopUpdatingLocation()
             self.incomingEntityTask?.cancel()
         }
+        multicastClient.onStateChange = { [weak self] in
+            guard let self else { return }
+            if self.multicastClient.isReady {
+                self.connect()
+            } else if !self.sitxClient.hasReadyOutput {
+                self.connectionState = .disconnected
+                self.locationManager.stopUpdatingLocation()
+            }
+        }
+        multicastClient.onEntity = { [weak self] entity in self?.receiveEntity(entity) }
         if WCSession.isSupported() {
             WCSession.default.delegate = self
             WCSession.default.activate()
@@ -205,6 +218,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func setAppActive(_ active: Bool) {
         isAppActive = active
+        multicastClient.setAppActive(active)
         sitxClient.setAppActive(active)
         if active { sitxClient.resumeAuthorization() }
         else { locationManager.stopUpdatingLocation() }
@@ -401,7 +415,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date()) {
-        guard !payload.uid.isEmpty,
+        guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
         let entity = IncomingMapEntity(
             id: payload.uid, latitude: payload.lat, longitude: payload.lon,
@@ -565,7 +579,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
                 try await transport.sendPLI(coordinate: location.coordinate)
                 lastPLISentAt = Date()
             } catch {
-                connectionState = .failed
+                if !sitxClient.hasReadyOutput { connectionState = .failed }
             }
         }
     }

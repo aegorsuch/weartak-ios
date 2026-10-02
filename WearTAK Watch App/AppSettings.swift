@@ -1,5 +1,11 @@
 import Combine
 import Foundation
+import Network
+
+enum MulticastOutputProtocol: String, CaseIterable, Identifiable {
+    case udp = "UDP"
+    var id: Self { self }
+}
 
 enum RelayProvider: String, CaseIterable, Identifiable {
     case notSet = "N/A"
@@ -79,6 +85,10 @@ final class AppSettings: ObservableObject {
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
         static let sitxEnabled = "WearTAK.sitxEnabled"
+        static let multicastEnabled = "WearTAK.multicastEnabled"
+        static let multicastAddress = "WearTAK.multicastAddress"
+        static let multicastPort = "WearTAK.multicastPort"
+        static let multicastOutputProtocol = "WearTAK.multicastOutputProtocol"
         static let highRestingHeartRate = "WearTAK.highRestingHeartRate"
         static let lowRestingHeartRate = "WearTAK.lowRestingHeartRate"
         static let highRestingWarningMinutes = "WearTAK.highRestingWarningMinutes"
@@ -188,6 +198,31 @@ final class AppSettings: ObservableObject {
 
     @Published var sitxEnabled: Bool {
         didSet { defaults.set(sitxEnabled, forKey: Keys.sitxEnabled) }
+    }
+
+    @Published var multicastEnabled: Bool {
+        didSet { defaults.set(multicastEnabled, forKey: Keys.multicastEnabled) }
+    }
+
+    @Published var multicastAddress: String {
+        didSet { defaults.set(multicastAddress, forKey: Keys.multicastAddress) }
+    }
+
+    @Published var multicastPort: Int {
+        didSet {
+            let clamped = min(max(multicastPort, 1), 65535)
+            guard clamped == multicastPort else { multicastPort = clamped; return }
+            defaults.set(multicastPort, forKey: Keys.multicastPort)
+        }
+    }
+
+    @Published var multicastOutputProtocol: MulticastOutputProtocol {
+        didSet { defaults.set(multicastOutputProtocol.rawValue, forKey: Keys.multicastOutputProtocol) }
+    }
+
+    static func isMulticastAddress(_ address: String) -> Bool {
+        guard let firstByte = IPv4Address(address)?.rawValue.first else { return false }
+        return (224...239).contains(firstByte)
     }
 
     @Published var highRestingHeartRate: Int {
@@ -438,6 +473,10 @@ final class AppSettings: ObservableObject {
         let storedSitxHost = defaults.string(forKey: Keys.sitxApiHost) ?? ""
         sitxApiHost = storedSitxHost
         sitxEnabled = defaults.object(forKey: Keys.sitxEnabled) as? Bool ?? !storedSitxHost.isEmpty
+        multicastEnabled = defaults.object(forKey: Keys.multicastEnabled) as? Bool ?? false
+        multicastAddress = defaults.string(forKey: Keys.multicastAddress) ?? "239.2.3.1"
+        multicastPort = min(max(defaults.object(forKey: Keys.multicastPort) as? Int ?? 6969, 1), 65535)
+        multicastOutputProtocol = MulticastOutputProtocol(rawValue: defaults.string(forKey: Keys.multicastOutputProtocol) ?? "UDP") ?? .udp
         highRestingHeartRate = defaults.object(forKey: Keys.highRestingHeartRate) as? Int ?? 120
         lowRestingHeartRate = defaults.object(forKey: Keys.lowRestingHeartRate) as? Int ?? 40
         highRestingWarningMinutes = defaults.object(forKey: Keys.highRestingWarningMinutes) as? Int ?? 5
