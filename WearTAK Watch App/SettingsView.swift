@@ -43,17 +43,51 @@ private struct DevicePreferencesView: View {
 
     var body: some View {
         List {
-            TextField("Callsign", text: $settings.callSign)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-            NavigationLink("My Team") {
+            NavigationLink {
+                MyCallsignView(settings: settings)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("My Callsign")
+                    Text(settings.callSign.isEmpty ? "Not Set" : settings.callSign)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            NavigationLink {
                 MyTeamView(settings: settings)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("My Team")
+                        Text(settings.teamColor.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Circle()
+                        .fill(settings.teamColor.swatchColor)
+                        .frame(width: 14, height: 14)
+                        .overlay(Circle().stroke(.gray.opacity(0.7), lineWidth: 1))
+                }
             }
             NavigationLink("My User Metrics") {
                 UserMetricsView(settings: settings)
             }
         }
         .navigationTitle("Callsign and Device Preferences")
+    }
+}
+
+private struct MyCallsignView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            TextField("Callsign", text: $settings.callSign)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+        }
+        .navigationTitle("My Callsign")
     }
 }
 
