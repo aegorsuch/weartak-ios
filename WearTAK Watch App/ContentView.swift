@@ -15,7 +15,7 @@ struct ContentView: View {
         NavigationStack {
             List {
                 if settings.chatEnabled {
-                    NavigationLink { ChatView() } label: {
+                    NavigationLink { ChatView(model: model, settings: settings) } label: {
                         Label("Chat", systemImage: "message")
                     }
                 }
@@ -162,10 +162,16 @@ struct ContentView: View {
 }
 
 private struct ChatView: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var settings: AppSettings
+
     var body: some View {
         List {
-            Text("Select a map user")
-                .foregroundStyle(.secondary)
+            NavigationLink {
+                TacticalMapView(model: model, settings: settings)
+            } label: {
+                Label("Select a map user", systemImage: "map")
+            }
         }
         .navigationTitle("Chat")
     }
