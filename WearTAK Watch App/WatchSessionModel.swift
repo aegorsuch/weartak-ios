@@ -155,7 +155,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var isUpdatingHeading = false
     private var lastPLISentAt: Date?
     private let networkPathMonitor = NWPathMonitor()
-    @Published private(set) var isOnWiFi = false
+    @Published private(set) var networkConnectivity: DashboardNetworkConnectivity = .offline
+    var isOnWiFi: Bool { networkConnectivity == .wifi }
+    var isPhoneRelayConnected: Bool {
+        connectionState == .connected && transport.pliReportingRoute == .phoneRelay
+    }
 
     init(transport: TAKTransport? = nil, settings: AppSettings) {
         let client = SitxClient(settings: settings)
@@ -193,9 +197,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         networkPathMonitor.pathUpdateHandler = { [weak self] path in
-            let usesWiFi = path.status == .satisfied && path.usesInterfaceType(.wifi)
+            let satisfied = path.status == .satisfied
+            let wifi = path.usesInterfaceType(.wifi)
+            let cellular = path.usesInterfaceType(.cellular)
             Task { @MainActor [weak self] in
-                self?.isOnWiFi = usesWiFi
+                self?.networkConnectivity = DashboardNetworkConnectivity.resolve(
+                    satisfied: satisfied, wifi: wifi, cellular: cellular
+                )
             }
         }
         networkPathMonitor.start(queue: DispatchQueue(label: "WearTAK.networkPath"))

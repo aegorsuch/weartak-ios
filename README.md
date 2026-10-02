@@ -32,6 +32,26 @@ automatic alerts have separate preferences. Alert thresholds and durations are
 configurable. The watch target requires the HealthKit capability when signing
 for a device. Sensor monitoring and direct reporting stop in the background.
 
+### Dashboard
+
+Tap the center metric to choose Exertion or Heart Rate. Exertion is the default;
+the selection is remembered. Heart Rate uses a heartbeat waveform icon and
+displays BPM. The selection menu has the existing Physiological Alerts On/Off
+toggle at the top, plus access to the full Physiology view. The alert toggle is
+independent of the Physiological Monitoring preference that controls sensing.
+
+The network icon reflects the active WiFi, cellular, unavailable, or other
+network path and opens Network Preferences. A cellular path does not expose its
+radio generation or signal strength. Phone-proxied paths may appear as another
+network type rather than identifiable WiFi or cellular.
+
+The TAK indicator distinguishes multicast broadcasts, the Sit(x) cloud, and a
+phone-relay icon. Green checks require a ready transport, not just an enabled
+preference. Concurrent active multicast and Sit(x) outputs show both symbols.
+A selected phone-relay provider does not imply a working BLE TAK connection;
+that integration remains incomplete. The TAK indicator also opens Network
+Preferences.
+
 ## TAK Relay
 
 TAK Relay integration with iTAK and TAK Aware is not complete. The project
@@ -155,6 +175,7 @@ multicast output; they do not use real credentials or broadcast onto the LAN.
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/AppSettings.swift' \
+  'WearTAK Watch App/DashboardStatus.swift' \
   'WearTAK Watch App/RelayProtocol.swift' \
   'WearTAK Watch App/SitxCoT.swift' \
   'WearTAK Watch App/MulticastTAKTransport.swift' \

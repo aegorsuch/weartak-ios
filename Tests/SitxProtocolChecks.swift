@@ -107,6 +107,25 @@ struct SitxProtocolChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
+        precondition(settings.dashboardMetric == .exertion)
+        settings.dashboardMetric = .heartRate
+        precondition(AppSettings(defaults: defaults).dashboardMetric == .heartRate)
+        settings.dashboardMetric = .exertion
+        precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: true, cellular: false) == .wifi)
+        precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: false, cellular: true) == .cellular)
+        precondition(DashboardNetworkConnectivity.resolve(satisfied: false, wifi: true, cellular: true) == .offline)
+        precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: false, cellular: false) == .other)
+        let pendingRelay = DashboardTAKStatus.resolve(multicastReady: false, sitxConnected: false,
+            phoneRelayConnected: false, multicastEnabled: false, sitxEnabled: false, relaySelected: true)
+        precondition(!pendingRelay.isConnected && pendingRelay.displayed == [.phoneRelay])
+        precondition(pendingRelay.label == "TAK BLE relay incomplete")
+        let bothOutputs = DashboardTAKStatus.resolve(multicastReady: true, sitxConnected: true,
+            phoneRelayConnected: false, multicastEnabled: true, sitxEnabled: true, relaySelected: true)
+        precondition(bothOutputs.isConnected && bothOutputs.displayed == [.multicast, .sitx])
+        let bleRelay = DashboardTAKStatus.resolve(multicastReady: false, sitxConnected: false,
+            phoneRelayConnected: true, multicastEnabled: false, sitxEnabled: false, relaySelected: true)
+        precondition(bleRelay.isConnected && bleRelay.active == [.phoneRelay])
+        print("PASS: dashboard metric persistence and network/TAK indicator states")
         precondition(settings.multicastEnabled)
         precondition(settings.multicastAddress == "239.2.3.1" && settings.multicastPort == 6969)
         precondition(settings.multicastOutputProtocol == .udp)

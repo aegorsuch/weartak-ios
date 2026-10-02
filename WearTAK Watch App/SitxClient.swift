@@ -56,9 +56,11 @@ final class SitxClient: ObservableObject, TAKTransport {
     var onDisconnected: (() -> Void)?
     var currentLocation: CLLocation?
     var additionalOutput: (any CoTOutput)?
+    var isSitxConnected: Bool {
+        settings.sitxEnabled && !isPhoneReachable && socket != nil && status == State.connected
+    }
     var hasReadyOutput: Bool {
-        additionalOutput?.isReady == true ||
-        (settings.sitxEnabled && !isPhoneReachable && socket != nil && status == State.connected)
+        additionalOutput?.isReady == true || isSitxConnected
     }
     var isPhoneReachable = false {
         didSet {

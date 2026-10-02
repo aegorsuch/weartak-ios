@@ -2,6 +2,16 @@ import Combine
 import Foundation
 import Network
 
+enum DashboardMetric: String, CaseIterable, Identifiable {
+    case exertion = "Exertion"
+    case heartRate = "Heart Rate"
+
+    var id: Self { self }
+    var symbol: String {
+        self == .exertion ? "figure.strengthtraining.traditional" : "waveform.path.ecg"
+    }
+}
+
 enum MulticastOutputProtocol: String, CaseIterable, Identifiable {
     case udp = "UDP"
     var id: Self { self }
@@ -69,6 +79,7 @@ enum WiFiBatteryPolicy: String, CaseIterable, Identifiable {
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Keys {
+        static let dashboardMetric = "WearTAK.dashboardMetric"
         static let watchLabel = "WearTAK.watchLabel"
         static let callSign = "WearTAK.callSign"
         static let teamColor = "WearTAK.teamColor"
@@ -130,6 +141,10 @@ final class AppSettings: ObservableObject {
     static let bloodhoundProximityIntensityOptions = ["Single Burst", "Triple Burst", "Until In Position"]
 
     private let defaults: UserDefaults
+
+    @Published var dashboardMetric: DashboardMetric {
+        didSet { defaults.set(dashboardMetric.rawValue, forKey: Keys.dashboardMetric) }
+    }
 
     @Published var watchLabel: String {
         didSet { defaults.set(watchLabel, forKey: Keys.watchLabel) }
@@ -451,6 +466,7 @@ final class AppSettings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        dashboardMetric = DashboardMetric(rawValue: defaults.string(forKey: Keys.dashboardMetric) ?? "") ?? .exertion
         reportingStrategy = ReportingStrategy(rawValue: defaults.string(forKey: Keys.reportingStrategy) ?? ReportingStrategy.dynamic.rawValue) ?? .dynamic
         wifiBatteryPolicy = WiFiBatteryPolicy(rawValue: defaults.string(forKey: Keys.wifiBatteryPolicy) ?? WiFiBatteryPolicy.none.rawValue) ?? .none
         stationaryReportingInterval = defaults.object(forKey: Keys.stationaryReportingInterval) as? Int ?? 3600

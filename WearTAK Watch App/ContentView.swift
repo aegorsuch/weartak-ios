@@ -171,45 +171,40 @@ private struct WatchDashboardView: View {
     private func statusHeader(small: Bool) -> some View {
         HStack(spacing: 6) {
             VStack(spacing: small ? 2 : 3) {
-                NavigationLink {
-                    SettingsView(model: model, settings: settings)
-                } label: {
-                    ZStack(alignment: .bottomTrailing) {
-                        Image(systemName: "shield.lefthalf.filled")
-                            .font(.system(size: small ? 18 : 21))
-                            .foregroundStyle(accent)
-                        Image(systemName: model.connectionState == .connected ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(model.connectionState == .connected ? .green : .orange)
-                            .background(.black, in: Circle())
-                            .offset(x: 4, y: 2)
-                    }
+                DashboardTAKIndicator(model: model, settings: settings)
                     .frame(width: 28, height: small ? 20 : 24)
+                NavigationLink {
+                    NetworkPreferencesView(model: model, settings: settings, sitxClient: model.sitxClient)
+                } label: {
+                    Image(systemName: model.networkConnectivity.symbol)
+                        .font(.system(size: small ? 11 : 13, weight: .semibold))
+                        .frame(width: 28, height: small ? 12 : 16)
                 }
-                .accessibilityLabel("TAK connection: \(model.connectionState.rawValue)")
-                Image(systemName: model.isOnWiFi ? "wifi" : "wifi.slash")
-                    .font(.system(size: small ? 11 : 13, weight: .semibold))
-                    .accessibilityLabel(model.isOnWiFi ? "WiFi active" : "WiFi inactive")
+                .accessibilityLabel("Network preferences: \(model.networkConnectivity.rawValue)")
             }
             Spacer(minLength: 0)
             NavigationLink {
-                PhysiologyView(monitor: physiology)
+                DashboardMetricPreferencesView(settings: settings, monitor: physiology)
             } label: {
                 VStack(spacing: 2) {
-                    Text("Exertion")
+                    Text(settings.dashboardMetric.rawValue)
                         .font(.system(size: small ? 10 : 12))
                         .foregroundStyle(.secondary)
                     HStack(spacing: 4) {
-                        Image(systemName: "figure.strengthtraining.traditional")
+                        Image(systemName: settings.dashboardMetric.symbol)
                             .font(.system(size: 16))
                             .foregroundStyle(accent)
-                        Text(physiology.exertionPercent.map { "\($0)%" } ?? "--%")
+                            Text(settings.dashboardMetric == .exertion
+                                ? physiology.exertionPercent.map { "\($0)%" } ?? "--%"
+                                : physiology.heartRate.map { "\($0)" } ?? "--")
                             .font(.system(size: small ? 21 : 24, weight: .semibold))
                             .monospacedDigit()
                     }
                 }
             }
-            .accessibilityLabel("Physiology. Exertion \(physiology.exertionPercent.map { "\($0) percent" } ?? "unavailable")")
+            .accessibilityLabel(settings.dashboardMetric == .exertion
+                ? "Select metric. Exertion \(physiology.exertionPercent.map { "\($0) percent" } ?? "unavailable")"
+                : "Select metric. Heart rate \(physiology.heartRate.map { "\($0) beats per minute" } ?? "unavailable")")
             Spacer(minLength: 0)
             VStack(spacing: small ? 2 : 3) {
                 Button { model.requestLocation() } label: {
@@ -232,19 +227,13 @@ private struct WatchDashboardView: View {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            if model.activeAlertType != nil {
-                Button { model.cancelEmergencyAlert() } label: {
-                    outlinedControl("xmark", color: .red)
-                }
-                .accessibilityLabel("Clear manual alert")
-            } else {
-                NavigationLink {
-                    ManualAlertView(model: model)
-                } label: {
-                    outlinedControl("exclamationmark.triangle", color: .red)
-                }
-                .accessibilityLabel("Manual alert")
+            NavigationLink {
+                ManualAlertView(model: model)
+            } label: {
+                outlinedControl("exclamationmark.triangle", color: .red)
+                    .background(model.activeAlertType == nil ? Color.clear : Color.red, in: Capsule())
             }
+            .accessibilityLabel(model.activeAlertType.map { "Manual alert active: \($0.rawValue)" } ?? "Manual alert")
             Button(action: dropPoint) {
                 PointDropSymbol()
                     .stroke(.white, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
@@ -373,6 +362,97 @@ private struct WatchDashboardView: View {
             .foregroundStyle(color)
             .frame(width: size, height: size)
             .background(Color(white: 0.22), in: Circle())
+    }
+}
+
+private struct DashboardMetricPreferencesView: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var monitor: PhysiologyMonitor
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Toggle(isOn: $settings.physiologicalAlertsEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Physiological Alerts")
+                    Text(settings.physiologicalAlertsEnabled ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section("Display") {
+                ForEach(DashboardMetric.allCases) { metric in
+                    Button {
+                        settings.dashboardMetric = metric
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Label(metric.rawValue, systemImage: metric.symbol)
+                            Spacer()
+                            if settings.dashboardMetric == metric {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+            NavigationLink {
+                PhysiologyView(monitor: monitor)
+            } label: {
+                Label("Physiology", systemImage: "heart.text.square")
+            }
+        }
+        .navigationTitle("Metric")
+    }
+}
+
+private struct DashboardTAKIndicator: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var sitx: SitxClient
+    @ObservedObject var multicast: MulticastTAKTransport
+
+    init(model: WatchSessionModel, settings: AppSettings) {
+        self.model = model
+        self.settings = settings
+        sitx = model.sitxClient
+        multicast = model.multicastClient
+    }
+
+    var body: some View {
+        let state = DashboardTAKStatus.resolve(
+            multicastReady: multicast.isReady,
+            sitxConnected: sitx.isSitxConnected,
+            phoneRelayConnected: model.isPhoneRelayConnected,
+            multicastEnabled: settings.multicastEnabled,
+            sitxEnabled: settings.sitxEnabled,
+            relaySelected: settings.relayProvider != .notSet
+        )
+        NavigationLink {
+            NetworkPreferencesView(model: model, settings: settings, sitxClient: sitx)
+        } label: {
+            ZStack(alignment: .bottomTrailing) {
+                HStack(spacing: 0) {
+                    if state.displayed.isEmpty {
+                        Image(systemName: "network")
+                            .frame(width: 24)
+                    } else {
+                        ForEach(state.displayed, id: \.self) { output in
+                            Image(systemName: output.symbol)
+                                .frame(width: CGFloat(24 / state.displayed.count))
+                        }
+                    }
+                }
+                .font(.system(size: state.displayed.count > 2 ? 8 : state.displayed.count > 1 ? 11 : 19))
+                .foregroundStyle(state.isConnected ? Color(red: 0.67, green: 0.80, blue: 0.98) : .gray)
+                Image(systemName: state.isConnected ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(state.isConnected ? .green : .orange)
+                    .background(.black, in: Circle())
+                    .offset(x: 3, y: 2)
+            }
+        }
+        .accessibilityLabel(state.label + ". Network preferences")
     }
 }
 
@@ -896,14 +976,26 @@ private struct ManualAlertView: View {
 
     var body: some View {
         List {
-            ForEach(ManualAlertType.allCases) { type in
-                Button(type.rawValue) {
-                    model.startEmergencyAlert(type: type)
+            if let activeType = model.activeAlertType {
+                LabeledContent("Active Alert", value: activeType.rawValue)
+                Button(role: .destructive) {
+                    model.cancelEmergencyAlert()
                     dismiss()
+                } label: {
+                    Label("Clear Manual Alert", systemImage: "xmark.circle.fill")
+                }
+            } else {
+                ForEach(ManualAlertType.allCases) { type in
+                    Button(type.rawValue) {
+                        model.startEmergencyAlert(type: type)
+                        dismiss()
+                    }
                 }
             }
-            Button("Cancel", role: .cancel) {
+            Button {
                 dismiss()
+            } label: {
+                Label("Back", systemImage: "arrow.left")
             }
         }
         .navigationTitle("Manual Alert")

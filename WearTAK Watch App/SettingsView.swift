@@ -487,7 +487,7 @@ private struct GaitTrackingView: View {
     }
 }
 
-private struct NetworkPreferencesView: View {
+struct NetworkPreferencesView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     @ObservedObject var sitxClient: SitxClient
