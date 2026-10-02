@@ -3,12 +3,12 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
-    @StateObject private var sitxClient: SitxClient
+    @ObservedObject private var sitxClient: SitxClient
 
     init(model: WatchSessionModel, settings: AppSettings) {
         self.model = model
         self.settings = settings
-        _sitxClient = StateObject(wrappedValue: SitxClient(settings: settings))
+        _sitxClient = ObservedObject(wrappedValue: model.sitxClient)
     }
 
     private var versionLabel: String {
@@ -561,6 +561,32 @@ private struct SitxDeviceAPIView: View {
                 }
             }
             LabeledContent("Status", value: client.status)
+            LabeledContent("Pending Events", value: "\(client.pendingEvents.count)")
+            if !client.groups.isEmpty {
+                NavigationLink {
+                    List(client.groups) { group in
+                        Button {
+                            client.selectGroup(group)
+                        } label: {
+                            HStack {
+                                Text(group.name)
+                                Spacer()
+                                if client.selectedGroupID == group.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    .navigationTitle("TAK Group")
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TAK Group")
+                        Text(client.groups.first { $0.id == client.selectedGroupID }?.name ?? "Not selected")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
             Button("Clear Sit(x)", role: .destructive) {
                 confirmForget = true
             }

@@ -3,6 +3,7 @@ import CoreLocation
 import Foundation
 import Network
 import WatchKit
+import WatchConnectivity
 
 enum ConnectionState: String {
     case disconnected = "Offline"
@@ -88,6 +89,7 @@ enum PLIReportingRoute {
     case standaloneSitx
 }
 
+@MainActor
 protocol TAKTransport {
     var pliReportingRoute: PLIReportingRoute { get }
     func connect() async throws
@@ -135,7 +137,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     private let locationManager = CLLocationManager()
     private let transport: TAKTransport
+    let sitxClient: SitxClient
     private let settings: AppSettings
+    private var connectionTask: Task<Void, Never>?
+    private var reportingTimer: Timer?
+    private var isSendingPLI = false
+    private var isAppActive = true
+    private var lastFixRequestAt: Date?
     private var incomingEntityTask: Task<Void, Never>?
     private var incomingPruneTimer: Timer?
     private var automaticAlertTask: Task<Void, Never>?
@@ -149,9 +157,23 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var isOnWiFi = false
 
     init(transport: TAKTransport? = nil, settings: AppSettings) {
-        self.transport = transport ?? UnconfiguredTAKTransport()
+        let client = SitxClient(settings: settings)
+        sitxClient = (transport as? SitxClient) ?? client
+        self.transport = transport ?? client
         self.settings = settings
         super.init()
+        sitxClient.onReady = { [weak self] in self?.connect() }
+        sitxClient.onDisconnected = { [weak self] in
+            guard let self else { return }
+            self.connectionTask?.cancel()
+            self.connectionState = .disconnected
+            self.locationManager.stopUpdatingLocation()
+            self.incomingEntityTask?.cancel()
+        }
+        if WCSession.isSupported() {
+            WCSession.default.delegate = self
+            WCSession.default.activate()
+        }
         if let data = UserDefaults.standard.data(forKey: Self.markerStorageKey) {
             markers = (try? JSONDecoder().decode([WatchMarker].self, from: data)) ?? []
         }
@@ -167,6 +189,25 @@ final class WatchSessionModel: NSObject, ObservableObject {
         incomingPruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.pruneIncomingEntities() }
         }
+        reportingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.isAppActive, self.connectionState == .connected,
+                      self.transport.pliReportingRoute == .standaloneSitx else { return }
+                if let location = self.lastLocation, abs(location.timestamp.timeIntervalSinceNow) < 120 {
+                    self.sendPLIIfDue(for: location)
+                } else if self.lastFixRequestAt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
+                    self.lastFixRequestAt = Date()
+                    self.requestLocation()
+                }
+            }
+        }
+    }
+
+    func setAppActive(_ active: Bool) {
+        isAppActive = active
+        sitxClient.setAppActive(active)
+        if active { sitxClient.resumeAuthorization() }
+        else { locationManager.stopUpdatingLocation() }
     }
 
     func requestLocation() {
@@ -196,11 +237,16 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func connect() {
+        guard isAppActive, connectionState != .connecting else { return }
+        connectionTask?.cancel()
         connectionState = .connecting
-        Task {
+        connectionTask = Task {
             do {
+                let incoming = transport.incomingEntities()
                 try await transport.connect()
+                try Task.checkCancellation()
                 connectionState = .connected
+                lastPLISentAt = nil
                 if transport.pliReportingRoute == .standaloneSitx,
                    locationManager.authorizationStatus == .authorizedAlways ||
                     locationManager.authorizationStatus == .authorizedWhenInUse {
@@ -208,15 +254,15 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 }
                 incomingEntityTask?.cancel()
                 incomingEntityTask = Task {
-                    for await payload in transport.incomingEntities() {
+                    for await payload in incoming {
                         guard !Task.isCancelled else { break }
                         receiveEntity(payload)
                     }
                 }
-                if let coordinate = lastLocation?.coordinate {
-                    try await transport.sendPLI(coordinate: coordinate)
-                    lastPLISentAt = Date()
-                }
+                requestLocation()
+                if let location = lastLocation { sendPLIIfDue(for: location) }
+            } catch is CancellationError {
+                return
             } catch {
                 connectionState = error is TAKTransportError ? .unconfigured : .failed
             }
@@ -401,6 +447,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func updateAutomaticAlert(_ category: AutomaticAlertCategory?) {
         guard category != activeAutomaticAlert else { return }
+        let previousCategory = activeAutomaticAlert
         activeAutomaticAlert = category
         automaticAlertDeliveryFailed = category != nil && connectionState != .connected
         if category != nil {
@@ -410,13 +457,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let pending = automaticAlertTask
         automaticAlertTask = Task {
             await pending?.value
-            if let deliveredAutomaticAlert, deliveredAutomaticAlert != category {
+            if let previousCategory, previousCategory != category {
                 do {
-                    try await transport.sendEmergencyAlert(state: .cancel, type: deliveredAutomaticAlert.rawValue)
+                    try await transport.sendEmergencyAlert(state: .cancel, type: previousCategory.rawValue)
                     self.deliveredAutomaticAlert = nil
                 } catch {
                     automaticAlertDeliveryFailed = true
-                    return
                 }
             }
             if let category, category == activeAutomaticAlert, deliveredAutomaticAlert == nil {
@@ -456,7 +502,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     try await transport.sendEmergencyAlert(state: .alert, type: category.rawValue)
                     deliveredEnvironmentalAlerts.insert(category)
                     automaticAlertDeliveryFailed = false
-                } else if deliveredEnvironmentalAlerts.contains(category) {
+                } else {
                     try await transport.sendEmergencyAlert(state: .cancel, type: category.rawValue)
                     deliveredEnvironmentalAlerts.remove(category)
                 }
@@ -481,12 +527,15 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         lastLocation = location
+        sitxClient.currentLocation = location
         checkBloodhoundProximity(at: location)
         guard connectionState == .connected else { return }
         sendPLIIfDue(for: location)
     }
 
     private func sendPLIIfDue(for location: CLLocation) {
+          guard isAppActive, !isSendingPLI, location.horizontalAccuracy >= 0,
+              abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
         guard transport.pliReportingRoute == .standaloneSitx else {
             Task {
                 try? await transport.sendPLI(coordinate: location.coordinate)
@@ -509,9 +558,15 @@ extension WatchSessionModel: CLLocationManagerDelegate {
 
         let effectiveInterval = settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)
         guard lastPLISentAt.map({ Date().timeIntervalSince($0) >= effectiveInterval }) ?? true else { return }
-        lastPLISentAt = Date()
+        isSendingPLI = true
         Task {
-            try? await transport.sendPLI(coordinate: location.coordinate)
+            defer { isSendingPLI = false }
+            do {
+                try await transport.sendPLI(coordinate: location.coordinate)
+                lastPLISentAt = Date()
+            } catch {
+                connectionState = .failed
+            }
         }
     }
 
@@ -540,5 +595,21 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             return
         }
         headingDegrees = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+    }
+}
+
+extension WatchSessionModel: WCSessionDelegate {
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        let reachable = activationState == .activated && session.isReachable
+        Task { @MainActor [weak self] in
+            self?.sitxClient.isPhoneReachable = reachable
+        }
+    }
+
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        let reachable = session.isReachable
+        Task { @MainActor [weak self] in
+            self?.sitxClient.isPhoneReachable = reachable
+        }
     }
 }

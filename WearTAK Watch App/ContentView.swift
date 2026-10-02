@@ -88,7 +88,7 @@ struct ContentView: View {
             }
         }
         .task {
-            model.connect()
+            model.setAppActive(true)
             model.requestLocation()
             if settings.physiologicalAlertsEnabled {
                 await physiology.startMonitoring()
@@ -134,10 +134,12 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
+                model.setAppActive(false)
                 physiology.stopViewing()
                 physiology.stopMonitoring()
                 environment.stopMonitoring()
             } else if phase == .active {
+                model.setAppActive(true)
                 if settings.physiologicalAlertsEnabled {
                     Task { await physiology.startMonitoring() }
                 } else if physiology.isViewing {
