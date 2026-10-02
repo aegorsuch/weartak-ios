@@ -30,8 +30,8 @@ enum ManualAlertType: String, CaseIterable, Identifiable {
 struct WatchMarker: Identifiable, Codable {
     let id: UUID
     var kind: MarkerKind
-    let latitude: Double
-    let longitude: Double
+    var latitude: Double
+    var longitude: Double
     let createdAt: Date
     var title: String?
     var remark: String?
@@ -243,6 +243,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
     }
 
+    func moveMarker(id: UUID, to coordinate: CLLocationCoordinate2D) {
+        guard CLLocationCoordinate2DIsValid(coordinate),
+              let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        markers[index].latitude = coordinate.latitude
+        markers[index].longitude = coordinate.longitude
+        let marker = markers[index]
+        saveMarkers()
+        Task {
+            try? await transport.sendMarker(marker)
+        }
+    }
+
     func deleteMarker(id: UUID) {
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
         markers.remove(at: index)
@@ -282,6 +294,17 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let targetLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
         let bearing = Self.bearingDegrees(from: location.coordinate, to: target.coordinate)
         return (bearing, location.distance(from: targetLocation))
+    }
+
+    func mapPointReading(to coordinate: CLLocationCoordinate2D, from location: CLLocation) -> (
+        bearingDegrees: Double, relativeBearingDegrees: Double, rangeMeters: Double, isCompassRelative: Bool
+    ) {
+        let destination = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let bearing = Self.bearingDegrees(from: location.coordinate, to: coordinate)
+        let relative = headingDegrees.map {
+            (bearing - $0 + 360).truncatingRemainder(dividingBy: 360)
+        } ?? bearing
+        return (bearing, relative, location.distance(from: destination), headingDegrees != nil)
     }
 
     /// Arrow rotation relative to where the watch currently points, so it spins like a real compass.

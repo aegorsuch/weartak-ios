@@ -267,7 +267,9 @@ private struct TacticalMapView: View {
                             .tint(.blue)
                     }
                     ForEach(model.markers) { marker in
-                        Marker(marker.displayTitle, coordinate: marker.coordinate)
+                        Annotation(marker.displayTitle, coordinate: marker.coordinate, anchor: .center) {
+                            MapPointSymbol(kind: marker.kind)
+                        }
                             .tag(marker.id)
                     }
                     ForEach(model.incomingEntities) { entity in
@@ -315,7 +317,7 @@ private struct TacticalMapView: View {
             }
             .onChange(of: selectedPointID) { _, id in
                 guard let id, let marker = model.markers.first(where: { $0.id == id }) else { return }
-                pointDraft = MapPointDraft(coordinate: marker.coordinate, marker: marker)
+                pointDraft = MapPointDraft(marker: marker)
                 selectedPointID = nil
             }
 
@@ -361,7 +363,7 @@ private struct TacticalMapView: View {
         .navigationTitle("Map")
         .sheet(item: $pointDraft) { draft in
             NavigationStack {
-                PointEditorView(model: model, marker: draft.marker, coordinate: draft.coordinate)
+                PointDetailView(model: model, marker: draft.marker)
             }
         }
     }
@@ -402,9 +404,42 @@ private struct TacticalMapView: View {
 }
 
 private struct MapPointDraft: Identifiable {
-    let id = UUID()
-    let coordinate: CLLocationCoordinate2D
-    var marker: WatchMarker?
+    let marker: WatchMarker
+    var id: UUID { marker.id }
+}
+
+private struct MapPointSymbol: View {
+    let kind: MarkerKind
+
+    var body: some View {
+        Group {
+            switch kind {
+            case .friendly:
+                Rectangle()
+                    .fill(.cyan)
+                    .overlay(Rectangle().stroke(.white, lineWidth: 1))
+                    .frame(width: 16, height: 11)
+            case .hostile:
+                Rectangle()
+                    .fill(.red)
+                    .overlay(Rectangle().stroke(.white, lineWidth: 1))
+                    .frame(width: 14, height: 14)
+                    .rotationEffect(.degrees(45))
+            case .neutral:
+                Rectangle()
+                    .fill(.green)
+                    .overlay(Rectangle().stroke(.white, lineWidth: 1))
+                    .frame(width: 14, height: 14)
+            case .unknown:
+                Image(systemName: "plus")
+                    .font(.system(size: 21, weight: .black))
+                    .foregroundStyle(.yellow)
+                    .shadow(color: .black, radius: 1)
+            }
+        }
+        .frame(width: 24, height: 24)
+        .contentShape(Rectangle())
+    }
 }
 
 private struct BloodhoundView: View {
@@ -479,7 +514,7 @@ private struct PointListView: View {
                 }
                 ForEach(model.markers) { marker in
                     NavigationLink {
-                        PointEditorView(model: model, marker: marker)
+                        PointDetailView(model: model, marker: marker)
                     } label: {
                         VStack(alignment: .leading) {
                             Text(marker.displayTitle)
@@ -517,79 +552,205 @@ private struct PointListView: View {
     }
 }
 
-private struct PointEditorView: View {
+private struct PointDetailView: View {
     @ObservedObject var model: WatchSessionModel
     @Environment(\.dismiss) private var dismiss
-    @State private var kind: MarkerKind
-    @State private var title: String
-    @State private var remark: String
+    @State private var marker: WatchMarker
     @State private var confirmDelete = false
 
-    private let markerID: UUID?
-    private let coordinate: CLLocationCoordinate2D?
-
-    init(model: WatchSessionModel, marker: WatchMarker? = nil, coordinate: CLLocationCoordinate2D? = nil) {
+    init(model: WatchSessionModel, marker: WatchMarker) {
         self.model = model
-        markerID = marker?.id
-        self.coordinate = marker?.coordinate ?? coordinate
-        _kind = State(initialValue: marker?.kind ?? model.selectedMarkerKind)
-        _title = State(initialValue: marker?.title ?? "")
-        _remark = State(initialValue: marker?.remark ?? "")
+        _marker = State(initialValue: marker)
     }
 
     var body: some View {
         List {
-            if let coordinate {
-                Section("Lat/Lon") {
-                    Text(coordinate.formatted)
-                        .font(.caption2)
+            Section {
+                Text(marker.displayTitle)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Section {
+                HStack {
+                    Text(marker.kind.rawValue)
+                    Spacer(minLength: 4)
+                    Text(MapCoordinateFormatter.droppedTime(marker.createdAt))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
             }
-            Section("Details") {
-                Picker("Set Type", selection: $kind) {
-                    ForEach(MarkerKind.allCases) { option in
-                        Text(option.rawValue).tag(option)
+            Section {
+                HStack(alignment: .top, spacing: 6) {
+                    VStack(spacing: 4) {
+                        Text("From You")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        if let location = model.lastLocation {
+                            let reading = model.mapPointReading(to: marker.coordinate, from: location)
+                            Image(systemName: "location.north.fill")
+                                .font(.title3)
+                                .rotationEffect(.degrees(reading.relativeBearingDegrees))
+                            Text("\(Int(reading.bearingDegrees.rounded()))° \(MapCoordinateFormatter.cardinalDirection(reading.bearingDegrees))")
+                                .font(.caption2.monospacedDigit())
+                                .multilineTextAlignment(.center)
+                        } else {
+                            Image(systemName: "location.slash")
+                                .font(.title3)
+                            Text("Unavailable")
+                                .font(.caption2)
+                        }
                     }
-                }
-                TextField("Set Title", text: $title)
-                TextField("Set Remark", text: $remark)
-            }
+                    .frame(width: 58)
 
-            if let markerID {
-                Section {
-                    Button(model.bloodhoundTargetID == markerID ? "Stop Bloodhound" : "Bloodhound") {
-                        model.toggleBloodhound(id: markerID)
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        if let location = model.lastLocation {
+                            Text(String(format: "%.2f km", location.distance(from: CLLocation(latitude: marker.latitude, longitude: marker.longitude)) / 1000))
+                                .font(.caption.bold())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        } else {
+                            Text("Distance unavailable")
+                                .font(.caption.bold())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        Text(String(format: "Lat %.5f", marker.latitude))
+                        Text(String(format: "Long %.5f", marker.longitude))
+                        Text("MGRS \(MapCoordinateFormatter.mgrs(marker.coordinate) ?? "Unavailable")")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.55)
                     }
+                    .font(.caption2.monospacedDigit())
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
             Section {
-                Button(markerID == nil ? "Drop point" : "Save point") {
-                    if let markerID {
-                        model.updateMarker(id: markerID, kind: kind, title: title, remark: remark)
-                        dismiss()
-                    } else if let coordinate,
-                              model.addMarker(at: coordinate, kind: kind, title: title, remark: remark) {
-                        dismiss()
+                Button(model.bloodhoundTargetID == marker.id ? "Stop Bloodhound" : "Bloodhound to Marker") {
+                    model.toggleBloodhound(id: marker.id)
+                }
+
+                NavigationLink("Change Title") {
+                    PointTextEditorView(title: "Change Title", value: marker.title ?? "") { value in
+                        update(title: value)
                     }
                 }
-                .disabled(coordinate == nil)
-                if markerID != nil {
-                    Button("Delete point", role: .destructive) {
-                        confirmDelete = true
+
+                NavigationLink(marker.remark?.isEmpty == false ? "Change Remark" : "Add Remark") {
+                    PointTextEditorView(
+                        title: marker.remark?.isEmpty == false ? "Change Remark" : "Add Remark",
+                        value: marker.remark ?? ""
+                    ) { value in
+                        update(remark: value)
                     }
+                }
+
+                NavigationLink("Change Marker") {
+                    PointMarkerTypeView(selection: marker.kind) { selectedKind in
+                        update(kind: selectedKind)
+                    }
+                }
+
+                Button("Move to Current Location") {
+                    guard let location = model.lastLocation else { return }
+                    model.moveMarker(id: marker.id, to: location.coordinate)
+                    marker.latitude = location.coordinate.latitude
+                    marker.longitude = location.coordinate.longitude
+                }
+                .disabled(model.lastLocation == nil)
+
+                Button("Delete Marker", role: .destructive) {
+                    confirmDelete = true
+                }
+
+                Button {
+                    dismiss()
+                } label: {
+                    Label("Back", systemImage: "arrow.left")
                 }
             }
         }
-        .navigationTitle(markerID == nil ? "Drop Point" : "Edit Point")
+        .navigationTitle("Point Details")
+        .onAppear {
+            model.requestLocation()
+            model.startHeadingUpdates()
+        }
+        .onDisappear { model.stopHeadingUpdates() }
         .confirmationDialog("Delete point?", isPresented: $confirmDelete) {
-            Button("Delete point", role: .destructive) {
-                if let markerID {
-                    model.deleteMarker(id: markerID)
+            Button("Delete Marker", role: .destructive) {
+                model.deleteMarker(id: marker.id)
+                dismiss()
+            }
+        }
+    }
+
+    private func update(kind: MarkerKind? = nil, title: String? = nil, remark: String? = nil) {
+        if let kind { marker.kind = kind }
+        if let title { marker.title = title }
+        if let remark { marker.remark = remark }
+        model.updateMarker(id: marker.id, kind: marker.kind, title: marker.title ?? "", remark: marker.remark ?? "")
+    }
+}
+
+private struct PointTextEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var value: String
+    let title: String
+    let onSave: (String) -> Void
+
+    init(title: String, value: String, onSave: @escaping (String) -> Void) {
+        self.title = title
+        self.onSave = onSave
+        _value = State(initialValue: value)
+    }
+
+    var body: some View {
+        List {
+            TextField(title, text: $value)
+        }
+        .navigationTitle(title)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    onSave(value)
                     dismiss()
                 }
             }
         }
+    }
+}
+
+private struct PointMarkerTypeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var selection: MarkerKind
+    let onSelect: (MarkerKind) -> Void
+
+    init(selection: MarkerKind, onSelect: @escaping (MarkerKind) -> Void) {
+        self.onSelect = onSelect
+        _selection = State(initialValue: selection)
+    }
+
+    private let choices: [MarkerKind] = [.unknown, .hostile, .friendly, .neutral]
+
+    var body: some View {
+        List(choices) { kind in
+            Button {
+                selection = kind
+                onSelect(kind)
+                dismiss()
+            } label: {
+                HStack {
+                    Text(kind.rawValue)
+                    Spacer()
+                    if selection == kind {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle("Change Marker")
     }
 }
 
