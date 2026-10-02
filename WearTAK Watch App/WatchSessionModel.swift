@@ -133,6 +133,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var deliveredEnvironmentalAlerts: Set<EnvironmentalAlertCategory> = []
     private var bloodhoundProximityNotified = false
     private var isUpdatingHeading = false
+    private var lastPLISentAt: Date?
 
     init(transport: TAKTransport? = nil, settings: AppSettings) {
         self.transport = transport ?? UnconfiguredTAKTransport()
@@ -180,6 +181,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
             do {
                 try await transport.connect()
                 connectionState = .connected
+                if locationManager.authorizationStatus == .authorizedAlways ||
+                    locationManager.authorizationStatus == .authorizedWhenInUse {
+                    locationManager.startUpdatingLocation()
+                }
                 incomingEntityTask?.cancel()
                 incomingEntityTask = Task {
                     for await payload in transport.incomingEntities() {
@@ -189,6 +194,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 }
                 if let coordinate = lastLocation?.coordinate {
                     try await transport.sendPLI(coordinate: coordinate)
+                    lastPLISentAt = Date()
                 }
             } catch {
                 connectionState = error is TAKTransportError ? .unconfigured : .failed
@@ -444,7 +450,11 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         guard manager.authorizationStatus == .authorizedAlways ||
                 manager.authorizationStatus == .authorizedWhenInUse else { return }
-        manager.requestLocation()
+        if connectionState == .connected {
+            manager.startUpdatingLocation()
+        } else {
+            manager.requestLocation()
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -452,6 +462,26 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         lastLocation = location
         checkBloodhoundProximity(at: location)
         guard connectionState == .connected else { return }
+        sendPLIIfDue(for: location)
+    }
+
+    private func sendPLIIfDue(for location: CLLocation) {
+        let hasActiveAlert = activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
+        let interval: TimeInterval
+        if hasActiveAlert {
+            interval = TimeInterval(settings.alertingReportingInterval)
+        } else if settings.reportingStrategy == .constant {
+            interval = TimeInterval(settings.constantReportingInterval)
+        } else if location.speed < 0.5 {
+            interval = TimeInterval(settings.stationaryReportingInterval)
+        } else if location.speed < 2.5 {
+            interval = TimeInterval(settings.onFootReportingInterval)
+        } else {
+            interval = TimeInterval(settings.vehicleReportingInterval)
+        }
+
+        guard lastPLISentAt.map({ Date().timeIntervalSince($0) >= interval }) ?? true else { return }
+        lastPLISentAt = Date()
         Task {
             try? await transport.sendPLI(coordinate: location.coordinate)
         }

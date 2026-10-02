@@ -43,48 +43,115 @@ private struct DevicePreferencesView: View {
 
     var body: some View {
         List {
-            NavigationLink {
-                MyCallsignView(settings: settings)
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("My Callsign")
-                    Text(settings.callSign.isEmpty ? "Not Set" : settings.callSign)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            NavigationLink {
-                MyTeamView(settings: settings)
-            } label: {
-                HStack {
+            Section {
+                NavigationLink {
+                    MyCallsignView(settings: settings)
+                } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("My Team")
-                        Text(settings.teamColor.rawValue)
+                        Text("My Callsign")
+                        Text(settings.callSign.isEmpty ? "Not Set" : settings.callSign)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Circle()
-                        .fill(settings.teamColor.swatchColor)
-                        .frame(width: 14, height: 14)
-                        .overlay(Circle().stroke(.gray.opacity(0.7), lineWidth: 1))
+                }
+                NavigationLink {
+                    MyTeamView(settings: settings)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("My Team")
+                            Text(settings.teamColor.rawValue)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Circle()
+                            .fill(settings.teamColor.swatchColor)
+                            .frame(width: 14, height: 14)
+                            .overlay(Circle().stroke(.gray.opacity(0.7), lineWidth: 1))
+                    }
+                }
+                NavigationLink {
+                    MyRoleView(settings: settings)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("My Role")
+                        Text(settings.roleGroup.map { "\($0.rawValue) · \(settings.role)" } ?? "Not Set")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                NavigationLink("My User Metrics") {
+                    UserMetricsView(settings: settings)
                 }
             }
-            NavigationLink {
-                MyRoleView(settings: settings)
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("My Role")
-                    Text(settings.roleGroup.map { "\($0.rawValue) · \(settings.role)" } ?? "Not Set")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            Section {
+                NavigationLink {
+                    ReportingStrategyView(settings: settings)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reporting Strategy")
+                        Text(settings.reportingStrategy.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            }
-            NavigationLink("My User Metrics") {
-                UserMetricsView(settings: settings)
             }
         }
         .navigationTitle("Callsign and Device Preferences")
+    }
+}
+
+private struct ReportingStrategyView: View {
+    @ObservedObject var settings: AppSettings
+
+    private let commonIntervals = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]
+
+    var body: some View {
+        List {
+            Section("Strategy") {
+                ForEach(ReportingStrategy.allCases) { strategy in
+                    Button {
+                        settings.reportingStrategy = strategy
+                    } label: {
+                        HStack {
+                            Text(strategy.rawValue)
+                            Spacer()
+                            if settings.reportingStrategy == strategy {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+
+            if settings.reportingStrategy == .dynamic {
+                Section("Dynamic Intervals") {
+                    intervalRow("Stationary Reporting Interval", value: $settings.stationaryReportingInterval)
+                    intervalRow("On Foot Reporting Interval", value: $settings.onFootReportingInterval)
+                    intervalRow("Vehicle Reporting Interval", value: $settings.vehicleReportingInterval)
+                    intervalRow("While Alerting Reporting Interval", value: $settings.alertingReportingInterval)
+                }
+            } else {
+                Section("Constant Interval") {
+                    intervalRow("Reporting Interval", value: $settings.constantReportingInterval)
+                }
+            }
+        }
+        .navigationTitle("Reporting Strategy")
+    }
+
+    private func intervalRow(_ title: String, value: Binding<Int>) -> some View {
+        NavigationLink {
+            ProfileNumberPickerView(
+                title: title,
+                selection: value,
+                values: commonIntervals,
+                valueLabel: { "\($0) seconds" }
+            )
+        } label: {
+            LabeledContent(title, value: "\(value.wrappedValue) seconds")
+        }
     }
 }
 

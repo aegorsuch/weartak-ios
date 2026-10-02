@@ -44,6 +44,13 @@ enum UserRoleGroup: String, CaseIterable, Identifiable {
     }
 }
 
+enum ReportingStrategy: String, CaseIterable, Identifiable {
+    case dynamic = "Dynamic Reporting"
+    case constant = "Constant Reporting"
+
+    var id: Self { self }
+}
+
 /// Persisted preferences mirroring Garmin's Device/Network/Alerting/Tool Preferences menus.
 @MainActor
 final class AppSettings: ObservableObject {
@@ -53,6 +60,12 @@ final class AppSettings: ObservableObject {
         static let teamColor = "WearTAK.teamColor"
         static let roleGroup = "WearTAK.roleGroup"
         static let role = "WearTAK.role"
+        static let reportingStrategy = "WearTAK.reportingStrategy"
+        static let stationaryReportingInterval = "WearTAK.stationaryReportingInterval"
+        static let onFootReportingInterval = "WearTAK.onFootReportingInterval"
+        static let vehicleReportingInterval = "WearTAK.vehicleReportingInterval"
+        static let alertingReportingInterval = "WearTAK.alertingReportingInterval"
+        static let constantReportingInterval = "WearTAK.constantReportingInterval"
         static let chatEnabled = "WearTAK.chatEnabled"
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
@@ -115,6 +128,30 @@ final class AppSettings: ObservableObject {
 
     @Published var role: String {
         didSet { defaults.set(role, forKey: Keys.role) }
+    }
+
+    @Published var reportingStrategy: ReportingStrategy {
+        didSet { defaults.set(reportingStrategy.rawValue, forKey: Keys.reportingStrategy) }
+    }
+
+    @Published var stationaryReportingInterval: Int {
+        didSet { setReportingInterval(stationaryReportingInterval, key: Keys.stationaryReportingInterval) }
+    }
+
+    @Published var onFootReportingInterval: Int {
+        didSet { setReportingInterval(onFootReportingInterval, key: Keys.onFootReportingInterval) }
+    }
+
+    @Published var vehicleReportingInterval: Int {
+        didSet { setReportingInterval(vehicleReportingInterval, key: Keys.vehicleReportingInterval) }
+    }
+
+    @Published var alertingReportingInterval: Int {
+        didSet { setReportingInterval(alertingReportingInterval, key: Keys.alertingReportingInterval) }
+    }
+
+    @Published var constantReportingInterval: Int {
+        didSet { setReportingInterval(constantReportingInterval, key: Keys.constantReportingInterval) }
     }
 
     @Published var chatEnabled: Bool {
@@ -351,6 +388,12 @@ final class AppSettings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        reportingStrategy = ReportingStrategy(rawValue: defaults.string(forKey: Keys.reportingStrategy) ?? ReportingStrategy.dynamic.rawValue) ?? .dynamic
+        stationaryReportingInterval = defaults.object(forKey: Keys.stationaryReportingInterval) as? Int ?? 3600
+        onFootReportingInterval = defaults.object(forKey: Keys.onFootReportingInterval) as? Int ?? 60
+        vehicleReportingInterval = defaults.object(forKey: Keys.vehicleReportingInterval) as? Int ?? 60
+        alertingReportingInterval = defaults.object(forKey: Keys.alertingReportingInterval) as? Int ?? 10
+        constantReportingInterval = defaults.object(forKey: Keys.constantReportingInterval) as? Int ?? 60
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
         callSign = defaults.string(forKey: Keys.callSign) ?? ""
         teamColor = TeamColor(rawValue: defaults.string(forKey: Keys.teamColor) ?? "White") ?? .white
@@ -400,6 +443,10 @@ final class AppSettings: ObservableObject {
         strideLength = defaults.object(forKey: Keys.strideLength) as? Int ?? 30
         uniformPantsLength = defaults.object(forKey: Keys.uniformPantsLength) as? Int ?? 32
         loadoutWeight = defaults.object(forKey: Keys.loadoutWeight) as? Int ?? 72
+    }
+
+    private func setReportingInterval(_ value: Int, key: String) {
+        defaults.set(min(max(value, 1), 86_400), forKey: key)
     }
 
     func toggleAllergy(_ allergy: String) {
