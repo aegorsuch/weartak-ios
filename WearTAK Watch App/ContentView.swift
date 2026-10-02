@@ -579,6 +579,17 @@ private struct PointDetailView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            if let remark = marker.remark?.trimmingCharacters(in: .whitespacesAndNewlines), !remark.isEmpty {
+                Section {
+                    Text("Remark: \(remark)")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if model.bloodhoundTargetID == marker.id {
+                Section {
+                    Label("Bloodhounding", systemImage: "location.north.fill")
+                }
+            }
             Section {
                 HStack(alignment: .top, spacing: 6) {
                     VStack(spacing: 4) {
@@ -616,9 +627,9 @@ private struct PointDetailView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
-                        Text(String(format: "Lat %.5f", marker.latitude))
-                        Text(String(format: "Long %.5f", marker.longitude))
-                        Text("MGRS \(MapCoordinateFormatter.mgrs(marker.coordinate) ?? "Unavailable")")
+                        Text(String(format: "%.5f", marker.latitude))
+                        Text(String(format: "%.5f", marker.longitude))
+                        Text(MapCoordinateFormatter.mgrs(marker.coordinate) ?? "Unavailable")
                             .lineLimit(1)
                             .minimumScaleFactor(0.55)
                     }
