@@ -81,8 +81,10 @@ change the default type.
 
 The stacked-layers icon at the top of the map opens Layers Menu. Map Buttons
 shows or hides zoom and snap controls; layers and Back remain available.
-Below it, Team Colors and Roles list only groups present among received users,
-with incoming-user counts. These groups come from CoT `__group name/role`
+Below it, Team Colors and Default Roles list only groups present among received
+users, with incoming-user counts. Their headings remain visible as
+`Team Colors (0)` and `Default Roles (0)` when no groups are present.
+These groups come from CoT `__group name/role`
 metadata received through multicast or Sit(x), not from a fixed option list.
 
 All groups start visible. Switching a team or role off hides its users on the

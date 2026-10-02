@@ -66,6 +66,9 @@ struct ContentView: View {
                 model.receiveEntity(EntityRelayPayload(uid: "preview-charlie", lat: 41.8803, lon: -87.6414, type: "a-f-G-U-C", callSign: "CHARLIE", team: "Green", role: "Team Member"))
                 showMapPreview = true
             }
+            if ProcessInfo.processInfo.arguments.contains("--preview-map") {
+                showMapPreview = true
+            }
             #endif
             if settings.physiologicalAlertsEnabled {
                 await physiology.startMonitoring()
@@ -725,21 +728,6 @@ private struct TacticalMapView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
 
-            VStack {
-                Button {
-                    showLayersMenu = true
-                } label: {
-                    Image(systemName: "square.3.layers.3d")
-                        .font(.system(size: 22))
-                        .frame(width: 40, height: 36)
-                        .background(.regularMaterial, in: Circle())
-                }
-                .accessibilityLabel("Layers Menu")
-                Spacer()
-            }
-            .padding(.top, 4)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
             HStack {
                 Spacer()
                 Button {
@@ -751,16 +739,33 @@ private struct TacticalMapView: View {
             .padding(.trailing, 5)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            GeometryReader { geometry in
+                Button {
+                    showLayersMenu = true
+                } label: {
+                    Image(systemName: "square.3.layers.3d")
+                        .font(.system(size: 22))
+                        .frame(width: 40, height: 36)
+                        .background(.regularMaterial, in: Circle())
+                }
+                .accessibilityLabel("Layers Menu")
+                .frame(maxWidth: .infinity, alignment: .top)
+                .offset(y: -geometry.safeAreaInsets.top + 8)
+            }
+        }
         .buttonStyle(.plain)
         .navigationBarBackButtonHidden(true)
-        .navigationTitle("Map")
+        .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bloodhoundPanel
         }
         .onAppear {
             updateBloodhoundHeading()
             #if DEBUG
-            showLayersMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-filters")
+            showLayersMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-filters") ||
+                ProcessInfo.processInfo.arguments.contains("--preview-empty-layers")
             #endif
         }
         .onDisappear { model.stopHeadingUpdates() }
@@ -878,7 +883,10 @@ private struct MapLayersMenuView: View {
     var body: some View {
         List {
             Toggle("Map Buttons", isOn: $settings.mapButtonsVisible)
-            if !model.incomingUserTeams.isEmpty {
+            if model.incomingUserTeams.isEmpty {
+                Text("Team Colors (0)")
+                    .font(.headline)
+            } else {
                 Section("Team Colors (\(model.incomingUserTeams.count))") {
                     ForEach(model.incomingUserTeams) { group in
                         Toggle(isOn: Binding(
@@ -898,8 +906,11 @@ private struct MapLayersMenuView: View {
                     }
                 }
             }
-            if !model.incomingUserRoles.isEmpty {
-                Section("Roles (\(model.incomingUserRoles.count))") {
+            if model.incomingUserRoles.isEmpty {
+                Text("Default Roles (0)")
+                    .font(.headline)
+            } else {
+                Section("Default Roles (\(model.incomingUserRoles.count))") {
                     ForEach(model.incomingUserRoles) { group in
                         Toggle("\(group.name) (\(group.count))", isOn: Binding(
                             get: { !settings.hiddenMapRoles.contains(group.id) },
