@@ -107,6 +107,13 @@ struct ContentView: View {
                 physiology.stopMonitoring()
             }
         }
+        .onChange(of: settings.physiologicalMonitoringEnabled) { _, enabled in
+            if enabled && scenePhase == .active {
+                Task { await physiology.startMonitoring() }
+            } else if !enabled {
+                physiology.stopSensing()
+            }
+        }
         .onChange(of: settings.environmentalAlertsEnabled) { _, enabled in
             if enabled && scenePhase == .active {
                 environment.startMonitoring()

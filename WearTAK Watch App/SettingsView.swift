@@ -96,9 +96,45 @@ private struct DevicePreferencesView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                NavigationLink {
+                    WiFiBatteryPreferencesView(settings: settings)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Save Battery on WiFi")
+                        Text(settings.wifiBatteryPolicy.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Toggle("Physiological Monitoring", isOn: $settings.physiologicalMonitoringEnabled)
             }
         }
         .navigationTitle("Callsign and Device Preferences")
+    }
+}
+
+private struct WiFiBatteryPreferencesView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            ForEach(WiFiBatteryPolicy.allCases) { policy in
+                Button {
+                    settings.wifiBatteryPolicy = policy
+                } label: {
+                    HStack {
+                        Text(policy.rawValue)
+                        Spacer()
+                        if settings.wifiBatteryPolicy == policy {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .disabled(policy == .some)
+                .accessibilityHint(policy == .some ? "WiFi network names are unavailable on watchOS" : "")
+            }
+        }
+        .navigationTitle("Save Battery on WiFi")
     }
 }
 

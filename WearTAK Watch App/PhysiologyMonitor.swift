@@ -36,6 +36,7 @@ final class PhysiologyMonitor: ObservableObject {
     }
 
     func refresh() async {
+        guard settings.physiologicalMonitoringEnabled else { return }
         guard HKHealthStore.isHealthDataAvailable() else {
             status = "Health data unavailable"
             return
@@ -51,6 +52,7 @@ final class PhysiologyMonitor: ObservableObject {
     }
 
     func startMonitoring() async {
+        guard settings.physiologicalMonitoringEnabled else { return }
         guard !automaticEnabled && !isStarting else { return }
         guard settings.physiologicalAlertsEnabled else {
             status = "Enable Physiological Alerts in Settings"
@@ -64,7 +66,7 @@ final class PhysiologyMonitor: ObservableObject {
             return
         }
         await refresh()
-        guard generation == monitoringGeneration else { return }
+        guard generation == monitoringGeneration, settings.physiologicalMonitoringEnabled else { return }
         guard HKHealthStore.isHealthDataAvailable(), status != "Health access unavailable" else { return }
 
         automaticEnabled = true
@@ -73,6 +75,7 @@ final class PhysiologyMonitor: ObservableObject {
     }
 
     func startViewing() async {
+        guard settings.physiologicalMonitoringEnabled else { return }
         guard !isViewing else { return }
         isViewing = true
         await refresh()
@@ -85,6 +88,12 @@ final class PhysiologyMonitor: ObservableObject {
         if !automaticEnabled {
             stopObservingSamples()
         }
+    }
+
+    func stopSensing() {
+        stopViewing()
+        stopMonitoring()
+        clearReading(status: "Physiological monitoring off")
     }
 
     private func startObservingSamples() {
@@ -140,6 +149,8 @@ final class PhysiologyMonitor: ObservableObject {
     }
 
     private func loadLatestReading() async {
+        guard settings.physiologicalMonitoringEnabled else { return }
+        let generation = monitoringGeneration
         do {
             let sample = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HKQuantitySample?, Error>) in
                 let query = HKSampleQuery(
@@ -159,6 +170,7 @@ final class PhysiologyMonitor: ObservableObject {
                 healthStore.execute(query)
             }
 
+            guard settings.physiologicalMonitoringEnabled, generation == monitoringGeneration else { return }
             if let sample {
                 let beatsPerMinute = sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
                 heartRate = Int(beatsPerMinute.rounded())

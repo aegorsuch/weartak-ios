@@ -1,6 +1,7 @@
 import Combine
 import CoreLocation
 import Foundation
+import Network
 import WatchKit
 
 enum ConnectionState: String {
@@ -134,6 +135,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var bloodhoundProximityNotified = false
     private var isUpdatingHeading = false
     private var lastPLISentAt: Date?
+    private let networkPathMonitor = NWPathMonitor()
+    private var isOnWiFi = false
 
     init(transport: TAKTransport? = nil, settings: AppSettings) {
         self.transport = transport ?? UnconfiguredTAKTransport()
@@ -144,6 +147,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        networkPathMonitor.pathUpdateHandler = { [weak self] path in
+            let usesWiFi = path.status == .satisfied && path.usesInterfaceType(.wifi)
+            Task { @MainActor [weak self] in
+                self?.isOnWiFi = usesWiFi
+            }
+        }
+        networkPathMonitor.start(queue: DispatchQueue(label: "WearTAK.networkPath"))
         incomingPruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.pruneIncomingEntities() }
         }
@@ -480,7 +490,8 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             interval = TimeInterval(settings.vehicleReportingInterval)
         }
 
-        guard lastPLISentAt.map({ Date().timeIntervalSince($0) >= interval }) ?? true else { return }
+        let effectiveInterval = settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)
+        guard lastPLISentAt.map({ Date().timeIntervalSince($0) >= effectiveInterval }) ?? true else { return }
         lastPLISentAt = Date()
         Task {
             try? await transport.sendPLI(coordinate: location.coordinate)

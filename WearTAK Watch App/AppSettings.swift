@@ -51,6 +51,14 @@ enum ReportingStrategy: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
+enum WiFiBatteryPolicy: String, CaseIterable, Identifiable {
+    case all = "All WiFi Connections"
+    case none = "No WiFi Connections"
+    case some = "Some WiFi Connections"
+
+    var id: Self { self }
+}
+
 /// Persisted preferences mirroring Garmin's Device/Network/Alerting/Tool Preferences menus.
 @MainActor
 final class AppSettings: ObservableObject {
@@ -61,6 +69,7 @@ final class AppSettings: ObservableObject {
         static let roleGroup = "WearTAK.roleGroup"
         static let role = "WearTAK.role"
         static let reportingStrategy = "WearTAK.reportingStrategy"
+        static let wifiBatteryPolicy = "WearTAK.wifiBatteryPolicy"
         static let stationaryReportingInterval = "WearTAK.stationaryReportingInterval"
         static let onFootReportingInterval = "WearTAK.onFootReportingInterval"
         static let vehicleReportingInterval = "WearTAK.vehicleReportingInterval"
@@ -86,6 +95,7 @@ final class AppSettings: ObservableObject {
         static let immersionAlertsEnabled = "WearTAK.immersionAlertsEnabled"
         static let batteryAlertsEnabled = "WearTAK.batteryAlertsEnabled"
         static let physiologicalAlertsEnabled = "WearTAK.physiologicalAlertsEnabled"
+        static let physiologicalMonitoringEnabled = "WearTAK.physiologicalMonitoringEnabled"
         static let bloodhoundProximityRadius = "WearTAK.bloodhoundProximityRadius"
         static let bloodhoundProximityVibrationEnabled = "WearTAK.bloodhoundProximityVibrationEnabled"
         static let bloodhoundProximityIntensity = "WearTAK.bloodhoundProximityIntensity"
@@ -132,6 +142,15 @@ final class AppSettings: ObservableObject {
 
     @Published var reportingStrategy: ReportingStrategy {
         didSet { defaults.set(reportingStrategy.rawValue, forKey: Keys.reportingStrategy) }
+    }
+
+    @Published var wifiBatteryPolicy: WiFiBatteryPolicy {
+        didSet { defaults.set(wifiBatteryPolicy.rawValue, forKey: Keys.wifiBatteryPolicy) }
+    }
+
+    func reportingInterval(base: TimeInterval, isOnWiFi: Bool) -> TimeInterval {
+        let boundedInterval = min(max(base, 1), 86_400)
+        return boundedInterval * (wifiBatteryPolicy == .all && isOnWiFi ? 6 : 1)
     }
 
     @Published var stationaryReportingInterval: Int {
@@ -298,6 +317,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(physiologicalAlertsEnabled, forKey: Keys.physiologicalAlertsEnabled) }
     }
 
+    @Published var physiologicalMonitoringEnabled: Bool {
+        didSet { defaults.set(physiologicalMonitoringEnabled, forKey: Keys.physiologicalMonitoringEnabled) }
+    }
+
     @Published var bloodhoundProximityRadius: Int {
         didSet {
             let clamped = min(max(bloodhoundProximityRadius, 10), 200)
@@ -389,6 +412,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         reportingStrategy = ReportingStrategy(rawValue: defaults.string(forKey: Keys.reportingStrategy) ?? ReportingStrategy.dynamic.rawValue) ?? .dynamic
+        wifiBatteryPolicy = WiFiBatteryPolicy(rawValue: defaults.string(forKey: Keys.wifiBatteryPolicy) ?? WiFiBatteryPolicy.none.rawValue) ?? .none
         stationaryReportingInterval = defaults.object(forKey: Keys.stationaryReportingInterval) as? Int ?? 3600
         onFootReportingInterval = defaults.object(forKey: Keys.onFootReportingInterval) as? Int ?? 60
         vehicleReportingInterval = defaults.object(forKey: Keys.vehicleReportingInterval) as? Int ?? 60
@@ -429,6 +453,7 @@ final class AppSettings: ObservableObject {
         immersionAlertsEnabled = defaults.object(forKey: Keys.immersionAlertsEnabled) as? Bool ?? false
         batteryAlertsEnabled = defaults.object(forKey: Keys.batteryAlertsEnabled) as? Bool ?? false
         physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? false
+        physiologicalMonitoringEnabled = defaults.object(forKey: Keys.physiologicalMonitoringEnabled) as? Bool ?? true
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true
         bloodhoundProximityIntensity = defaults.string(forKey: Keys.bloodhoundProximityIntensity) ?? "Single Burst"
