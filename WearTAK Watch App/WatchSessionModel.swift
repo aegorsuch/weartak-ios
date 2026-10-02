@@ -198,7 +198,17 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func dropMarker() -> Bool {
         guard let coordinate = lastLocation?.coordinate else { return false }
-        return addMarker(at: coordinate, kind: selectedMarkerKind, title: "", remark: "")
+        return addMarker(at: coordinate, kind: selectedMarkerKind, title: defaultPointTitle(), remark: "")
+    }
+
+    func defaultPointTitle(at date: Date = Date()) -> String {
+        let callsign = settings.callSign.trimmingCharacters(in: .whitespacesAndNewlines)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "HHmmss'Z'"
+        let timestamp = formatter.string(from: date)
+        return callsign.isEmpty ? timestamp : "\(callsign)_\(timestamp)"
     }
 
     @discardableResult

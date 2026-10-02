@@ -14,6 +14,7 @@ enum RelayProvider: String, CaseIterable, Identifiable {
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let watchLabel = "WearTAK.watchLabel"
+        static let callSign = "WearTAK.callSign"
         static let chatEnabled = "WearTAK.chatEnabled"
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
@@ -60,6 +61,10 @@ final class AppSettings: ObservableObject {
 
     @Published var watchLabel: String {
         didSet { defaults.set(watchLabel, forKey: Keys.watchLabel) }
+    }
+
+    @Published var callSign: String {
+        didSet { defaults.set(callSign, forKey: Keys.callSign) }
     }
 
     @Published var chatEnabled: Bool {
@@ -297,6 +302,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
+        callSign = defaults.string(forKey: Keys.callSign) ?? ""
         chatEnabled = defaults.object(forKey: Keys.chatEnabled) as? Bool ?? true
         let storedRelayProvider = defaults.string(forKey: Keys.relayProvider)
         if storedRelayProvider == "TAK Aware Relay" {

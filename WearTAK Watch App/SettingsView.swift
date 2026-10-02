@@ -43,11 +43,14 @@ private struct DevicePreferencesView: View {
 
     var body: some View {
         List {
+            TextField("Callsign", text: $settings.callSign)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
             NavigationLink("My User Metrics") {
                 UserMetricsView(settings: settings)
             }
         }
-        .navigationTitle("Device Preferences")
+        .navigationTitle("Callsign and Device Preferences")
     }
 }
 

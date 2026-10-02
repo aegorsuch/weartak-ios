@@ -248,6 +248,7 @@ private struct TacticalMapView: View {
     @ObservedObject var model: WatchSessionModel
     @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var selectedPointID: UUID?
     @State private var visibleRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
         span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
@@ -260,13 +261,14 @@ private struct TacticalMapView: View {
     var body: some View {
         ZStack {
             MapReader { proxy in
-                Map(position: $cameraPosition) {
+                Map(position: $cameraPosition, selection: $selectedPointID) {
                     if let coordinate = model.lastLocation?.coordinate {
                         Marker("You", systemImage: "location.fill", coordinate: coordinate)
                             .tint(.blue)
                     }
                     ForEach(model.markers) { marker in
                         Marker(marker.displayTitle, coordinate: marker.coordinate)
+                            .tag(marker.id)
                     }
                     ForEach(model.incomingEntities) { entity in
                         Marker(entity.id, systemImage: "person.fill", coordinate: entity.coordinate)
@@ -287,7 +289,12 @@ private struct TacticalMapView: View {
                                     guard !Task.isCancelled,
                                           let coordinate = proxy.convert(startLocation, from: .local),
                                           CLLocationCoordinate2DIsValid(coordinate) else { return }
-                                    pointDraft = MapPointDraft(coordinate: coordinate)
+                                    model.addMarker(
+                                        at: coordinate,
+                                        kind: .unknown,
+                                        title: model.defaultPointTitle(),
+                                        remark: ""
+                                    )
                                     longPressTask = nil
                                 }
                             } else if hypot(value.translation.width, value.translation.height) > 12 {
@@ -305,6 +312,11 @@ private struct TacticalMapView: View {
             .onAppear(perform: centerOnce)
             .onChange(of: model.lastLocation?.timestamp) { _, _ in
                 centerOnce()
+            }
+            .onChange(of: selectedPointID) { _, id in
+                guard let id, let marker = model.markers.first(where: { $0.id == id }) else { return }
+                pointDraft = MapPointDraft(coordinate: marker.coordinate, marker: marker)
+                selectedPointID = nil
             }
 
             VStack(spacing: 0) {
@@ -349,7 +361,7 @@ private struct TacticalMapView: View {
         .navigationTitle("Map")
         .sheet(item: $pointDraft) { draft in
             NavigationStack {
-                PointEditorView(model: model, coordinate: draft.coordinate)
+                PointEditorView(model: model, marker: draft.marker, coordinate: draft.coordinate)
             }
         }
     }
@@ -392,6 +404,7 @@ private struct TacticalMapView: View {
 private struct MapPointDraft: Identifiable {
     let id = UUID()
     let coordinate: CLLocationCoordinate2D
+    var marker: WatchMarker?
 }
 
 private struct BloodhoundView: View {
