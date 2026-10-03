@@ -48,8 +48,8 @@ The link is not available until the Apple distribution steps below are done.
   LAN; turn it off in Network Preferences when not wanted.
 
 Beta builds expire after 90 days. Install a newer TestFlight build when one is
-available. The phone TAK relay remains incomplete; selecting iTAK or TAK Aware
-does not connect the watch to those apps.
+available. WearTAK Companion is optional; see its setup below. Selecting iTAK
+or TAK Aware does not yet connect the watch to those partner apps.
 
 ### Developers: build from source onto a watch
 
@@ -113,7 +113,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `3`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `4`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -126,9 +126,9 @@ Then:
 
 1. Run the protocol checks below and the watch build. For upload, choose the
   shared scheme WearTAK App Store and destination Any iOS Device, then Product
-  > Archive. The iOS target is Apple's watch-only packaging stub, not an iPhone
-  UI or phone relay. It embeds the existing watch app under `WearTAK.app/Watch/`.
-  Continue using WearTAK Watch App for watch simulator/device development.
+  > Archive. The iOS target is WearTAK Companion and embeds the independent
+  watch app under `WearTAK.app/Watch/`. Continue using WearTAK Watch App for
+  watch development or WearTAK Companion for phone development.
 2. In Organizer, validate the archive and use Distribute App > App Store
   Connect to upload it. Resolve signing or validation failures; never upload
   the simulator/ad-hoc-signed build used during development.
@@ -143,7 +143,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `3`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `4`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -203,9 +203,10 @@ network type rather than identifiable WiFi or cellular.
 The TAK indicator distinguishes multicast broadcasts, the Sit(x) cloud, and a
 phone-relay icon. Green checks require a ready transport, not just an enabled
 preference. Concurrent active multicast and Sit(x) outputs show both symbols.
-A selected phone-relay provider does not imply a working BLE TAK connection;
-that integration remains incomplete. The TAK indicator also opens Network
-Preferences.
+A selected phone-relay provider does not imply a working connection. Companion
+readiness requires a reachable watch/phone session and a confirmed live server
+connection; iTAK and TAK Aware integration remains incomplete. The TAK indicator
+also opens Network Preferences.
 
 ### Dropped markers
 
@@ -229,12 +230,13 @@ change the default type.
 ### Map Layers Menu
 
 The stacked-layers icon at the top of the map opens Layers Menu. Map Buttons
-shows or hides zoom and snap controls; layers and Back remain available.
+shows or hides zoom and snap controls; Layers, Channels and Back remain available.
 Below it, Team Colors and Default Roles list only groups present among received
 users, with incoming-user counts. Their headings remain visible as
 `Team Colors (0)` and `Default Roles (0)` when no groups are present.
 These groups come from CoT `__group name/role`
-metadata received through multicast or Sit(x), not from a fixed option list.
+metadata received through multicast, Sit(x), or Companion, not from a fixed
+option list.
 
 All groups start visible. Switching a team or role off hides its users on the
 map; both filters must allow a user for that user to appear. Hidden selections
@@ -253,10 +255,59 @@ selector currently saves a preference only; choosing iTAK or TAK Aware does not
 establish a relay connection or enable phone-relayed delivery. Their submenu
 rows use a small Teaming label rather than a general integration warning.
 
-WearTAK Companion is also listed as an optional relay choice. It requires an
-existing TAK server and an administrator-provided client certificate or
-enrollment account; it does not supply a server. Its bridge backend is still
-under implementation, so selecting it alone does not establish a connection.
+### WearTAK Companion
+
+The optional iPhone app requires iOS 18 or newer, an existing TAK server, and
+an administrator-provided client certificate or enrollment account. It does
+not supply a server. The watch remains independently usable with direct Sit(x)
+and local multicast without Companion.
+
+1. On the phone, open WearTAK Companion and choose Add Server. Enter the server
+  IP or hostname (or a root HTTPS URL) and CoT stream port, normally `8089`.
+  Use the hostname matching the server certificate; TLS verification is strict.
+2. Enroll with the administrator's username/password or import a `.p12` file
+  with its password. Save the server, then turn its individual switch on.
+  Additional servers can be saved, edited, enabled independently, or removed
+  with confirmation. The Watch status appears above the TAK Servers list.
+3. On the watch, select Companion in Settings > Network Preferences > TAK
+  Relay. Keep both apps foregrounded and the paired phone reachable.
+  Connected requires a successful mutual-TLS server connection, not just a
+  saved certificate or Bluetooth pairing.
+
+Enrollment uses HTTPS `8446` by default; an explicit HTTPS URL port overrides
+that enrollment port, not the separately entered CoT stream port. Client
+identities and import passwords are stored in endpoint-scoped Keychain entries.
+Enrollment passwords are not persisted; renew by enrolling again. The UI
+reports certificate expiration and a renewal warning within three days.
+
+Watch CoT is sent to all connected, enabled servers. An acknowledgement means
+at least one server socket accepted the write, not that a remote TAK user
+received it. Incoming CoT is forwarded to a reachable watch. Readiness is
+confirmed by a live handshake and expires if confirmations stop. Direct Sit(x)
+pauses only while Companion is actually ready; multicast remains independent.
+There is no guaranteed background relay or durable offline PLI replay.
+
+### Map Channels
+
+The connected-nodes button at the watch map's top right opens Channels; Layers
+remains top center. Choose an enabled Companion server to load its assigned
+channels, then toggle membership on the watch. Refresh reloads the server state.
+Selections are shown only after the server confirms them. Empty, unsupported,
+disconnected, and request-failure states are displayed explicitly.
+
+Companion performs the mutually authenticated HTTPS requests on port `8443`:
+`GET /Marti/api/groups/groupCacheEnabled`,
+`GET /Marti/api/groups/all?useCache=true&sendLatestSA=true`, and
+`PUT /Marti/api/groups/active?clientUid=<watch UID>`. Updates preserve the full
+group payload and change matching IN/OUT records together. Confirmed membership
+changes advance that server's map-source generation; stale entries from that
+source are cleared without clearing local points or other-source entries.
+Companion restarts clear Companion-sourced cache entries only.
+
+Channels requires a TAK server supporting these group APIs. Multicast,
+standalone Sit(x), iTAK and TAK Aware do not currently expose this channel menu's
+server operations. Protocol checks and combined builds cover local behavior;
+paired-device channel and CoT interoperability still require live verification.
 
 ## TAK SA Multicast
 
@@ -358,11 +409,10 @@ Multicast does not retain offline events or retry unacknowledged datagrams.
 
 ### Limitations
 
-Direct reporting is foreground-only; continuous screen-off/background tracking
-is not implemented. Direct Sit(x) pauses when WatchConnectivity reports a
-reachable phone companion. Physical Bluetooth pairing alone is not detectable
-through that API. This repository does not yet contain a phone companion or
-phone-relay transport. Chat delivery is not implemented.
+Reporting is foreground-only; continuous screen-off/background tracking is not
+implemented. Direct Sit(x) pauses only when the optional Companion transport is
+confirmed ready. Physical Bluetooth pairing alone is not proof of relay
+readiness. Chat delivery is not implemented.
 
 watchOS cannot identify connected WiFi SSIDs or list saved networks. All WiFi
 Connections and No WiFi Connections are supported; Some WiFi Connections is
@@ -371,8 +421,8 @@ and live Sit(x) WebSocket checks for distribution builds.
 
 ## Protocol checks
 
-Run these checks on macOS. They use mocked HTTP, in-memory tokens, and a fake
-multicast output; they do not use real credentials or broadcast onto the LAN.
+Run these checks on macOS. They use mocked HTTP, in-memory tokens, and fake
+outputs; they do not use real credentials or broadcast onto the LAN.
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
@@ -385,3 +435,20 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
 ```
+
+Bridge/channel checks cover bounded XML framing, message correlation, channel
+payload preservation, endpoint parsing and multi-server record persistence:
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/CompanionEndpoint.swift \
+  Shared/CompanionServer.swift Shared/TAKChannels.swift \
+  Tests/BridgeProtocolChecks.swift -o /tmp/weartak-bridge-checks
+/tmp/weartak-bridge-checks
+```
+
+`Tests/CompanionSecurityChecks.swift` also checks generated CSR signatures,
+certificate/key matching, expiry and `.p12` import/password handling with
+temporary test identities. It requires the resolved SwiftASN1 module linked
+alongside CertificateStore and EnrollmentClient. No simulator or mock test
+establishes physical-device background reliability or live server compatibility.

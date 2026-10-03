@@ -1,0 +1,219 @@
+import Combine
+import Foundation
+import WatchConnectivity
+
+@MainActor
+final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessionDelegate {
+    @Published private(set) var configured = false
+    @Published private(set) var serverReady = false
+    @Published private(set) var status = "Configure on phone"
+    @Published private(set) var channelServers: [TAKChannelServer] = []
+    @Published private(set) var channelsLoading = false
+    @Published private(set) var channelError: String?
+    var onStateChange: (() -> Void)?
+    var onCoT: ((BridgeWire.Message) -> Void)?
+    var onSourceRefresh: ((UUID, Int) -> Void)?
+    var onBridgeRestart: (() -> Void)?
+    private var sessionID: UUID?
+
+    private let settings: AppSettings
+    private var active = false
+    private var lastConfirmation: Date?
+    private var timer: Timer?
+    private var selection: AnyCancellable?
+    private var handshakeInFlight = false
+    private var pending: [UUID: CheckedContinuation<BridgeWire.Message, Error>] = [:]
+    private var timeouts: [UUID: Task<Void, Never>] = [:]
+
+    var isReady: Bool {
+        active && settings.relayProvider == .companion && serverReady && WCSession.default.isReachable &&
+            lastConfirmation.map { Date().timeIntervalSince($0) < 15 } == true
+    }
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        super.init()
+        if WCSession.isSupported() {
+            WCSession.default.delegate = self
+            WCSession.default.activate()
+        }
+        selection = settings.$relayProvider.dropFirst().sink { [weak self] _ in
+            Task { @MainActor [weak self] in self?.refresh() }
+        }
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.refresh() }
+        }
+    }
+
+    func setActive(_ active: Bool) {
+        self.active = active
+        if !active { invalidate() }
+        else { refresh() }
+    }
+
+    private func refresh() {
+        guard active, settings.relayProvider == .companion, WCSession.default.activationState == .activated,
+              WCSession.default.isReachable else {
+            invalidate()
+            return
+        }
+        if lastConfirmation.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
+            serverReady = false
+            onStateChange?()
+        }
+        guard !handshakeInFlight else { return }
+        handshakeInFlight = true
+        Task {
+            defer { handshakeInFlight = false }
+            do {
+                let reply = try await request(BridgeWire.Message(kind: .hello))
+                guard reply.kind == .status else { throw TAKTransportError.notConfigured }
+                apply(reply)
+            } catch { invalidate() }
+        }
+    }
+
+    private func apply(_ message: BridgeWire.Message) {
+        applySession(message)
+        if let configured = message.configured { self.configured = configured }
+        serverReady = message.ready == true
+        lastConfirmation = Date()
+        status = message.detail ?? (serverReady ? "Connected" : "Not connected")
+        onStateChange?()
+    }
+
+    private func applySession(_ message: BridgeWire.Message) {
+        guard let incoming = message.sessionID, incoming != sessionID else { return }
+        sessionID = incoming
+        channelServers = []
+        onBridgeRestart?()
+    }
+
+    private func invalidate() {
+        serverReady = false
+        lastConfirmation = nil
+        status = configured ? "Companion not connected" : "Configure on phone"
+        for task in timeouts.values { task.cancel() }
+        timeouts = [:]
+        let waiting = pending.values
+        pending = [:]
+        for continuation in waiting { continuation.resume(throwing: TAKTransportError.notConfigured) }
+        onStateChange?()
+    }
+
+    func send(_ xml: String) async throws {
+        guard isReady else { throw TAKTransportError.notConfigured }
+        let reply = try await request(BridgeWire.Message(kind: .cot, xml: xml))
+        guard reply.kind == .acknowledgement, reply.ready == true else {
+            if reply.kind == .status { apply(reply) }
+            throw TAKTransportError.notConfigured
+        }
+    }
+
+    func refreshChannels(serverID: UUID? = nil) async {
+        await channelRequest(BridgeWire.Message(kind: .channels, serverID: serverID))
+    }
+
+    func setChannel(serverID: UUID, bitPosition: Int, active: Bool) async {
+        await channelRequest(BridgeWire.Message(kind: .channelUpdate, serverID: serverID,
+            channelBitPosition: bitPosition, channelActive: active, clientUID: SitxClient.deviceID()))
+    }
+
+    private func channelRequest(_ message: BridgeWire.Message) async {
+        guard !channelsLoading else { return }
+        guard isReady else {
+            channelError = "Connect WearTAK Companion to a TAK server to configure channels."
+            return
+        }
+        channelsLoading = true
+        channelError = nil
+        defer { channelsLoading = false }
+        do {
+            let reply = try await request(message, timeoutSeconds: 65)
+            guard reply.kind == .channels, let servers = reply.channelServers else { throw TAKTransportError.notConfigured }
+            applySession(reply)
+            let previous = Dictionary(uniqueKeysWithValues: channelServers.map { ($0.id, $0) })
+            channelServers = servers.map { server in
+                if server.id != message.serverID, server.state == "Select server to load channels", let cached = previous[server.id] {
+                    return cached
+                }
+                return server
+            }
+            if let id = reply.sourceServerID, let generation = reply.sourceGeneration {
+                onSourceRefresh?(id, generation)
+            }
+            if let id = message.serverID { channelError = channelServers.first { $0.id == id }?.error }
+        } catch {
+            channelError = "Channel request failed. Keep Companion open and check the server's channel API."
+        }
+    }
+
+    private func request(_ message: BridgeWire.Message, timeoutSeconds: Double = 12) async throws -> BridgeWire.Message {
+        guard pending.count < 16, WCSession.default.isReachable else { throw TAKTransportError.notConfigured }
+        let data = try message.encoded()
+        return try await withCheckedThrowingContinuation { continuation in
+            pending[message.id] = continuation
+            timeouts[message.id] = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(timeoutSeconds)) } catch { return }
+                self?.finish(message.id, result: .failure(TAKTransportError.notConfigured))
+            }
+            WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
+                Task { @MainActor in
+                    do {
+                        let reply = try BridgeWire.Message.decode(data)
+                        guard reply.id == message.id else { throw TAKTransportError.notConfigured }
+                        self?.finish(message.id, result: .success(reply))
+                    } catch { self?.finish(message.id, result: .failure(error)) }
+                }
+            }, errorHandler: { [weak self] error in
+                Task { @MainActor in self?.finish(message.id, result: .failure(error)) }
+            })
+        }
+    }
+
+    private func finish(_ id: UUID, result: Result<BridgeWire.Message, Error>) {
+        timeouts.removeValue(forKey: id)?.cancel()
+        pending.removeValue(forKey: id)?.resume(with: result)
+    }
+
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        let configured = session.receivedApplicationContext["WearTAKCompanion.serverConfigured"] as? Bool ?? false
+        Task { @MainActor [weak self] in
+            self?.configured = configured
+            self?.refresh()
+        }
+    }
+
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor [weak self] in self?.refresh() }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
+        let configured = context["WearTAKCompanion.serverConfigured"] as? Bool
+        let unavailable = context["WearTAKCompanion.serverReady"] as? Bool == false
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let configured { self.configured = configured }
+            if unavailable { self.invalidate() }
+            else { self.refresh() }
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data) {
+        Task { @MainActor [weak self] in
+            guard let self, let message = try? BridgeWire.Message.decode(data), message.kind == .status else { return }
+            self.apply(message)
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data, replyHandler: @escaping (Data) -> Void) {
+        Task { @MainActor [weak self] in
+            guard let self, let message = try? BridgeWire.Message.decode(data) else { replyHandler(Data()); return }
+            if message.kind == .cot, message.xml != nil, self.active, self.settings.relayProvider == .companion {
+                self.applySession(message)
+                self.onCoT?(message)
+            }
+            replyHandler((try? BridgeWire.Message(kind: .acknowledgement, id: message.id).encoded()) ?? Data())
+        }
+    }
+}

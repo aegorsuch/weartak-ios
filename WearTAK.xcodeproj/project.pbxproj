@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */ = {isa = PBXBuildFile; productRef = 99B100000000000000000006 /* SwiftASN1 */; };
 		99A20000000000000000000A /* WearTAK Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 12858C89306DD75A002BB8CC /* WearTAK Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -40,6 +41,16 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		99B100000000000000000001 /* WearTAK Companion */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "WearTAK Companion";
+			sourceTree = "<group>";
+		};
+		99B100000000000000000002 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		12858C8B306DD75A002BB8CC /* WearTAK Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "WearTAK Watch App";
@@ -48,6 +59,12 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		99B100000000000000000004 /* Companion Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */, );
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		12858C86306DD75A002BB8CC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -62,6 +79,8 @@
 			isa = PBXGroup;
 			children = (
 				12858C8B306DD75A002BB8CC /* WearTAK Watch App */,
+				99B100000000000000000001 /* WearTAK Companion */,
+				99B100000000000000000002 /* Shared */,
 				12858C8A306DD75A002BB8CC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -93,6 +112,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				12858C8B306DD75A002BB8CC /* WearTAK Watch App */,
+				99B100000000000000000002 /* Shared */,
 			);
 			name = "WearTAK Watch App";
 			packageProductDependencies = (
@@ -105,18 +125,26 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 99A200000000000000000003 /* Build configuration list for PBXNativeTarget "WearTAK Distribution" */;
 			buildPhases = (
+				99B100000000000000000003 /* Companion Sources */,
+				99B100000000000000000004 /* Companion Frameworks */,
 				99A200000000000000000007 /* Resources */,
 				99A200000000000000000006 /* Embed Watch Content */,
 			);
-			buildRules = (
-			);
+			buildRules = ();
 			dependencies = (
 				99A200000000000000000008 /* PBXTargetDependency */,
 			);
 			name = "WearTAK Distribution";
+			fileSystemSynchronizedGroups = (
+				99B100000000000000000001 /* WearTAK Companion */,
+				99B100000000000000000002 /* Shared */,
+			);
+			packageProductDependencies = (
+				99B100000000000000000006 /* SwiftASN1 */,
+			);
 			productName = WearTAK;
 			productReference = 99A200000000000000000001 /* WearTAK.app */;
-			productType = "com.apple.product-type.application.watchapp2-container";
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -146,6 +174,9 @@
 			productRefGroup = 12858C8A306DD75A002BB8CC /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
+			packageReferences = (
+				99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */,
+			);
 			targets = (
 				12858C88306DD75A002BB8CC /* WearTAK Watch App */,
 				99A200000000000000000002 /* WearTAK Distribution */,
@@ -164,8 +195,7 @@
 		99A200000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
-			);
+			files = ();
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
@@ -201,6 +231,12 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		99B100000000000000000003 /* Companion Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		12858C85306DD75A002BB8CC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -209,6 +245,22 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-asn1.git";
+			requirement = {kind = upToNextMajorVersion; minimumVersion = 1.3.1; };
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		99B100000000000000000006 /* SwiftASN1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */;
+			productName = SwiftASN1;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXTargetDependency section */
 		99A200000000000000000008 /* PBXTargetDependency */ = {
@@ -342,7 +394,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = H284X28FTP;
 				ENABLE_PREVIEWS = YES;
@@ -354,7 +406,9 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKWatchOnly = YES;
+				INFOPLIST_KEY_WKWatchOnly = NO;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.aegorsuch.weartak;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -386,7 +440,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = H284X28FTP;
 				ENABLE_PREVIEWS = YES;
@@ -398,7 +452,9 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK uses your location to send your position and place markers.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKWatchOnly = YES;
+				INFOPLIST_KEY_WKWatchOnly = NO;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.aegorsuch.weartak;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -425,19 +481,22 @@
 		99A200000000000000000004 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = H284X28FTP;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
+				SWIFT_VERSION = 5.0;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK Companion connects to your TAK server and relays your watch's positions, alerts, and points.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
+				INFOPLIST_KEY_CFBundleDisplayName = "WearTAK Companion";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;
 				PRODUCT_NAME = WearTAK;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -448,19 +507,22 @@
 		99A200000000000000000005 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
+				SWIFT_VERSION = 5.0;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK Companion connects to your TAK server and relays your watch's positions, alerts, and points.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = H284X28FTP;
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
+				INFOPLIST_KEY_CFBundleDisplayName = "WearTAK Companion";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;
 				PRODUCT_NAME = WearTAK;
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

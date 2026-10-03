@@ -10,7 +10,7 @@ struct PointTypePickerView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let diameter = min(geometry.size.width, geometry.size.height) - 4
+            let diameter = min(geometry.size.width, geometry.size.height) - 10
             ZStack {
                 sector(.hostile, angle: -90, diameter: diameter)
                 sector(.neutral, angle: -180, diameter: diameter)
@@ -20,7 +20,7 @@ struct PointTypePickerView: View {
                 ForEach(caption.indices, id: \.self) { index in
                     let angle = -160.0 + 140.0 * Double(index) / Double(caption.count - 1)
                     Text(String(caption[index]))
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .rotationEffect(.degrees(angle + 90))
                         .position(x: diameter * (0.5 + 0.20 * cos(angle * .pi / 180)),
                                   y: diameter * (0.5 + 0.20 * sin(angle * .pi / 180)))
@@ -48,6 +48,7 @@ struct PointTypePickerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(.black)
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
         .foregroundStyle(.white)
         .buttonStyle(.plain)
         .toolbar(.hidden, for: .navigationBar)
@@ -78,11 +79,10 @@ struct PointTypePickerView: View {
                 .overlay {
                     VStack(spacing: 2) {
                         MapPointSymbol(kind: kind)
-                            .scaleEffect(0.8)
-                            .frame(width: 20, height: 20)
-                        Text(kind.rawValue).font(.system(size: 11)).lineLimit(1).minimumScaleFactor(0.75)
+                            .frame(width: 24, height: 24)
+                        Text(kind.rawValue).font(.system(size: 12)).lineLimit(1).minimumScaleFactor(0.75)
                     }
-                    .frame(width: diameter * 0.37, height: 36)
+                    .frame(width: diameter * 0.37, height: 40)
                     .position(x: diameter * (0.5 + 0.34 * cos(angle * .pi / 180)),
                               y: diameter * (0.5 + 0.38 * sin(angle * .pi / 180)))
                 }

@@ -56,11 +56,12 @@ final class SitxClient: ObservableObject, TAKTransport {
     var onDisconnected: (() -> Void)?
     var currentLocation: CLLocation?
     var additionalOutput: (any CoTOutput)?
+    var companionOutput: (any CoTOutput)?
     var isSitxConnected: Bool {
         settings.sitxEnabled && !isPhoneReachable && socket != nil && status == State.connected
     }
     var hasReadyOutput: Bool {
-        additionalOutput?.isReady == true || isSitxConnected
+        additionalOutput?.isReady == true || companionOutput?.isReady == true || isSitxConnected
     }
     var isPhoneReachable = false {
         didSet {
@@ -128,7 +129,7 @@ final class SitxClient: ObservableObject, TAKTransport {
 
     func connect() async throws {
         guard settings.sitxEnabled, isAppActive, !isPhoneReachable, !selectedGroupID.isEmpty else {
-            if additionalOutput?.isReady == true { return }
+            if hasReadyOutput { return }
             throw TAKTransportError.notConfigured
         }
         if socket != nil { return }
@@ -227,11 +228,15 @@ final class SitxClient: ObservableObject, TAKTransport {
     private func deliver(_ xml: String, eventKey: String? = nil) async throws {
         var delivered = false
         var failure: Error = TAKTransportError.notConfigured
+        if let companionOutput, companionOutput.isReady {
+            do { try await companionOutput.send(xml); delivered = true }
+            catch { failure = error }
+        }
         if let additionalOutput, additionalOutput.isReady {
             do { try await additionalOutput.send(xml); delivered = true }
             catch { failure = error }
         }
-        if settings.sitxEnabled {
+        if settings.sitxEnabled && !isPhoneReachable {
             do {
                 if let eventKey { try await sendEvent(xml, key: eventKey) }
                 else { try await sendXML(xml) }

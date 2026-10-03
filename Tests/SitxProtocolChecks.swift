@@ -325,6 +325,20 @@ struct SitxProtocolChecks {
         client.setTAKEnabled(false)
         settings.sitxEnabled = true
         print("PASS: multicast-only PLI/alerts/points and successful output despite offline Sit(x)")
+        let phoneOutput = FixtureCoTOutput()
+        client.companionOutput = phoneOutput
+        client.isPhoneReachable = true
+        settings.sitxEnabled = false
+        try await client.connect()
+        try await client.sendPLI(coordinate: marker.coordinate)
+        try await client.sendEmergencyAlert(state: .alert, type: "Companion test")
+        precondition(phoneOutput.messages.count == 2 && client.hasReadyOutput)
+        phoneOutput.isReady = false
+        precondition(!client.hasReadyOutput)
+        client.companionOutput = nil
+        client.isPhoneReachable = false
+        settings.sitxEnabled = true
+        print("PASS: Companion-only readiness and PLI/alert delivery without Sit(x) or multicast")
 
         MockSitxHTTP.lock.withLock { MockSitxHTTP.failRefresh = true }
         let failureClient = SitxClient(settings: settings, session: session, defaults: defaults, tokenStore: tokens)

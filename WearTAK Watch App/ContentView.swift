@@ -18,7 +18,6 @@ struct ContentView: View {
             WatchDashboardView(
                 model: model,
                 physiology: physiology,
-                environment: environment,
                 settings: settings,
                 dropPoint: {
                     model.requestLocation()
@@ -144,7 +143,6 @@ struct ContentView: View {
 private struct WatchDashboardView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var physiology: PhysiologyMonitor
-    @ObservedObject var environment: EnvironmentalMonitor
     @ObservedObject var settings: AppSettings
     let dropPoint: () -> Void
 
@@ -225,9 +223,9 @@ private struct WatchDashboardView: View {
                         Image(systemName: settings.dashboardMetric.symbol)
                             .font(.system(size: 16))
                             .foregroundStyle(accent)
-                            Text(settings.dashboardMetric == .exertion
-                                ? physiology.exertionPercent.map { "\($0)%" } ?? "--%"
-                                : physiology.heartRate.map { "\($0)" } ?? "--")
+                        Text(settings.dashboardMetric == .exertion
+                            ? physiology.exertionPercent.map { "\($0)%" } ?? "--%"
+                            : physiology.heartRate.map { "\($0)" } ?? "--")
                             .font(.system(size: small ? 21 : 24, weight: .semibold))
                             .monospacedDigit()
                     }
@@ -611,6 +609,7 @@ private struct TacticalMapView: View {
     @State private var hasCentered = false
     @State private var pointDraft: MapPointDraft?
     @State private var showLayersMenu = false
+    @State private var showChannelsMenu = false
     @State private var longPressStart: CGPoint?
     @State private var longPressTask: Task<Void, Never>?
 
@@ -756,16 +755,28 @@ private struct TacticalMapView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .top) {
             GeometryReader { geometry in
-                Button {
-                    showLayersMenu = true
-                } label: {
-                    Image(systemName: "square.3.layers.3d")
-                        .font(.system(size: 22))
-                        .frame(width: 40, height: 36)
-                        .background(.regularMaterial, in: Circle())
+                ZStack(alignment: .top) {
+                    Button {
+                        showLayersMenu = true
+                    } label: {
+                        Image(systemName: "square.3.layers.3d")
+                            .font(.system(size: 22))
+                            .frame(width: 40, height: 36)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("Layers Menu")
+                    .frame(maxWidth: .infinity, alignment: .top)
+                    HStack {
+                        Spacer()
+                        Button {
+                            showChannelsMenu = true
+                        } label: {
+                            mapControl("point.3.connected.trianglepath.dotted", label: "Channels")
+                        }
+                        .padding(.trailing, 5)
+                    }
+                    .padding(.top, 24)
                 }
-                .accessibilityLabel("Layers Menu")
-                .frame(maxWidth: .infinity, alignment: .top)
                 .offset(y: -geometry.safeAreaInsets.top + 8)
             }
         }
@@ -798,6 +809,11 @@ private struct TacticalMapView: View {
         .sheet(isPresented: $showLayersMenu, onDismiss: updateBloodhoundHeading) {
             NavigationStack {
                 MapLayersMenuView(model: model, settings: settings)
+            }
+        }
+        .sheet(isPresented: $showChannelsMenu, onDismiss: updateBloodhoundHeading) {
+            NavigationStack {
+                MapChannelsMenuView(client: model.companionClient, settings: settings)
             }
         }
     }
@@ -943,6 +959,112 @@ private struct MapLayersMenuView: View {
             }
         }
         .navigationTitle("Layers Menu")
+    }
+}
+
+private struct MapChannelsMenuView: View {
+    @ObservedObject var client: WatchCompanionOutput
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            if settings.relayProvider != .companion {
+                Text("Channels unavailable for this relay.")
+                    .foregroundStyle(.secondary)
+            } else if !client.isReady {
+                Text(client.status)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(client.channelServers) { server in
+                    NavigationLink {
+                        MapServerChannelsView(client: client, serverID: server.id)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verbatim: server.name)
+                                .lineLimit(3)
+                            Text(server.state)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if client.channelServers.isEmpty && !client.channelsLoading && client.channelError == nil {
+                    Text("No enabled TAK servers")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if client.channelsLoading {
+                ProgressView("Loading channels")
+            }
+            if let error = client.channelError {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
+            Button {
+                Task { await client.refreshChannels() }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(!client.isReady || client.channelsLoading)
+            Button {
+                dismiss()
+            } label: {
+                Label("Back", systemImage: "arrow.left")
+            }
+        }
+        .navigationTitle("Channels")
+        .task { await client.refreshChannels() }
+    }
+}
+
+private struct MapServerChannelsView: View {
+    @ObservedObject var client: WatchCompanionOutput
+    let serverID: UUID
+
+    private var server: TAKChannelServer? {
+        client.channelServers.first { $0.id == serverID }
+    }
+
+    var body: some View {
+        List {
+            if let server {
+                Section {
+                    ForEach(server.channels) { channel in
+                        Toggle(channel.name, isOn: Binding(
+                            get: { self.server?.channels.first { $0.id == channel.id }?.active ?? false },
+                            set: { active in
+                                Task { await client.setChannel(serverID: serverID, bitPosition: channel.bitPosition, active: active) }
+                            }
+                        ))
+                        .disabled(!client.isReady || client.channelsLoading || server.state != "Ready")
+                    }
+                    if server.channels.isEmpty && !client.channelsLoading {
+                        Text(server.error ?? server.state)
+                            .font(.caption)
+                            .foregroundStyle(server.error == nil ? Color.secondary : Color.orange)
+                    }
+                } header: {
+                    Text(verbatim: server.name)
+                        .textCase(nil)
+                }
+            } else if !client.channelsLoading {
+                Text("Server unavailable").foregroundStyle(.secondary)
+            }
+            if client.channelsLoading {
+                ProgressView("Updating channels")
+            }
+            if let error = client.channelError, server?.error != error {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
+            Button {
+                Task { await client.refreshChannels(serverID: serverID) }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(!client.isReady || client.channelsLoading)
+        }
+        .navigationTitle("Channels")
+        .task { await client.refreshChannels(serverID: serverID) }
     }
 }
 

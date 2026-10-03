@@ -66,6 +66,8 @@ struct IncomingMapEntity: Identifiable {
     let callSign: String?
     let team: String?
     let role: String?
+    let sourceServerID: UUID?
+    let sourceGeneration: Int
 
     var isUser: Bool { SitxCoT.isUser(type: type) }
 
@@ -153,6 +155,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private let transport: TAKTransport
     let sitxClient: SitxClient
     let multicastClient: MulticastTAKTransport
+    let companionClient: WatchCompanionOutput
     private let settings: AppSettings
     private var connectionTask: Task<Void, Never>?
     private var reportingTimer: Timer?
@@ -168,18 +171,21 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var bloodhoundProximityNotified = false
     private var isUpdatingHeading = false
     private var lastPLISentAt: Date?
+    private var sourceGenerations: [UUID: Int] = [:]
     private let networkPathMonitor = NWPathMonitor()
     @Published private(set) var networkConnectivity: DashboardNetworkConnectivity = .offline
     var isOnWiFi: Bool { networkConnectivity == .wifi }
     var isPhoneRelayConnected: Bool {
-        connectionState == .connected && transport.pliReportingRoute == .phoneRelay
+        companionClient.isReady
     }
 
     init(transport: TAKTransport? = nil, settings: AppSettings) {
         let client = SitxClient(settings: settings)
         sitxClient = (transport as? SitxClient) ?? client
         multicastClient = MulticastTAKTransport(settings: settings)
+        companionClient = WatchCompanionOutput(settings: settings)
         sitxClient.additionalOutput = multicastClient
+        sitxClient.companionOutput = companionClient
         self.transport = transport ?? client
         self.settings = settings
         super.init()
@@ -202,9 +208,28 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
         }
         multicastClient.onEntity = { [weak self] entity in self?.receiveEntity(entity) }
-        if WCSession.isSupported() {
-            WCSession.default.delegate = self
-            WCSession.default.activate()
+        companionClient.onStateChange = { [weak self] in
+            guard let self else { return }
+            self.companionServerConfigured = self.companionClient.configured
+            self.sitxClient.isPhoneReachable = self.companionClient.isReady
+            if self.sitxClient.hasReadyOutput { self.connect() }
+            else {
+                self.connectionState = .disconnected
+                self.locationManager.stopUpdatingLocation()
+            }
+        }
+        companionClient.onCoT = { [weak self] message in
+            guard let self, let xml = message.xml else { return }
+            for entity in SitxCoT.parse(Data(xml.utf8), excluding: SitxClient.deviceID()) {
+                self.receiveEntity(entity, sourceServerID: message.sourceServerID, sourceGeneration: message.sourceGeneration ?? 0)
+            }
+        }
+        companionClient.onSourceRefresh = { [weak self] id, generation in
+            self?.refreshSource(id, generation: generation)
+        }
+        companionClient.onBridgeRestart = { [weak self] in
+            self?.sourceGenerations = [:]
+            self?.incomingEntities.removeAll { $0.sourceServerID != nil }
         }
         if let data = UserDefaults.standard.data(forKey: Self.markerStorageKey) {
             markers = (try? JSONDecoder().decode([WatchMarker].self, from: data)) ?? []
@@ -241,6 +266,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func setAppActive(_ active: Bool) {
         isAppActive = active
+        companionClient.setActive(active)
         multicastClient.setAppActive(active)
         sitxClient.setAppActive(active)
         if active { sitxClient.resumeAuthorization() }
@@ -439,13 +465,16 @@ final class WatchSessionModel: NSObject, ObservableObject {
         return (bearing + 360).truncatingRemainder(dividingBy: 360)
     }
 
-    func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date()) {
+    func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date(), sourceServerID: UUID? = nil, sourceGeneration: Int = 0) {
+        if let sourceServerID, sourceGeneration < sourceGenerations[sourceServerID, default: 0] { return }
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
+        if let sourceServerID { refreshSource(sourceServerID, generation: sourceGeneration) }
         let entity = IncomingMapEntity(
             id: payload.uid, latitude: payload.lat, longitude: payload.lon,
             type: payload.type, lastSeen: now,
-            callSign: payload.callSign, team: payload.team, role: payload.role
+            callSign: payload.callSign, team: payload.team, role: payload.role,
+            sourceServerID: sourceServerID, sourceGeneration: sourceGeneration
         )
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
             incomingEntities[index] = entity
@@ -461,6 +490,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func pruneIncomingEntities(now: Date = Date()) {
         incomingEntities.removeAll { now.timeIntervalSince($0.lastSeen) > 300 }
+    }
+
+    private func refreshSource(_ id: UUID, generation: Int) {
+        guard generation > sourceGenerations[id, default: 0] else { return }
+        sourceGenerations[id] = generation
+        incomingEntities.removeAll { $0.sourceServerID == id && $0.sourceGeneration < generation }
     }
 
     private func saveMarkers() {
@@ -635,30 +670,5 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             return
         }
         headingDegrees = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
-    }
-}
-
-extension WatchSessionModel: WCSessionDelegate {
-    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        let reachable = activationState == .activated && session.isReachable
-        let configured = session.receivedApplicationContext["WearTAKCompanion.serverConfigured"] as? Bool ?? false
-        Task { @MainActor [weak self] in
-            self?.sitxClient.isPhoneReachable = reachable
-            self?.companionServerConfigured = configured
-        }
-    }
-
-    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        guard let configured = applicationContext["WearTAKCompanion.serverConfigured"] as? Bool else { return }
-        Task { @MainActor [weak self] in
-            self?.companionServerConfigured = configured
-        }
-    }
-
-    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        let reachable = session.isReachable
-        Task { @MainActor [weak self] in
-            self?.sitxClient.isPhoneReachable = reachable
-        }
     }
 }
