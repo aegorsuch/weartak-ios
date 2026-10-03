@@ -65,6 +65,11 @@ struct ContentView: View {
                 model.receiveEntity(EntityRelayPayload(uid: "preview-charlie", lat: 41.8803, lon: -87.6414, type: "a-f-G-U-C", callSign: "CHARLIE", team: "Green", role: "Team Member"))
                 showMapPreview = true
             }
+            if ProcessInfo.processInfo.arguments.contains("--preview-map-channels") {
+                settings.relayProvider = .companion
+                model.companionClient.beginChannelPreview()
+                showMapPreview = true
+            }
             if ProcessInfo.processInfo.arguments.contains("--preview-map") {
                 showMapPreview = true
             }
@@ -789,6 +794,7 @@ private struct TacticalMapView: View {
         .onAppear {
             updateBloodhoundHeading()
             #if DEBUG
+            showChannelsMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-channels")
             showLayersMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-filters") ||
                 ProcessInfo.processInfo.arguments.contains("--preview-empty-layers")
             #endif
@@ -813,7 +819,16 @@ private struct TacticalMapView: View {
         }
         .sheet(isPresented: $showChannelsMenu, onDismiss: updateBloodhoundHeading) {
             NavigationStack {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--preview-map-channels"),
+                   let serverID = model.companionClient.channelServers.first?.id {
+                    MapServerChannelsView(client: model.companionClient, serverID: serverID)
+                } else {
+                    MapChannelsMenuView(client: model.companionClient, settings: settings)
+                }
+                #else
                 MapChannelsMenuView(client: model.companionClient, settings: settings)
+                #endif
             }
         }
     }

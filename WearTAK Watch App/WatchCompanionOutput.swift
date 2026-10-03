@@ -18,6 +18,9 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
 
     private let settings: AppSettings
     private var active = false
+    #if DEBUG
+    private(set) var isChannelPreview = false
+    #endif
     private var lastConfirmation: Date?
     private var timer: Timer?
     private var selection: AnyCancellable?
@@ -26,8 +29,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     private var timeouts: [UUID: Task<Void, Never>] = [:]
 
     var isReady: Bool {
-        active && settings.relayProvider == .companion && serverReady && WCSession.default.isReachable &&
-            lastConfirmation.map { Date().timeIntervalSince($0) < 15 } == true
+        guard active, settings.relayProvider == .companion, serverReady else { return false }
+        #if DEBUG
+        if isChannelPreview { return true }
+        #endif
+        return WCSession.default.isReachable && lastConfirmation.map { Date().timeIntervalSince($0) < 15 } == true
     }
 
     init(settings: AppSettings) {
@@ -115,12 +121,47 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     func setChannel(serverID: UUID, bitPosition: Int, active: Bool) async {
+        #if DEBUG
+        if isChannelPreview {
+            channelServers = channelServers.map { server in
+                guard server.id == serverID else { return server }
+                var updated = server
+                updated.channels = server.channels.map { channel in
+                    channel.bitPosition == bitPosition
+                        ? TAKChannel(bitPosition: channel.bitPosition, name: channel.name, direction: channel.direction, active: active)
+                        : channel
+                }
+                return updated
+            }
+            return
+        }
+        #endif
         await channelRequest(BridgeWire.Message(kind: .channelUpdate, serverID: serverID,
             channelBitPosition: bitPosition, channelActive: active, clientUID: SitxClient.deviceID()))
     }
 
+    #if DEBUG
+    func beginChannelPreview() {
+        let id = UUID(uuidString: "E0B22F5E-4AC1-4BC4-A1CA-A47B6759C367")!
+        isChannelPreview = true
+        configured = true
+        serverReady = true
+        status = "Connected (Preview)"
+        channelError = nil
+        channelServers = [TAKChannelServer(id: id, name: "192.0.2.18:8089", channels: [
+            TAKChannel(bitPosition: 0, name: "Operations", direction: "IN/OUT", active: true),
+            TAKChannel(bitPosition: 1, name: "Command", direction: "IN/OUT", active: true),
+            TAKChannel(bitPosition: 2, name: "Logistics", direction: "IN/OUT", active: false),
+            TAKChannel(bitPosition: 3, name: "Medical", direction: "IN/OUT", active: false)
+        ], state: "Ready")]
+    }
+    #endif
+
     private func channelRequest(_ message: BridgeWire.Message) async {
         guard !channelsLoading else { return }
+        #if DEBUG
+        if isChannelPreview { return }
+        #endif
         guard isReady else {
             channelError = "Connect WearTAK Companion to a TAK server to configure channels."
             return
