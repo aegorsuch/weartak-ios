@@ -179,6 +179,10 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         lastConfirmation = Date()
         status = message.detail ?? (serverReady ? "Connected" : "Not connected")
         onStateChange?()
+        for event in message.chatEvents ?? [] {
+            onCoT?(BridgeWire.Message(kind: .cot, xml: event.xml, sourceServerID: event.sourceServerID,
+                sourceGeneration: event.sourceGeneration, sessionID: message.sessionID))
+        }
     }
 
     private func applySession(_ message: BridgeWire.Message) {

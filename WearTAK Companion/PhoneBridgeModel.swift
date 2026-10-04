@@ -43,6 +43,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var backgroundDeadline: Task<Void, Never>?
     private var refreshInFlight = false
     private var mapCache = CompanionMapCache()
+    private var chatBuffer = CompanionChatBuffer()
     private var lastMapEventReceivedAt: Date?
     private static let mapStorageKey = "WearTAK.companion.mapCache"
     // An active phone location session keeps Companion running, so server sessions stay up while it reports.
@@ -197,6 +198,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private func synchronize() {
         let validIDs = Set(servers.map(\.id))
         mapCache.prune(enabledServerIDs: Set(servers.filter(\.enabled).map(\.id)))
+        chatBuffer.prune(enabledServerIDs: Set(servers.filter(\.enabled).map(\.id)))
         saveMapCache()
         for id in Array(sessions.keys) where !validIDs.contains(id) { sessions.removeValue(forKey: id)?.stop() }
         for server in servers {
@@ -417,13 +419,18 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                                       sourceGeneration: sourceGenerations[sourceID, default: 0], receivedAt: Date())
         let isChat = event.header?.type == "b-t-f"
         if isChat { chatLogger.notice("Server GeoChat received") }
+        if isChat, chatBuffer.receive(event) {
+            chatLogger.warning("GeoChat buffer limit reached; oldest messages evicted")
+        }
         if event.isValid { lastMapEventReceivedAt = event.receivedAt }
         mapCache.receive(event)
         saveMapCache()
         guard canRelay, connected, WCSession.default.isReachable, incomingInFlight < 16,
               let data = try? BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: sourceID,
                   sourceGeneration: sourceGenerations[sourceID, default: 0], sessionID: bridgeSessionID).encoded() else {
-            if isChat { chatLogger.notice("GeoChat not forwarded: bridge unavailable or receive queue full") }
+            if isChat {
+                chatLogger.notice("GeoChat not forwarded: relay=\(self.canRelay), connected=\(self.connected), reachable=\(WCSession.default.isReachable), inFlight=\(self.incomingInFlight)")
+            }
             return
         }
         incomingInFlight += 1
@@ -476,7 +483,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 replyID = message.id
                 try self.beginBackgroundRefresh()
                 if message.kind == .hello {
-                    replyHandler(try self.snapshot(id: message.id).encoded())
+                    self.chatBuffer.prune(enabledServerIDs: Set(self.servers.filter(\.enabled).map(\.id)))
+                    replyHandler(try self.chatBuffer.filling(self.snapshot(id: message.id)).encoded())
                     return
                 }
                 if message.kind == .mapSnapshot {

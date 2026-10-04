@@ -184,7 +184,9 @@ incoming chat badge, haptic, read clearing and replies; dashboard point Drop
 and Cancel, persisted title/remark and live server receipt; phone PLI with its
 screen locked; alert interval activation and restoration after cancellation.
 Watch reporting/chat reception is not guaranteed while the watch app is
-backgrounded. WinTAK/TAKX interoperability remains unverified.
+backgrounded. ATAK and TAKX direct chat (incoming message, unread badge/read
+clearing and replies) has been verified with the simulator and a live server.
+WinTAK and other WearTAK peer interoperability remain unverified.
 Archive validation, export-compliance answers, beta review credentials and
 privacy disclosures still require App Store Connect/Organizer review. Commit
 the tested source before the final archive so its embedded Git revision
@@ -520,7 +522,12 @@ messages each. The dashboard Chat button shows the total unread count; the inbox
 lists conversations with per-conversation counts. Opening an active conversation
 marks it read. New unread incoming messages trigger a haptic when Chat is enabled.
 These are in-app notifications while the watch app receives messages, not system
-notifications or guaranteed background delivery. Quick Messages (Roger, Negative,
+notifications or guaranteed background delivery. Companion keeps a five-minute
+in-memory GeoChat retry buffer (32 events, 40 KB of XML), returned on watch
+handshakes as well as attempted live delivery. Inbox deduplication prevents
+repeated unread notifications. Disabled/removed server entries are pruned;
+overflow evicts oldest events and is logged. Phone restart clears the buffer.
+Quick Messages (Roger, Negative,
 Objective Sighted, In Position) fill the draft; Send is still required. Known
 conversations remain replyable without a current map contact, using their original
 source. Unknown or unavailable sources show an explicit unavailable message;

@@ -30,6 +30,7 @@ enum BridgeWire {
         var refreshError: String?
         var phoneReporting: String?
         var phoneLocationEnabled: Bool?
+        var chatEvents: [CompanionMapEvent]?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -48,6 +49,10 @@ enum BridgeWire {
                 guard message.kind == .mapSnapshot, events.count <= CompanionMapCache.maximumEvents,
                       events.allSatisfy({ $0.isValid }) else { throw Failure.invalidCoT }
             }
+            if let events = message.chatEvents {
+                guard message.kind == .status, events.count <= CompanionChatBuffer.maximumEvents,
+                      events.allSatisfy({ CompanionChatBuffer.isValid($0) }) else { throw Failure.invalidCoT }
+            }
             return message
         }
     }
@@ -61,6 +66,57 @@ enum BridgeWire {
             case .invalidCoT: return "The Companion message contains invalid CoT map data."
             }
         }
+    }
+}
+
+struct CompanionChatBuffer {
+    static let maximumEvents = 32
+    static let maximumAge: TimeInterval = 300
+    private(set) var events: [CompanionMapEvent] = []
+
+    static func isValid(_ event: CompanionMapEvent) -> Bool {
+        event.sourceGeneration >= 0 && event.receivedAt.timeIntervalSince1970.isFinite &&
+            CoTStreamFramer.isEvent(Data(event.xml.utf8)) && event.header?.type == "b-t-f"
+    }
+
+    // Retain until expiry, not first transmission: watch inbox deduplication makes polling retry-safe.
+    mutating func receive(_ event: CompanionMapEvent, now: Date = Date()) -> Bool {
+        guard Self.isValid(event) else { return false }
+        prune(now: now)
+        guard !events.contains(where: {
+            $0.sourceServerID == event.sourceServerID && $0.header?.uid == event.header?.uid
+        }) else { return false }
+        events.append(event)
+        var evicted = false
+        while events.count > Self.maximumEvents || events.reduce(0, { $0 + $1.xml.utf8.count }) > 40_000 {
+            events.removeFirst()
+            evicted = true
+        }
+        return evicted
+    }
+
+    mutating func prune(now: Date = Date(), enabledServerIDs: Set<UUID>? = nil) {
+        events.removeAll { event in
+            now.timeIntervalSince(event.receivedAt) > Self.maximumAge || event.receivedAt > now.addingTimeInterval(30) ||
+                (enabledServerIDs.map { !$0.contains(event.sourceServerID) } ?? false)
+        }
+    }
+
+    func filling(_ message: BridgeWire.Message) throws -> BridgeWire.Message {
+        var reply = message
+        reply.chatEvents = []
+        for event in events.reversed() {
+            var candidate = reply
+            candidate.chatEvents?.insert(event, at: 0)
+            do {
+                _ = try candidate.encoded()
+                reply = candidate
+            } catch BridgeWire.Failure.tooLarge {
+                break
+            }
+        }
+        _ = try reply.encoded()
+        return reply
     }
 }
 

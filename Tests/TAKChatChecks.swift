@@ -42,7 +42,55 @@ struct TAKChatChecks {
         """
         precondition(TAKChatMessage.parse(atak, ownUID: "watch")?.text == "Roger")
         precondition(TAKChatMessage.parse(atak, ownUID: "watch")?.senderCallSign == "ATAK")
-        print("PASS: GeoChat routing, quick messages, ATAK-shaped XML, inbox unread/read, deduplication, source isolation and eviction checks")
+        try checkRelayBuffer(xml: atak, now: now)
+        print("PASS: GeoChat routing, quick messages, ATAK-shaped XML, inbox unread/read, deduplication, source isolation, buffered handshake delivery and eviction checks")
+    }
+
+    static func checkRelayBuffer(xml: String, now: Date) throws {
+        let server = UUID()
+        let event = CompanionMapEvent(xml: xml, sourceServerID: server, sourceGeneration: 0, receivedAt: now)
+        var buffer = CompanionChatBuffer()
+        precondition(!buffer.receive(event, now: now))
+        precondition(!buffer.receive(event, now: now) && buffer.events.count == 1)
+        let reply = try buffer.filling(BridgeWire.Message(kind: .status, ready: true))
+        let decoded = try BridgeWire.Message.decode(reply.encoded())
+        precondition(decoded.chatEvents?.first?.sourceServerID == server)
+        precondition(decoded.chatEvents?.first?.xml == xml)
+        precondition(buffer.events.count == 1) // A lost handshake reply must remain retryable.
+        let wrongKind = BridgeWire.Message(kind: .hello, chatEvents: reply.chatEvents)
+        do {
+            _ = try BridgeWire.Message.decode(wrongKind.encoded())
+            fatalError("Chat events accepted outside status reply")
+        } catch BridgeWire.Failure.invalidCoT {}
+        buffer.prune(now: now, enabledServerIDs: [])
+        precondition(buffer.events.isEmpty)
+        _ = buffer.receive(event, now: now)
+        buffer.prune(now: now.addingTimeInterval(301))
+        precondition(buffer.events.isEmpty)
+        for index in 0..<40 {
+            let uniqueXML = xml.replacingOccurrences(of: "message-1", with: "message-\(index)")
+            _ = buffer.receive(CompanionMapEvent(xml: uniqueXML, sourceServerID: server,
+                sourceGeneration: 0, receivedAt: now), now: now)
+        }
+        precondition(buffer.events.count == 32)
+        precondition(buffer.events.reduce(0, { $0 + $1.xml.utf8.count }) <= 40_000)
+        let bounded = try buffer.filling(BridgeWire.Message(kind: .status))
+        let boundedData = try bounded.encoded()
+        precondition(boundedData.count <= BridgeWire.maximumMessageBytes)
+        let boundedReply = try BridgeWire.Message.decode(boundedData)
+        precondition(boundedReply.chatEvents?.count == 32)
+        var byteLimited = CompanionChatBuffer()
+        for index in 0..<30 {
+            let largeXML = xml.replacingOccurrences(of: "message-1", with: "large-\(index)")
+                .replacingOccurrences(of: ">Roger<", with: ">\(String(repeating: "&amp;", count: 2_000))<")
+            _ = byteLimited.receive(CompanionMapEvent(xml: largeXML, sourceServerID: server,
+                sourceGeneration: 0, receivedAt: now), now: now)
+        }
+        precondition(byteLimited.events.count < 32 && !byteLimited.events.isEmpty)
+        precondition(byteLimited.events.reduce(0, { $0 + $1.xml.utf8.count }) <= 40_000)
+        let byteLimitedReply = try byteLimited.filling(BridgeWire.Message(kind: .status))
+        let byteLimitedData = try byteLimitedReply.encoded()
+        precondition(byteLimitedData.count <= BridgeWire.maximumMessageBytes)
     }
 
     static func checkInbox(now: Date) {
