@@ -5,13 +5,15 @@ import Security
 final class TAKChannelClient {
     private let host: String
     private let session: URLSession
+    private let trustDelegate: ChannelTrustDelegate
 
-    init(host: String, identity: ClientIdentity, trustedCA: Data?) {
+    init(host: String, identity: ClientIdentity, trustedCA: Data?, requestTimeout: TimeInterval = 15) {
         self.host = host
         let delegate = ChannelTrustDelegate(host: host, identity: identity, trustedCA: trustedCA)
+        trustDelegate = delegate
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 15
-        configuration.timeoutIntervalForResource = 20
+        configuration.timeoutIntervalForRequest = requestTimeout
+        configuration.timeoutIntervalForResource = requestTimeout + 5
         session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
     }
 
@@ -48,12 +50,20 @@ final class TAKChannelClient {
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        let endpoint = "Channels API https://\(host):8443\(path)"
+        trustDelegate.diagnostics.reset()
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw CompanionFailure.message(trustDelegate.diagnostics.message(endpoint: endpoint, error: error))
+        }
         guard data.count <= 1_048_576, let http = response as? HTTPURLResponse else {
             throw TAKChannelGroups.ChannelError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw CompanionFailure.message("Channel request failed: HTTP \(http.statusCode).")
+            throw CompanionFailure.message("\(endpoint): HTTP \(http.statusCode).")
         }
         return data
     }
@@ -63,6 +73,7 @@ private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessi
     let host: String
     let identity: ClientIdentity
     let trustedCA: Data?
+    let diagnostics = TLSConnectionDiagnostics()
 
     init(host: String, identity: ClientIdentity, trustedCA: Data?) {
         self.host = host
@@ -86,17 +97,19 @@ private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessi
             completionHandler(.performDefaultHandling, nil)
             return
         }
-        SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host as CFString))
-        let anchors: [SecCertificate]
-        if let trustedCA, let ca = SecCertificateCreateWithData(nil, trustedCA as CFData) { anchors = [ca] }
-        else { anchors = Array(identity.certificates.dropFirst()) }
-        if !anchors.isEmpty {
-            SecTrustSetAnchorCertificates(trust, anchors as CFArray)
-            SecTrustSetAnchorCertificatesOnly(trust, true)
+        do {
+            try CertificateStore.evaluateServerTrust(trust, host: host,
+                certificates: identity.certificates, trustedCA: trustedCA)
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } catch {
+            diagnostics.record(error)
+            completionHandler(.cancelAuthenticationChallenge, nil)
         }
-        var error: CFError?
-        if SecTrustEvaluateWithError(trust, &error) { completionHandler(.useCredential, URLCredential(trust: trust)) }
-        else { completionHandler(.cancelAuthenticationChallenge, nil) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        urlSession(session, didReceive: challenge, completionHandler: completionHandler)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,

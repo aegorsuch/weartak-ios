@@ -10,10 +10,14 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     @Published private(set) var channelServers: [TAKChannelServer] = []
     @Published private(set) var channelsLoading = false
     @Published private(set) var channelError: String?
+    @Published private(set) var mapRefreshing = false
+    @Published private(set) var mapRefreshError: String?
+    @Published private(set) var mapLastChecked: Date?
     var onStateChange: (() -> Void)?
     var onCoT: ((BridgeWire.Message) -> Void)?
     var onSourceRefresh: ((UUID, Int) -> Void)?
     var onBridgeRestart: (() -> Void)?
+    var onMapSnapshot: (([CompanionMapEvent], [UUID]) -> Void)?
     private var sessionID: UUID?
 
     private let settings: AppSettings
@@ -52,7 +56,9 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     func setActive(_ active: Bool) {
+        let resumed = active && !self.active
         self.active = active
+        if resumed { mapLastChecked = nil }
         if !active { invalidate() }
         else { refresh() }
     }
@@ -60,6 +66,9 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     private func refresh() {
         guard active, settings.relayProvider == .companion, WCSession.default.activationState == .activated,
               WCSession.default.isReachable else {
+            if active, settings.relayProvider == .companion {
+                mapRefreshError = "Phone unavailable. Showing cached positions."
+            }
             invalidate()
             return
         }
@@ -75,7 +84,41 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
                 let reply = try await request(BridgeWire.Message(kind: .hello))
                 guard reply.kind == .status else { throw TAKTransportError.notConfigured }
                 apply(reply)
-            } catch { invalidate() }
+                if mapLastChecked.map({ Date().timeIntervalSince($0) >= 30 }) ?? true {
+                    await refreshMap()
+                }
+            } catch {
+                mapRefreshError = "Phone unavailable: \(error.localizedDescription)"
+                invalidate()
+            }
+        }
+    }
+
+    func refreshMap() async {
+        guard active, settings.relayProvider == .companion, !mapRefreshing else { return }
+        guard WCSession.default.activationState == .activated, WCSession.default.isReachable else {
+            mapRefreshError = "Phone unavailable. Showing cached positions."
+            return
+        }
+        mapRefreshing = true
+        mapRefreshError = nil
+        defer { mapRefreshing = false }
+        do {
+            let reply = try await request(BridgeWire.Message(kind: .mapSnapshot), timeoutSeconds: 28)
+            guard reply.kind == .mapSnapshot, let events = reply.mapEvents,
+                  let enabled = reply.enabledServerIDs else {
+                throw CompanionRefreshFailure.message(reply.detail ?? "Update both WearTAK apps to refresh the map.")
+            }
+            apply(reply)
+            onMapSnapshot?(events, enabled)
+            mapLastChecked = Date()
+            mapRefreshError = reply.refreshError
+            if reply.snapshotTruncated == true {
+                mapRefreshError = [mapRefreshError, "Map snapshot was size-limited; some contacts were omitted."]
+                    .compactMap { $0 }.joined(separator: "\n")
+            }
+        } catch {
+            mapRefreshError = "Map refresh failed: \(error.localizedDescription). Showing cached positions."
         }
     }
 
@@ -185,18 +228,24 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             }
             if let id = message.serverID { channelError = channelServers.first { $0.id == id }?.error }
         } catch {
-            channelError = "Channel request failed. Keep Companion open and check the server's channel API."
+            channelError = "Channel request failed: \(error.localizedDescription)"
         }
     }
 
     private func request(_ message: BridgeWire.Message, timeoutSeconds: Double = 12) async throws -> BridgeWire.Message {
-        guard pending.count < 16, WCSession.default.isReachable else { throw TAKTransportError.notConfigured }
+        guard WCSession.default.isReachable else {
+            throw CompanionRefreshFailure.message("The paired phone is unavailable for live messaging.")
+        }
+        guard pending.count < 16 else {
+            throw CompanionRefreshFailure.message("Too many Companion requests are in progress.")
+        }
         let data = try message.encoded()
         return try await withCheckedThrowingContinuation { continuation in
             pending[message.id] = continuation
             timeouts[message.id] = Task { [weak self] in
                 do { try await Task.sleep(for: .seconds(timeoutSeconds)) } catch { return }
-                self?.finish(message.id, result: .failure(TAKTransportError.notConfigured))
+                self?.finish(message.id, result: .failure(CompanionRefreshFailure.message(
+                    "The phone did not reply within \(Int(timeoutSeconds)) seconds.")))
             }
             WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
                 Task { @MainActor in
@@ -235,16 +284,17 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         Task { @MainActor [weak self] in
             guard let self else { return }
             if let configured { self.configured = configured }
-            if unavailable { self.invalidate() }
+            if unavailable && !self.handshakeInFlight && !self.mapRefreshing { self.invalidate() }
             else { self.refresh() }
         }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data) {
         Task { @MainActor [weak self] in
-            guard let self, let message = try? BridgeWire.Message.decode(data), message.kind == .status else { return }
+            guard let self, self.active, let message = try? BridgeWire.Message.decode(data), message.kind == .status else { return }
             self.apply(message)
         }
+
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data, replyHandler: @escaping (Data) -> Void) {
@@ -256,5 +306,10 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             }
             replyHandler((try? BridgeWire.Message(kind: .acknowledgement, id: message.id).encoded()) ?? Data())
         }
+    }
+
+    private enum CompanionRefreshFailure: LocalizedError {
+        case message(String)
+        var errorDescription: String? { switch self { case .message(let text): return text } }
     }
 }

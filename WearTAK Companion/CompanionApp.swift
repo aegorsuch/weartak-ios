@@ -36,7 +36,13 @@ struct CompanionSetupView: View {
         NavigationStack {
             List {
                 Section("Watch") {
-                    LabeledContent("Connection", value: bridge.watchStatus)
+                    LabeledContent("Live messaging", value: bridge.watchStatus)
+                    Text("Open WearTAK on the watch to request a short refresh, even while this phone is locked. This is not continuous background tracking.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let error = bridge.mapCacheError {
+                        Text(error).font(.caption).foregroundStyle(.orange)
+                    }
                 }
                 Section("TAK Servers") {
                     if bridge.servers.isEmpty {
@@ -94,6 +100,7 @@ struct CompanionSetupView: View {
             .alert("Server settings", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
                 Button("OK", role: .cancel) { errorText = nil }
             } message: { Text(errorText ?? "") }
+            .onAppear { bridge.setActive(scenePhase == .active) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { bridge.setActive(false) }
                 else if phase == .active { bridge.setActive(true) }

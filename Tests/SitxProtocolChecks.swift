@@ -122,7 +122,33 @@ struct SitxProtocolChecks {
         precondition(SitxCoT.parse(Data(pointXML.utf8), excluding: "self").first?.team == nil)
         precondition(SitxCoT.isUser(type: "a-f-G-U-C") && SitxCoT.isUser(type: "a-h-G-U-C-I"))
         precondition(!SitxCoT.isUser(type: "a-n-G") && !SitxCoT.isUser(type: "b-a-o"))
+        precondition(incomingUser[0].isUser == true)
+        precondition(SitxCoT.parse(Data(pointXML.utf8), excluding: "self").first?.isUser == false)
+        let k9XML = SitxCoT.event(uid: "incoming-k9", type: "a-f-G-E-V-C", coordinate: userCoordinate,
+            detail: "<contact callsign=\"REX\"/><__group name=\"Dark Green\" role=\"K9\"/>", lifetime: 300)
+        let k9 = SitxCoT.parse(Data(k9XML.utf8), excluding: "self")
+        precondition(k9.count == 1 && k9[0].isUser == true && k9[0].team == "Dark Green" && k9[0].role == "K9")
+        precondition(TeamColor(cotName: k9[0].team) == .darkGreen && SitxCoT.roleBadge(k9[0].role) == "K9")
+        let endpointXML = SitxCoT.event(uid: "incoming-endpoint", type: "a-f-G", coordinate: userCoordinate,
+            detail: "<contact callsign=\"BRAVO\" endpoint=\"*:-1:stcp\"/>", lifetime: 300)
+        precondition(SitxCoT.parse(Data(endpointXML.utf8), excluding: "self").first?.isUser == true)
+        let takvXML = SitxCoT.event(uid: "incoming-takv", type: "a-f-G", coordinate: userCoordinate,
+            detail: "<takv platform=\"ATAK\"/>", lifetime: 300)
+        precondition(SitxCoT.parse(Data(takvXML.utf8), excluding: "self").first?.isUser == true)
+        let markerXML = SitxCoT.event(uid: "incoming-marker", type: "a-f-G-U-C-I", coordinate: userCoordinate,
+            detail: "<contact callsign=\"F.1\"/>", lifetime: 300)
+        precondition(SitxCoT.parse(Data(markerXML.utf8), excluding: "self").first?.isUser == true)
+        let hostileXML = SitxCoT.event(uid: "incoming-hostile", type: "a-h-G", coordinate: userCoordinate,
+            detail: "<contact callsign=\"H.1\"/>", lifetime: 300)
+        precondition(SitxCoT.parse(Data(hostileXML.utf8), excluding: "self").first?.isUser == false)
+        precondition(TeamColor(cotName: " dark_green ") == .darkGreen && TeamColor(cotName: "DarkBlue") == .darkBlue)
+        precondition(TeamColor(cotName: "cyan") == .cyan && TeamColor(cotName: "Plaid") == nil && TeamColor(cotName: nil) == nil)
+        precondition(SitxCoT.roleBadge("Team Lead") == "TL" && SitxCoT.roleBadge(" team member ") == "TM")
+        precondition(SitxCoT.roleBadge("Forward Observer") == "FO" && SitxCoT.roleBadge("Medic") == "MED")
+        precondition(SitxCoT.roleBadge("Pilot") == "PIL" && SitxCoT.roleBadge("Quick Reaction Force Alpha") == "QRF")
+        precondition(SitxCoT.roleBadge("") == nil && SitxCoT.roleBadge(nil) == nil)
         print("PASS: incoming CoT callsign/team/role parsing and user classification")
+        print("PASS: __group/takv/endpoint user classification, team color lookup and role badges")
         let teamGroups = MapUserGroup.make(values: ["Red", " red ", "Green", " "])
         precondition(teamGroups.count == 2 && teamGroups.first { $0.id == "red" }?.count == 2)
         precondition(MapUserGroup.make(values: []).isEmpty)
@@ -139,6 +165,103 @@ struct SitxProtocolChecks {
         settings.hiddenMapTeams = []
         settings.hiddenMapRoles = []
         print("PASS: present-user grouping, independent team/role filters and persistence")
+        let atakNow = ISO8601DateFormatter().date(from: "2026-10-04T01:48:41Z")!
+        func atakPLI(type: String, extra: String = "") -> String {
+            """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <event version="2.0" uid="ANDROID-0f1e2d3c4b5a6978" type="\(type)" how="m-g" time="2026-10-04T01:48:40.512Z" start="2026-10-04T01:48:40.512Z" stale="2026-10-04T01:55:10.512Z">
+              <point lat="38.8895" lon="-77.0353" hae="12.4" ce="9.9" le="9999999.0"/>
+              <detail>
+                <takv os="34" version="5.2.0.4 (8ab1f2c3).1718123456-CIV" device="SAMSUNG SM-S918U" platform="ATAK-CIV"/>
+                <contact endpoint="*:-1:stcp" callsign="ODIN-ATAK"/>
+                <uid Droid="ODIN-ATAK"/>
+                <precisionlocation altsrc="GPS" geopointsrc="GPS"/>
+                <__group role="K9" name="Dark Green"/>
+                <status battery="87"/>
+                <track course="132.5" speed="0.0"/>
+                \(extra)
+                <_flow-tags_ TAK-Server-f1e2d3c4="2026-10-04T01:48:40Z"/>
+              </detail>
+            </event>
+            """
+        }
+        for type in ["a-f-G-U-C-I", "a-f-G-U-C", "a-f-G-E-V-C", "a-f-G"] {
+            let parsed = SitxCoT.parse(Data(atakPLI(type: type).utf8), excluding: "self", now: atakNow)
+            precondition(parsed.count == 1 && parsed[0].isUser == true && parsed[0].callSign == "ODIN-ATAK")
+            precondition(parsed[0].team == "Dark Green" && parsed[0].role == "K9")
+            let users = parsed.filter { $0.isUser == true || SitxCoT.isUser(type: $0.type) }
+            let teams = MapUserGroup.make(values: users.compactMap(\.team))
+            let roles = MapUserGroup.make(values: users.compactMap(\.role))
+            precondition(teams.count == 1 && teams[0].id == "dark green" && teams[0].name == "Dark Green" && teams[0].count == 1)
+            precondition(roles.count == 1 && roles[0].id == "k9" && roles[0].name == "K9" && roles[0].count == 1)
+            precondition(TeamColor(cotName: teams[0].name) == .darkGreen && SitxCoT.roleBadge(users[0].role) == "K9")
+            precondition(settings.isMapUserVisible(team: users[0].team, role: users[0].role))
+            settings.hiddenMapTeams.insert(teams[0].id)
+            precondition(!settings.isMapUserVisible(team: users[0].team, role: users[0].role))
+            settings.hiddenMapTeams = []
+            settings.hiddenMapRoles.insert(roles[0].id)
+            precondition(!settings.isMapUserVisible(team: users[0].team, role: users[0].role))
+            settings.hiddenMapRoles = []
+        }
+        let droidOnly = """
+            <event version="2.0" uid="ANDROID-droid-only" type="a-f-G" how="m-g" time="2026-10-04T01:48:40Z" start="2026-10-04T01:48:40Z" stale="2026-10-04T01:55:10Z"><point lat="38.8" lon="-77.0" hae="0" ce="9" le="9"/><detail><uid Droid="LOKI"/></detail></event>
+            """
+        precondition(SitxCoT.parse(Data(droidOnly.utf8), excluding: "self", now: atakNow).first?.isUser == true)
+        let bareUpdate = EntityRelayPayload(uid: "ANDROID-0f1e2d3c4b5a6978", lat: 38.9, lon: -77.0, type: "a-f-G", isUser: false)
+            .inheritingMetadata(callSign: "ODIN-ATAK", team: "Dark Green", role: "K9", isUser: true)
+        precondition(bareUpdate.isUser == true && bareUpdate.team == "Dark Green" && bareUpdate.role == "K9" && bareUpdate.callSign == "ODIN-ATAK")
+        let teamChange = EntityRelayPayload(uid: "u", lat: 0, lon: 0, type: "a-f-G-U-C", team: "Cyan", role: "Medic", isUser: true)
+            .inheritingMetadata(callSign: nil, team: "Dark Green", role: "K9", isUser: true)
+        precondition(teamChange.team == "Cyan" && teamChange.role == "Medic")
+        let neverUser = EntityRelayPayload(uid: "p", lat: 0, lon: 0, type: "a-h-G", isUser: false)
+            .inheritingMetadata(callSign: nil, team: nil, role: nil, isUser: false)
+        precondition(neverUser.isUser == false)
+        print("PASS: raw ATAK PLI (Dark Green/K9) classifies as user with team/role counts, toggles and metadata carry-over")
+        let watchUID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        let ownDetail = SitxCoT.pliDetail(uid: watchUID, callSign: " THOR <&> ", team: "Dark Green", role: "K9",
+                                          appVersion: "1.2", osVersion: "watchOS 11.0")
+        let ownPLI = SitxCoT.event(uid: watchUID, type: SitxCoT.pliType, coordinate: userCoordinate, detail: ownDetail, lifetime: 300)
+        let ownFields = XMLFields()
+        let ownParser = XMLParser(data: Data(ownPLI.utf8))
+        ownParser.delegate = ownFields
+        precondition(ownParser.parse())
+        precondition(ownFields.attributes["event"]?.first?["type"] == "a-f-G-U-C" && ownFields.attributes["event"]?.first?["uid"] == watchUID)
+        precondition(ownFields.attributes["contact"]?.first?["callsign"] == "THOR <&>")
+        precondition(ownFields.attributes["contact"]?.first?["endpoint"] == "*:-1:stcp")
+        precondition(ownFields.attributes["__group"]?.first?["name"] == "Dark Green" && ownFields.attributes["__group"]?.first?["role"] == "K9")
+        precondition(ownFields.attributes["takv"]?.first?["platform"] == "WearTAK" && ownFields.attributes["takv"]?.first?["device"] == "Apple Watch")
+        precondition(ownFields.attributes["takv"]?.first?["version"] == "1.2" && ownFields.attributes["takv"]?.first?["os"] == "watchOS 11.0")
+        precondition(ownFields.attributes["uid"]?.first?["Droid"] == "THOR <&>")
+        let peerView = SitxCoT.parse(Data(ownPLI.utf8), excluding: "another-device")
+        precondition(peerView.count == 1 && peerView[0].isUser == true && peerView[0].callSign == "THOR <&>")
+        precondition(peerView[0].team == "Dark Green" && peerView[0].role == "K9")
+        precondition(SitxCoT.parse(Data(ownPLI.utf8), excluding: watchUID).isEmpty)
+        let blankDetail = SitxCoT.pliDetail(uid: watchUID, callSign: "  ", team: "White", role: " ",
+                                            appVersion: "1.2", osVersion: "watchOS 11.0")
+        let blankPLI = SitxCoT.parse(Data(SitxCoT.event(uid: watchUID, type: SitxCoT.pliType, coordinate: userCoordinate,
+                                                        detail: blankDetail, lifetime: 300).utf8), excluding: "another-device")
+        precondition(blankPLI.first?.callSign == "WEARTAK-0a1b2c3d" && blankPLI.first?.role == "Team Member")
+        precondition(SitxCoT.pliCallSign("ODIN", uid: watchUID) == "ODIN")
+        print("PASS: outgoing PLI carries ATAK contact endpoint, __group, takv and uid Droid; blank callsign/role fall back")
+        let reportTime = ISO8601DateFormatter().date(from: "2026-10-04T01:48:40Z")!
+        let fresh = MapContactAge(lastSeen: reportTime, now: reportTime.addingTimeInterval(45.9))
+        precondition(fresh.seconds == 45 && !fresh.isStale && fresh.title("ODIN-ATAK") == "ODIN-ATAK ? 45s")
+        precondition(fresh.accessibilityLabel(callSign: "ODIN-ATAK", team: "Dark Green", role: "K9")
+                     == "ODIN-ATAK, Dark Green K9 user, last report 45 seconds ago")
+        let boundary = MapContactAge(lastSeen: reportTime, now: reportTime.addingTimeInterval(60))
+        precondition(!boundary.isStale && boundary.shortText == "1m")
+        let stale = MapContactAge(lastSeen: reportTime, now: reportTime.addingTimeInterval(61))
+        precondition(stale.isStale && stale.title("ODIN-ATAK") == "ODIN-ATAK ? 1m")
+        precondition(stale.accessibilityLabel(callSign: "ODIN-ATAK", team: nil, role: " ")
+                     == "ODIN-ATAK, user, last report 1 minute ago, stale")
+        precondition(MapContactAge(lastSeen: reportTime, now: reportTime.addingTimeInterval(299)).shortText == "4m")
+        precondition(MapContactAge(lastSeen: reportTime, now: reportTime.addingTimeInterval(7_200)).spokenText == "2 hours ago")
+        let future = MapContactAge(lastSeen: reportTime.addingTimeInterval(20), now: reportTime)
+        precondition(future.seconds == 0 && !future.isStale && future.spokenText == "0 seconds ago")
+        precondition(MapContactAge(lastSeen: reportTime, now: reportTime.addingTimeInterval(1)).spokenText == "1 second ago")
+        let ages = [fresh, boundary, stale, future].map { $0.title("X") + " " + $0.accessibilityLabel(callSign: "X", team: nil, role: nil) }
+        precondition(!ages.contains { $0.lowercased().contains("live") })
+        print("PASS: contact age labels, 60 s stale threshold, clock-skew clamp and accessibility text without 'live'")
         precondition(settings.mapButtonsVisible)
         settings.mapButtonsVisible = false
         precondition(!AppSettings(defaults: defaults).mapButtonsVisible)
@@ -306,7 +429,13 @@ struct SitxProtocolChecks {
         precondition(output.messages.count == 5 && client.pendingEvents.isEmpty)
         let pli = try fields(output.messages[0])
         precondition(pli.attributes["event"]?.first?["type"] == "a-f-G-U-C")
+        precondition(pli.attributes["event"]?.first?["uid"] == SitxClient.deviceID())
         precondition(pli.attributes["contact"]?.first?["callsign"] == settings.callSign)
+        precondition(pli.attributes["contact"]?.first?["endpoint"] == "*:-1:stcp")
+        precondition(pli.attributes["__group"]?.first?["name"] == settings.teamColor.rawValue)
+        precondition(pli.attributes["__group"]?.first?["role"]?.isEmpty == false)
+        precondition(pli.attributes["takv"]?.first?["platform"] == "WearTAK")
+        precondition(pli.attributes["uid"]?.first?["Droid"] == settings.callSign)
         let multicastAlert = try fields(output.messages[1])
         let multicastCancel = try fields(output.messages[2])
         precondition(multicastAlert.attributes["event"]?.first?["uid"] == multicastCancel.attributes["event"]?.first?["uid"])
@@ -333,6 +462,11 @@ struct SitxProtocolChecks {
         try await client.sendPLI(coordinate: marker.coordinate)
         try await client.sendEmergencyAlert(state: .alert, type: "Companion test")
         precondition(phoneOutput.messages.count == 2 && client.hasReadyOutput)
+        let relayedPLI = try fields(phoneOutput.messages[0])
+        precondition(relayedPLI.attributes["event"]?.first?["uid"] == SitxClient.deviceID())
+        precondition(relayedPLI.attributes["event"]?.first?["type"] == "a-f-G-U-C")
+        precondition(relayedPLI.attributes["contact"]?.first?["endpoint"] == "*:-1:stcp")
+        precondition(relayedPLI.attributes["__group"] != nil && relayedPLI.attributes["takv"] != nil)
         phoneOutput.isReady = false
         precondition(!client.hasReadyOutput)
         client.companionOutput = nil

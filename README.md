@@ -247,6 +247,30 @@ not create an empty toggle. Filters do not hide your own location, saved points,
 or incoming non-user markers. Incoming users use their reported team color
 when recognized and their contact callsign when available.
 
+Every incoming user is drawn as a circular dot filled with its CoT
+`__group name` team color, with a short role badge inside the dot. For
+example, a Dark Green K9 user appears as a dark green dot labeled `K9`. Team
+names match case-, space- and underscore-insensitively (`Dark Green`,
+`dark_green`, `DarkGreen`); a missing or unrecognized team uses a gray dot.
+Known roles use fixed badges (`TL`, `TM`, `HQ`, `K9`, `MED`, `RTO`, `SNP`,
+`FO`, and LEO roles such as `ATL`, `CP`, `TOC`); other roles use up to three
+initials, or the first three letters of a single word. A missing role leaves
+the dot unlabeled. An event counts as a user when it is an `a-` event with a
+`__group`, `takv`, contact `endpoint`, or ATAK `<uid Droid>` detail, or when
+its type is `a-?-G-U-C?`, so a user is not shown as a pin, or left out of Team
+Colors/Default Roles, because of its 2525 type (e.g. an ATAK `a-f-G` or
+`a-f-G-E-V-C` self type). A later update for the same UID that omits
+`__group`/contact detail keeps the last known team, role and callsign.
+Other incoming `a-` events keep the hostile/friendly/unknown pin.
+
+Below each user dot, a label such as `ODIN-ATAK ? 45s` shows the age of that
+contact's last report. The age counts from the CoT event time, including for
+positions restored from the Companion cache, and updates every second while the
+map is open (`45s`, then `3m`, `2h`). No position is labeled live. After 60
+seconds the dot dims, gets an orange ring, and its label turns orange.
+VoiceOver reads the callsign, team, role, report age and stale state.
+Incoming non-user pins show no age.
+
 ## TAK Relay
 
 TAK Relay integration with iTAK and TAK Aware is not complete. The project
@@ -270,7 +294,8 @@ and local multicast without Companion.
   Additional servers can be saved, edited, enabled independently, or removed
   with confirmation. The Watch status appears above the TAK Servers list.
 3. On the watch, select Companion in Settings > Network Preferences > TAK
-  Relay. Keep both apps foregrounded and the paired phone reachable.
+  Relay. Open the watch app while the paired phone is in range. A watch request
+  can wake Companion for a short refresh while the phone is locked.
   Connected requires a successful mutual-TLS server connection, not just a
   saved certificate or Bluetooth pairing.
 
@@ -285,7 +310,42 @@ at least one server socket accepted the write, not that a remote TAK user
 received it. Incoming CoT is forwarded to a reachable watch. Readiness is
 confirmed by a live handshake and expires if confirmations stop. Direct Sit(x)
 pauses only while Companion is actually ready; multicast remains independent.
-There is no guaranteed background relay or durable offline PLI replay.
+Live messaging availability is not TAK server health. When the watch is
+backgrounded, the phone may show "Waiting for watch app"; this does not mean
+the devices are unpaired.
+
+### Locked-phone map refresh
+
+The foreground watch automatically requests a map refresh on resume and every
+30 seconds while open; the map's refresh button can request one sooner.
+WatchConnectivity can wake the iPhone app, which requests up to 25 seconds of
+iOS background execution and reconnects enabled TAK streams. It requests
+`/Marti/api/groups/all?useCache=true&sendLatestSA=true` to ask supported servers
+to resend recent situational awareness, then returns a bounded map snapshot.
+Streams stop when the background task expires and can reconnect on a subsequent
+watch request. This does not grant continuous background execution.
+
+Both apps cache up to 50 incoming Companion events. The watch displays cached
+positions immediately while refreshing. Cache replay preserves the original
+CoT timestamp; reconnecting does not make an old position appear new. Entries
+expire at the CoT stale time or after five minutes, whichever comes first.
+Disabling/removing a server excludes its cached events on the next snapshot,
+and channel changes invalidate that source's cached events. Snapshot payloads
+are limited to 60 KB, with an explicit warning if contacts are omitted.
+
+The map footer distinguishes refreshing, connected and cached states, shows
+the newest position's age, and opens detailed refresh errors. Failed refreshes
+leave unexpired cached contacts visible, not falsely labeled live. Local map
+points and independent transports are not cleared by Companion restarts.
+
+Install matching phone/watch builds for snapshot support. The phone must be
+in range, unlocked at least once after restarting for Keychain access, and
+allowed by iOS to run. Force-quitting Companion, unavailable connectivity,
+background-time expiration, or an unsupported/failing server SA API can prevent
+a fresh snapshot. Test locked-phone and wrist-down/resume operation on paired
+hardware; simulator tests cannot guarantee background wake-up. There is no
+guaranteed continuous background relay, emergency-alert delivery, or durable
+offline PLI replay.
 
 ### Map Channels
 
@@ -302,7 +362,18 @@ Companion performs the mutually authenticated HTTPS requests on port `8443`:
 group payload and change matching IN/OUT records together. Confirmed membership
 changes advance that server's map-source generation; stale entries from that
 source are cleared without clearing local points or other-source entries.
-Companion restarts clear Companion-sourced cache entries only.
+Companion restarts reset source generations and channel listings while retaining
+unexpired Companion positions with their original timestamps.
+
+The Channels API uses HTTPS port `8443`, independently of the displayed CoT
+stream port (normally `8089`). Request failures identify the API endpoint and
+underlying error code; certificate-validation failures also include the trust
+error when available. Both stream and Channels TLS verify the hostname and
+certificate chain. An explicitly configured server CA restricts trust to that
+CA; otherwise the client certificate's CA chain supplements system trust roots,
+allowing an API listener with a publicly trusted certificate. Invalid configured
+CA data is reported rather than silently ignored. Client-certificate challenges
+are handled at both the URLSession session and task levels.
 
 Channels requires a TAK server supporting these group APIs. Multicast,
 standalone Sit(x), iTAK and TAK Aware do not currently expose this channel menu's
@@ -388,7 +459,13 @@ do not erase authorization. Connected is shown only after the socket responds.
 ### Delivery and shared reporting
 
 PLI includes a stable device UID, position, callsign, team, role, and CoT
-time/start/stale fields. Both multicast and standalone Sit(x) use the reporting
+time/start/stale fields. It is an `a-f-G-U-C` event with ATAK contact detail:
+`<contact endpoint="*:-1:stcp">`, `__group name/role`, `<takv platform="WearTAK"
+device="Apple Watch">`, and `<uid Droid>`. A blank callsign is sent as
+`WEARTAK-<first 8 UID characters>` and a blank role as `Team Member`, so
+receivers never get an unnamed or roleless contact. The same XML goes to every
+ready output: WearTAK Companion (relayed unchanged to each connected TAK
+server), multicast, and standalone Sit(x) when the phone is unreachable. Both multicast and standalone Sit(x) use the reporting
 controls. Dynamic Reporting defaults to 3600 seconds stationary, 60 seconds on
 foot, 60 seconds in a vehicle, and 10 seconds while alerting. Constant Reporting
 defaults to 60 seconds. Save Battery on WiFi multiplies the selected interval
@@ -442,13 +519,26 @@ payload preservation, endpoint parsing and multi-server record persistence:
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/CompanionEndpoint.swift \
-  Shared/CompanionServer.swift Shared/TAKChannels.swift \
+  Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKChannels.swift \
   Tests/BridgeProtocolChecks.swift -o /tmp/weartak-bridge-checks
 /tmp/weartak-bridge-checks
 ```
 
+Map cache/snapshot checks preserve CoT timestamps and expiry, invalidate
+sources, reset bridge generations, and enforce 50-contact/60 KB bounds:
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Tests/CompanionMapChecks.swift \
+  -o /tmp/weartak-map-checks
+/tmp/weartak-map-checks
+```
+
 `Tests/CompanionSecurityChecks.swift` also checks generated CSR signatures,
-certificate/key matching, expiry and `.p12` import/password handling with
-temporary test identities. It requires the resolved SwiftASN1 module linked
+certificate/key matching, expiry, `.p12` import/password handling, private-CA
+server trust, hostname rejection, explicit CA restrictions, invalid CA data,
+and endpoint/error diagnostics with temporary test identities. It requires the resolved SwiftASN1 module linked
 alongside CertificateStore and EnrollmentClient. No simulator or mock test
 establishes physical-device background reliability or live server compatibility.

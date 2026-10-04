@@ -40,7 +40,76 @@ struct CompanionSecurityChecks {
             _ = try CertificateStore.importP12(p12, password: "wrong-fixture-password")
             fatalError("Wrong .p12 password accepted")
         } catch CompanionFailure.message {}
-        print("PASS: PKCS#10 CSR signature, subject encoding, key match, expiry and .p12 identity/password checks")
+        try checkServerTrust(in: directory, client: leaf)
+        let diagnostics = TLSConnectionDiagnostics()
+        diagnostics.record(CompanionFailure.message("Hostname mismatch"))
+        let networkError = NSError(domain: NSURLErrorDomain, code: -1200,
+                                   userInfo: [NSLocalizedDescriptionKey: "TLS handshake failed"])
+        let message = diagnostics.message(endpoint: "Channels API https://fixture.example:8443", error: networkError)
+        precondition(message.contains("fixture.example:8443") && message.contains("Hostname mismatch") &&
+                     message.contains("NSURLErrorDomain -1200"))
+        diagnostics.reset()
+        precondition(!diagnostics.message(endpoint: "Channels API", error: networkError).contains("Hostname mismatch"))
+        print("PASS: CSR, identity, expiry, server trust, hostname rejection, explicit CA and TLS diagnostics checks")
+    }
+
+    static func checkServerTrust(in directory: URL, client: SecCertificate) throws {
+        let extensions = """
+        basicConstraints=critical,CA:FALSE
+        keyUsage=critical,digitalSignature,keyEncipherment
+        extendedKeyUsage=serverAuth
+        subjectAltName=DNS:fixture.example
+        """
+        try Data(extensions.utf8).write(to: directory.appendingPathComponent("server.ext"))
+        try openssl(["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", "server.key",
+                     "-out", "server.csr", "-subj", "/CN=fixture.example"], in: directory)
+        try openssl(["x509", "-req", "-in", "server.csr", "-CA", "ca.pem", "-CAkey", "ca.key",
+                     "-CAcreateserial", "-out", "server.pem", "-days", "1", "-extfile", "server.ext"], in: directory)
+        try openssl(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "other-ca.key",
+                     "-out", "other-ca.pem", "-days", "1", "-subj", "/CN=Unrelated Fixture CA"], in: directory)
+        func certificate(_ name: String) throws -> SecCertificate {
+            let data = try CertificateStore.decodeCertificate(
+                String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8))
+            guard let certificate = SecCertificateCreateWithData(nil, data as CFData) else {
+                throw CompanionFailure.message("Invalid TLS fixture certificate.")
+            }
+            return certificate
+        }
+        let server = try certificate("server.pem")
+        let ca = try certificate("ca.pem")
+        let otherCA = try certificate("other-ca.pem")
+        func evaluate(host: String = "fixture.example", chain: [SecCertificate],
+                      explicitCA: Data? = nil) throws {
+            var trust: SecTrust?
+            let status = SecTrustCreateWithCertificates([server, ca] as CFArray,
+                                                       SecPolicyCreateSSL(true, nil), &trust)
+            guard status == errSecSuccess, let trust else {
+                throw CompanionFailure.message("Unable to create fixture trust (\(status)).")
+            }
+            SecTrustSetNetworkFetchAllowed(trust, false)
+            try CertificateStore.evaluateServerTrust(trust, host: host, certificates: chain, trustedCA: explicitCA)
+        }
+        let caData = SecCertificateCopyData(ca) as Data
+        try evaluate(chain: [client, ca])
+        try evaluate(chain: [client], explicitCA: caData)
+        do {
+            try evaluate(host: "wrong.example", chain: [client, ca])
+            fatalError("TLS hostname mismatch accepted")
+        } catch {}
+        do {
+            try evaluate(chain: [client])
+            fatalError("Untrusted private server CA accepted")
+        } catch {}
+        do {
+            try evaluate(chain: [client, ca], explicitCA: SecCertificateCopyData(otherCA) as Data)
+            fatalError("Explicit server CA restriction bypassed")
+        } catch {}
+        do {
+            try evaluate(chain: [client, ca], explicitCA: Data("not a certificate".utf8))
+            fatalError("Invalid configured CA silently ignored")
+        } catch CompanionFailure.message(let message) {
+            precondition(message.contains("DER certificate"))
+        }
     }
 
     static func openssl(_ arguments: [String], in directory: URL) throws {

@@ -657,9 +657,17 @@ private struct TacticalMapView: View {
                             .tag(MapPointSelection.marker(marker.id))
                     }
                     ForEach(model.incomingEntities) { entity in
-                        if !entity.isUser || settings.isMapUserVisible(team: entity.team, role: entity.role) {
-                            Marker(entity.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? entity.id,
-                                   systemImage: entity.isUser ? "person.fill" : "mappin", coordinate: entity.coordinate)
+                        if entity.isUser {
+                            if settings.isMapUserVisible(team: entity.team, role: entity.role) {
+                                Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
+                                    IncomingUserMarker(title: incomingMapTitle(entity), lastSeen: entity.lastSeen,
+                                                       team: entity.teamColor, badge: entity.roleBadge,
+                                                       teamName: entity.team, role: entity.role)
+                                }
+                                .annotationTitles(.hidden)
+                            }
+                        } else {
+                            Marker(incomingMapTitle(entity), systemImage: "mappin", coordinate: entity.coordinate)
                                 .tint(incomingMapColor(entity))
                         }
                     }
@@ -789,7 +797,12 @@ private struct TacticalMapView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            bloodhoundPanel
+            VStack(spacing: 0) {
+                if settings.relayProvider == .companion {
+                    CompanionMapStatusView(model: model, client: model.companionClient)
+                }
+                bloodhoundPanel
+            }
         }
         .onAppear {
             updateBloodhoundHeading()
@@ -877,12 +890,12 @@ private struct TacticalMapView: View {
         }
     }
 
+    private func incomingMapTitle(_ entity: IncomingMapEntity) -> String {
+        entity.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? entity.id
+    }
+
     private func incomingMapColor(_ entity: IncomingMapEntity) -> Color {
-        if entity.isUser, let team = entity.team,
-           let color = TeamColor.allCases.first(where: { $0.rawValue.caseInsensitiveCompare(team.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame }) {
-            return color.mapColor
-        }
-        return entity.kind == .hostile ? .red : entity.kind == .friendly ? .blue : .yellow
+        entity.kind == .hostile ? .red : entity.kind == .friendly ? .blue : .yellow
     }
 
     private func mapControl(_ systemName: String, label: String) -> some View {
@@ -943,7 +956,7 @@ private struct MapLayersMenuView: View {
                         )) {
                             HStack(spacing: 6) {
                                 Circle()
-                                    .fill(TeamColor.allCases.first { $0.rawValue.caseInsensitiveCompare(group.name) == .orderedSame }?.mapColor ?? .gray)
+                                    .fill(TeamColor(cotName: group.name)?.mapColor ?? .gray)
                                     .frame(width: 10, height: 10)
                                 Text("\(group.name) (\(group.count))")
                             }
@@ -1106,6 +1119,57 @@ private struct MapPointDraft: Identifiable {
     }
 }
 
+private struct CompanionMapStatusView: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var client: WatchCompanionOutput
+    @State private var showDetails = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            HStack(spacing: 6) {
+                Button { showDetails = true } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(client.mapRefreshing ? "Refreshing TAK..." : client.isReady ? "TAK connected" : "Cached TAK")
+                        if let error = client.mapRefreshError ?? model.mapCacheError {
+                            Text(error).foregroundStyle(.orange).lineLimit(1)
+                        } else if let latest = model.incomingEntities.filter({ $0.sourceServerID != nil }).map(\.lastSeen).max() {
+                            Text("Newest position \(max(0, Int(context.date.timeIntervalSince(latest))))s old")
+                        } else {
+                            Text("No current contacts")
+                        }
+                    }
+                    .font(.system(size: 10))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    Task { await client.refreshMap() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 28, height: 28)
+                }
+                .disabled(client.mapRefreshing)
+                .accessibilityLabel("Refresh TAK map")
+            }
+            .padding(.horizontal, 8)
+            .background(.regularMaterial)
+        }
+        .sheet(isPresented: $showDetails) {
+            NavigationStack {
+                List {
+                    Text(client.status)
+                    if let error = client.mapRefreshError { Text(error).foregroundStyle(.orange) }
+                    if let error = model.mapCacheError { Text(error).foregroundStyle(.orange) }
+                    Text("Positions show their reported age. Cached positions are not live and expire after five minutes or their CoT stale time.")
+                        .font(.caption)
+                    Button("Refresh TAK map") { Task { await client.refreshMap() } }
+                        .disabled(client.mapRefreshing)
+                }
+                .navigationTitle("Map freshness")
+            }
+        }
+    }
+}
+
 private struct SelfCoordinateView: View {
     let coordinate: CLLocationCoordinate2D
 
@@ -1173,6 +1237,68 @@ struct MapPointSymbol: View {
         }
         .frame(width: 24, height: 24)
         .contentShape(Rectangle())
+    }
+}
+
+/// Incoming TAK user: circle filled with the CoT `__group` team color, role badge inside.
+private struct IncomingUserDot: View {
+    let team: TeamColor?
+    let badge: String?
+
+    private var darkText: Bool { team?.prefersDarkMarkerText ?? false }
+
+    var body: some View {
+        Circle()
+            .fill(team?.mapColor ?? .gray)
+            .overlay(Circle().stroke(darkText ? Color.black : Color.white, lineWidth: 1.5))
+            .overlay {
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: badge.count > 2 ? 7 : 9, weight: .heavy))
+                        .foregroundStyle(darkText ? Color.black : Color.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .padding(2)
+                }
+            }
+            .frame(width: 22, height: 22)
+    }
+}
+
+/// User dot plus a ticking `CALLSIGN ? 45s` label; reports older than 60 s dim with an orange ring.
+private struct IncomingUserMarker: View {
+    let title: String
+    let lastSeen: Date
+    let team: TeamColor?
+    let badge: String?
+    let teamName: String?
+    let role: String?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let age = MapContactAge(lastSeen: lastSeen, now: context.date)
+            IncomingUserDot(team: team, badge: badge)
+                .opacity(age.isStale ? 0.5 : 1)
+                .overlay {
+                    if age.isStale {
+                        Circle().stroke(.orange, lineWidth: 2.5).frame(width: 28, height: 28)
+                    }
+                }
+                .overlay(alignment: .top) {
+                    Text(age.title(title))
+                        .font(.system(size: 9, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(age.isStale ? Color.orange : Color.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 3)
+                        .background(Color.black.opacity(0.6), in: Capsule())
+                        .fixedSize()
+                        .offset(y: 27)
+                        .allowsHitTesting(false)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(age.accessibilityLabel(callSign: title, team: teamName, role: role))
+        }
     }
 }
 

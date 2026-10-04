@@ -20,8 +20,63 @@ struct ClientIdentity {
     let expires: Date
 }
 
+nonisolated final class TLSConnectionDiagnostics: @unchecked Sendable {
+    private let lock = NSLock()
+    private var failure: String?
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        failure = nil
+    }
+
+    func record(_ error: Error) {
+        lock.lock()
+        defer { lock.unlock() }
+        let underlying = error as NSError
+        failure = "\(error.localizedDescription) [\(underlying.domain) \(underlying.code)]"
+    }
+
+    func message(endpoint: String, error: Error) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        let underlying = error as NSError
+        return "\(endpoint): \(failure ?? error.localizedDescription) (\(underlying.domain) \(underlying.code))."
+    }
+}
+
 enum CertificateStore {
     private static let service = "com.aegorsuch.weartak.companion.identities"
+
+    nonisolated static func evaluateServerTrust(_ trust: SecTrust, host: String,
+                                    certificates: [SecCertificate], trustedCA: Data?) throws {
+        let policyStatus = SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host as CFString))
+        guard policyStatus == errSecSuccess else {
+            throw CompanionFailure.message("Unable to configure TLS hostname validation (\(policyStatus)).")
+        }
+        let anchors: [SecCertificate]
+        if let trustedCA {
+            guard let ca = SecCertificateCreateWithData(nil, trustedCA as CFData) else {
+                throw CompanionFailure.message("The configured server CA is not a valid DER certificate.")
+            }
+            anchors = [ca]
+        } else {
+            anchors = Array(certificates.dropFirst())
+        }
+        if !anchors.isEmpty {
+            let anchorStatus = SecTrustSetAnchorCertificates(trust, anchors as CFArray)
+            // An explicit CA restricts trust; inferred client CAs supplement system roots.
+            let rootsStatus = SecTrustSetAnchorCertificatesOnly(trust, trustedCA != nil)
+            guard anchorStatus == errSecSuccess, rootsStatus == errSecSuccess else {
+                throw CompanionFailure.message("Unable to configure TLS trust anchors (\(anchorStatus), \(rootsStatus)).")
+            }
+        }
+        var error: CFError?
+        guard SecTrustEvaluateWithError(trust, &error) else {
+            if let error { throw error as Error }
+            throw CompanionFailure.message("The server certificate failed hostname or certificate-chain validation.")
+        }
+    }
 
     static func read(endpoint: String) throws -> StoredIdentity? {
         var result: CFTypeRef?

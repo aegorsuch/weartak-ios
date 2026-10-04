@@ -43,6 +43,22 @@ enum TeamColor: String, CaseIterable, Identifiable {
     case brown = "Brown"
 
     var id: Self { self }
+
+    /// Matches CoT `__group name` case/spacing-insensitively ("Dark Green", "dark_green", "DarkGreen").
+    init?(cotName: String?) {
+        func key(_ value: String) -> String { value.lowercased().filter { $0.isLetter } }
+        guard let name = cotName.map(key), !name.isEmpty,
+              let match = Self.allCases.first(where: { key($0.rawValue) == name }) else { return nil }
+        self = match
+    }
+
+    /// Light team colors need dark text/outline on map dots.
+    var prefersDarkMarkerText: Bool {
+        switch self {
+        case .white, .yellow, .orange, .cyan, .green: return true
+        default: return false
+        }
+    }
 }
 
 enum UserRoleGroup: String, CaseIterable, Identifiable {

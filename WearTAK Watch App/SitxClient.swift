@@ -247,10 +247,14 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     func sendPLI(coordinate: CLLocationCoordinate2D) async throws {
-        let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\" endpoint=\"*:-1:stcp\"/><__group name=\"\(SitxCoT.escape(settings.teamColor.rawValue))\" role=\"\(SitxCoT.escape(settings.role))\"/>"
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let detail = SitxCoT.pliDetail(
+            uid: Self.deviceID(), callSign: settings.callSign, team: settings.teamColor.rawValue, role: settings.role,
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+            osVersion: "watchOS \(os.majorVersion).\(os.minorVersion)")
         let lifetime = TimeInterval(max(settings.stationaryReportingInterval, settings.constantReportingInterval,
                                         settings.onFootReportingInterval, settings.vehicleReportingInterval)) * 6 + 120
-        try await deliver(SitxCoT.event(uid: Self.deviceID(), type: "a-f-G-U-C", coordinate: coordinate,
+        try await deliver(SitxCoT.event(uid: Self.deviceID(), type: SitxCoT.pliType, coordinate: coordinate,
                                       detail: detail, lifetime: lifetime))
     }
 

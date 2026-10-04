@@ -68,8 +68,11 @@ struct IncomingMapEntity: Identifiable {
     let role: String?
     let sourceServerID: UUID?
     let sourceGeneration: Int
+    let expiresAt: Date?
+    let isUser: Bool
 
-    var isUser: Bool { SitxCoT.isUser(type: type) }
+    var teamColor: TeamColor? { TeamColor(cotName: team) }
+    var roleBadge: String? { SitxCoT.roleBadge(role) }
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -129,6 +132,9 @@ struct UnconfiguredTAKTransport: TAKTransport {
 @MainActor
 final class WatchSessionModel: NSObject, ObservableObject {
     private static let markerStorageKey = "WearTAK.droppedPoints"
+    private static let companionCacheKey = "WearTAK.cachedCompanionMap"
+    private var companionMapCache = CompanionMapCache()
+    @Published private(set) var mapCacheError: String?
 
     @Published private(set) var connectionState: ConnectionState = .disconnected
     @Published private(set) var companionServerConfigured = false
@@ -220,19 +226,65 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         companionClient.onCoT = { [weak self] message in
             guard let self, let xml = message.xml else { return }
-            for entity in SitxCoT.parse(Data(xml.utf8), excluding: SitxClient.deviceID()) {
-                self.receiveEntity(entity, sourceServerID: message.sourceServerID, sourceGeneration: message.sourceGeneration ?? 0)
+            let now = Date()
+            let header = CoTMapHeader.parse(xml)
+            let seen = min(header?.time ?? now, now)
+            if let id = message.sourceServerID {
+                self.companionMapCache.receive(CompanionMapEvent(xml: xml, sourceServerID: id,
+                    sourceGeneration: message.sourceGeneration ?? 0, receivedAt: now))
+                self.saveCompanionMapCache()
             }
+            for entity in SitxCoT.parse(Data(xml.utf8), excluding: SitxClient.deviceID()) {
+                self.receiveEntity(entity, at: seen, sourceServerID: message.sourceServerID,
+                                   sourceGeneration: message.sourceGeneration ?? 0, expiresAt: header?.stale)
+            }
+            self.pruneIncomingEntities(now: now)
+        }
+        companionClient.onMapSnapshot = { [weak self] events, enabled in
+            guard let self else { return }
+            let ids = Set(enabled)
+            self.incomingEntities.removeAll { $0.sourceServerID.map { !ids.contains($0) } ?? false }
+            self.companionMapCache.prune(enabledServerIDs: ids)
+            for event in events where ids.contains(event.sourceServerID) && event.isCurrent(at: Date()) {
+                self.companionMapCache.receive(event)
+                for entity in SitxCoT.parse(Data(event.xml.utf8), excluding: SitxClient.deviceID()) {
+                    self.receiveEntity(entity, at: event.lastSeen, sourceServerID: event.sourceServerID,
+                                       sourceGeneration: event.sourceGeneration, expiresAt: event.header?.stale)
+                }
+            }
+            self.pruneIncomingEntities()
+            self.saveCompanionMapCache()
         }
         companionClient.onSourceRefresh = { [weak self] id, generation in
             self?.refreshSource(id, generation: generation)
         }
         companionClient.onBridgeRestart = { [weak self] in
-            self?.sourceGenerations = [:]
-            self?.incomingEntities.removeAll { $0.sourceServerID != nil }
+            guard let self else { return }
+            self.sourceGenerations = [:]
+            self.companionMapCache.resetGenerations()
+            self.incomingEntities = self.incomingEntities.map { entity in
+                guard entity.sourceServerID != nil else { return entity }
+                return IncomingMapEntity(id: entity.id, latitude: entity.latitude, longitude: entity.longitude,
+                    type: entity.type, lastSeen: entity.lastSeen, callSign: entity.callSign,
+                    team: entity.team, role: entity.role, sourceServerID: entity.sourceServerID,
+                    sourceGeneration: 0, expiresAt: entity.expiresAt, isUser: entity.isUser)
+            }
+            self.saveCompanionMapCache()
         }
         if let data = UserDefaults.standard.data(forKey: Self.markerStorageKey) {
             markers = (try? JSONDecoder().decode([WatchMarker].self, from: data)) ?? []
+        }
+        if let data = UserDefaults.standard.data(forKey: Self.companionCacheKey) {
+            do {
+                companionMapCache = try JSONDecoder().decode(CompanionMapCache.self, from: data)
+                companionMapCache.prune()
+                for event in companionMapCache.events {
+                    for entity in SitxCoT.parse(Data(event.xml.utf8), excluding: SitxClient.deviceID()) {
+                        receiveEntity(entity, at: event.lastSeen, sourceServerID: event.sourceServerID,
+                                      sourceGeneration: event.sourceGeneration, expiresAt: event.header?.stale)
+                    }
+                }
+            } catch { mapCacheError = "Unable to load cached map: \(error.localizedDescription)" }
         }
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
@@ -247,7 +299,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
         }
         networkPathMonitor.start(queue: DispatchQueue(label: "WearTAK.networkPath"))
-        incomingPruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        incomingPruneTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.pruneIncomingEntities() }
         }
         reportingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -266,6 +318,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func setAppActive(_ active: Bool) {
         isAppActive = active
+        if active { pruneIncomingEntities() }
         companionClient.setActive(active)
         multicastClient.setAppActive(active)
         sitxClient.setAppActive(active)
@@ -465,16 +518,24 @@ final class WatchSessionModel: NSObject, ObservableObject {
         return (bearing + 360).truncatingRemainder(dividingBy: 360)
     }
 
-    func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date(), sourceServerID: UUID? = nil, sourceGeneration: Int = 0) {
+    func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date(), sourceServerID: UUID? = nil,
+                       sourceGeneration: Int = 0, expiresAt: Date? = nil) {
         if let sourceServerID, sourceGeneration < sourceGenerations[sourceServerID, default: 0] { return }
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
         if let sourceServerID { refreshSource(sourceServerID, generation: sourceGeneration) }
+        if let existing = incomingEntities.first(where: { $0.id == payload.uid }),
+           existing.lastSeen > now { return }
+        let previous = incomingEntities.first(where: { $0.id == payload.uid })
+        let metadata = previous.map {
+            payload.inheritingMetadata(callSign: $0.callSign, team: $0.team, role: $0.role, isUser: $0.isUser)
+        } ?? payload
         let entity = IncomingMapEntity(
             id: payload.uid, latitude: payload.lat, longitude: payload.lon,
             type: payload.type, lastSeen: now,
-            callSign: payload.callSign, team: payload.team, role: payload.role,
-            sourceServerID: sourceServerID, sourceGeneration: sourceGeneration
+            callSign: metadata.callSign, team: metadata.team, role: metadata.role,
+            sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt,
+            isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type)
         )
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
             incomingEntities[index] = entity
@@ -489,13 +550,25 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func pruneIncomingEntities(now: Date = Date()) {
-        incomingEntities.removeAll { now.timeIntervalSince($0.lastSeen) > 300 }
+        incomingEntities.removeAll {
+            now.timeIntervalSince($0.lastSeen) > 300 || ($0.expiresAt.map { $0 <= now } ?? false)
+        }
+        companionMapCache.prune(now: now)
     }
 
     private func refreshSource(_ id: UUID, generation: Int) {
         guard generation > sourceGenerations[id, default: 0] else { return }
         sourceGenerations[id] = generation
         incomingEntities.removeAll { $0.sourceServerID == id && $0.sourceGeneration < generation }
+        companionMapCache.remove(sourceID: id, beforeGeneration: generation)
+        saveCompanionMapCache()
+    }
+
+    private func saveCompanionMapCache() {
+        do {
+            UserDefaults.standard.set(try JSONEncoder().encode(companionMapCache), forKey: Self.companionCacheKey)
+            mapCacheError = nil
+        } catch { mapCacheError = "Unable to save cached map: \(error.localizedDescription)" }
     }
 
     private func saveMarkers() {

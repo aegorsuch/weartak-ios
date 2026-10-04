@@ -48,6 +48,57 @@ struct EntityRelayPayload: Codable {
     var callSign: String? = nil
     var team: String? = nil
     var role: String? = nil
+    /// Parser-derived user classification; nil falls back to the CoT type.
+    var isUser: Bool? = nil
+
+    /// A same-uid update without `__group`/contact detail keeps the last known metadata,
+    /// so the user's dot color, role badge and Layers counts do not drop out.
+    func inheritingMetadata(callSign previousCallSign: String?, team previousTeam: String?,
+                            role previousRole: String?, isUser previousIsUser: Bool) -> Self {
+        var merged = self
+        if callSign?.isEmpty ?? true { merged.callSign = previousCallSign }
+        if (team?.isEmpty ?? true) && (role?.isEmpty ?? true) {
+            merged.team = previousTeam
+            merged.role = previousRole
+        }
+        if previousIsUser { merged.isUser = true }
+        return merged
+    }
+}
+
+/// Age of an incoming contact's last report (CoT event time for cached/relayed events).
+struct MapContactAge: Equatable {
+    static let staleThreshold = 60
+    let seconds: Int
+
+    init(lastSeen: Date, now: Date) {
+        let elapsed = now.timeIntervalSince(lastSeen)
+        seconds = elapsed.isFinite ? max(0, Int(min(elapsed, Double(Int32.max)))) : 0
+    }
+
+    var isStale: Bool { seconds > Self.staleThreshold }
+
+    var shortText: String {
+        if seconds < 60 { return "\(seconds)s" }
+        if seconds < 3600 { return "\(seconds / 60)m" }
+        return "\(seconds / 3600)h"
+    }
+
+    var spokenText: String {
+        func unit(_ value: Int, _ name: String) -> String { "\(value) \(name)\(value == 1 ? "" : "s") ago" }
+        if seconds < 60 { return unit(seconds, "second") }
+        if seconds < 3600 { return unit(seconds / 60, "minute") }
+        return unit(seconds / 3600, "hour")
+    }
+
+    func title(_ callSign: String) -> String { "\(callSign) ? \(shortText)" }
+
+    func accessibilityLabel(callSign: String, team: String?, role: String?) -> String {
+        let group = [team, role].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        let kind = group.isEmpty ? "user" : group + " user"
+        return "\(callSign), \(kind), last report \(spokenText)" + (isStale ? ", stale" : "")
+    }
 }
 
 struct MapUserGroup: Identifiable {

@@ -21,19 +21,19 @@ final class TAKServerConnection {
         sec_protocol_options_set_local_identity(tls.securityProtocolOptions, localIdentity)
         sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, endpoint.host)
         sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
-        let anchors: [SecCertificate]
-        if let trustedCA, let ca = SecCertificateCreateWithData(nil, trustedCA as CFData) { anchors = [ca] }
-        else { anchors = Array(identity.certificates.dropFirst()) }
+        let diagnostics = TLSConnectionDiagnostics()
+        let certificates = identity.certificates
         let host = endpoint.host
         sec_protocol_options_set_verify_block(tls.securityProtocolOptions, { _, securityTrust, complete in
             let trust = sec_trust_copy_ref(securityTrust).takeRetainedValue()
-            SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host as CFString))
-            if !anchors.isEmpty {
-                SecTrustSetAnchorCertificates(trust, anchors as CFArray)
-                SecTrustSetAnchorCertificatesOnly(trust, true)
+            do {
+                try CertificateStore.evaluateServerTrust(trust, host: host,
+                    certificates: certificates, trustedCA: trustedCA)
+                complete(true)
+            } catch {
+                diagnostics.record(error)
+                complete(false)
             }
-            var error: CFError?
-            complete(SecTrustEvaluateWithError(trust, &error))
         }, queue)
         let parameters = NWParameters(tls: tls, tcp: NWProtocolTCP.Options())
         guard let port = NWEndpoint.Port(rawValue: UInt16(endpoint.streamPort)) else {
@@ -53,7 +53,8 @@ final class TAKServerConnection {
                     self.onState?(true, "Connected")
                     self.receive(socket)
                 case .waiting(let error), .failed(let error):
-                    self.fail(socket, message: error.localizedDescription)
+                    self.fail(socket, message: diagnostics.message(
+                        endpoint: "TAK stream \(endpoint.host):\(endpoint.streamPort)", error: error))
                 case .cancelled:
                     self.ready = false
                 default: break

@@ -1,11 +1,14 @@
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 
 enum BridgeWire {
     static let version = 1
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -21,6 +24,10 @@ enum BridgeWire {
         var sourceGeneration: Int?
         var clientUID: String?
         var sessionID: UUID?
+        var mapEvents: [CompanionMapEvent]?
+        var enabledServerIDs: [UUID]?
+        var snapshotTruncated: Bool?
+        var refreshError: String?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -35,11 +42,24 @@ enum BridgeWire {
             if message.kind == .cot {
                 guard let xml = message.xml, CoTStreamFramer.isEvent(Data(xml.utf8)) else { throw Failure.invalidCoT }
             }
+            if let events = message.mapEvents {
+                guard message.kind == .mapSnapshot, events.count <= CompanionMapCache.maximumEvents,
+                      events.allSatisfy({ $0.isValid }) else { throw Failure.invalidCoT }
+            }
             return message
         }
     }
 
-    enum Failure: Error { case tooLarge, unsupportedVersion, invalidCoT }
+    enum Failure: LocalizedError {
+        case tooLarge, unsupportedVersion, invalidCoT
+        var errorDescription: String? {
+            switch self {
+            case .tooLarge: return "The Companion message exceeds the supported size."
+            case .unsupportedVersion: return "Update both WearTAK apps to matching versions."
+            case .invalidCoT: return "The Companion message contains invalid CoT map data."
+            }
+        }
+    }
 }
 
 struct CoTStreamFramer {
