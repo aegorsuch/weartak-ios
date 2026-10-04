@@ -276,6 +276,10 @@ struct SitxProtocolChecks {
         precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: false, cellular: true) == .cellular)
         precondition(DashboardNetworkConnectivity.resolve(satisfied: false, wifi: true, cellular: true) == .offline)
         precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: false, cellular: false) == .other)
+        precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: true, cellular: false,
+            phoneReachable: true) == .phone)
+        precondition(DashboardNetworkConnectivity.resolve(satisfied: false, wifi: false, cellular: false,
+            phoneReachable: true) == .phone)
         let pendingRelay = DashboardTAKStatus.resolve(multicastReady: false, sitxConnected: false,
             phoneRelayConnected: false, multicastEnabled: false, sitxEnabled: false, relaySelected: true)
         precondition(!pendingRelay.isConnected && pendingRelay.displayed == [.phoneRelay])
@@ -286,6 +290,24 @@ struct SitxProtocolChecks {
         let bleRelay = DashboardTAKStatus.resolve(multicastReady: false, sitxConnected: false,
             phoneRelayConnected: true, multicastEnabled: false, sitxEnabled: false, relaySelected: true)
         precondition(bleRelay.isConnected && bleRelay.active == [.phoneRelay])
+        for multicastReady in [false, true] {
+            for serverReady in [false, true] {
+                for serverConfigured in [false, true] {
+                    let state = DashboardTAKStatus.resolve(multicastReady: multicastReady,
+                        sitxConnected: false, phoneRelayConnected: serverReady,
+                        multicastEnabled: true, sitxEnabled: false, relaySelected: serverConfigured)
+                    precondition(state.usesServerIcon == (serverReady || serverConfigured))
+                    precondition(state.isServerConnected == serverReady)
+                }
+            }
+        }
+        precondition(pendingRelay.indicatorLabel == "TAK server not connected")
+        precondition(bothOutputs.usesServerIcon && bothOutputs.isServerConnected)
+        precondition(bleRelay.indicatorLabel == "TAK server connected")
+        precondition(DashboardLocationStatus.resolve(watchEnabled: false, phoneEnabled: false) == .disabled)
+        precondition(DashboardLocationStatus.resolve(watchEnabled: true, phoneEnabled: false) == .watch)
+        precondition(DashboardLocationStatus.resolve(watchEnabled: false, phoneEnabled: true) == .phone)
+        precondition(DashboardLocationStatus.resolve(watchEnabled: true, phoneEnabled: true) == .phone)
         print("PASS: dashboard metric persistence and network/TAK indicator states")
         precondition(settings.multicastEnabled)
         precondition(settings.multicastAddress == "239.2.3.1" && settings.multicastPort == 6969)
@@ -386,10 +408,10 @@ struct SitxProtocolChecks {
         let marker = WatchMarker(id: UUID(), kind: .neutral, latitude: 38.1, longitude: -77.1,
                                  title: "Point <&>", remark: "Watch's \"remark\"")
         try? await client.sendMarker(marker)
-        let markerXML = client.pendingEvents[marker.id.uuidString]!
-        let parsed = SitxCoT.parse(Data(markerXML.utf8), excluding: "self")
+        let sentMarkerXML = client.pendingEvents[marker.id.uuidString]!
+        let parsed = SitxCoT.parse(Data(sentMarkerXML.utf8), excluding: "self")
         precondition(parsed.count == 1 && parsed[0].uid == marker.id.uuidString && parsed[0].type == "a-n-G")
-        precondition(SitxCoT.parse(Data(markerXML.utf8), excluding: marker.id.uuidString).isEmpty)
+        precondition(SitxCoT.parse(Data(sentMarkerXML.utf8), excluding: marker.id.uuidString).isEmpty)
         try? await client.deleteMarker(uid: marker.id.uuidString)
         let deletion = try fields(client.pendingEvents[marker.id.uuidString]!)
         precondition(deletion.attributes["event"]?.first?["type"] == "t-x-d-d")

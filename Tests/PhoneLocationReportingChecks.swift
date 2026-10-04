@@ -49,6 +49,37 @@ struct PhoneLocationReportingChecks {
         precondition(PhoneReportingPolicy.interval(for: identity, speed: 10) == 10)
         changed = identity; changed.constantStrategy = true
         precondition(PhoneReportingPolicy.interval(for: changed, speed: 0) == 60)
+        var alerting = identity
+        alerting.alertingInterval = 15
+        alerting.alertActive = true
+        _ = try alerting.validated(now: now)
+        let decodedAlert = try WatchReportingIdentity.decode(contextValue: alerting.contextValue())
+        precondition(decodedAlert == alerting && !identity.hasSameSettings(as: alerting))
+        for constant in [false, true] {
+            alerting.constantStrategy = constant
+            for speed in [0.0, 1.0, 10.0] {
+                precondition(PhoneReportingPolicy.interval(for: alerting, speed: speed) == 15)
+            }
+        }
+        alerting.alertingInterval = 1
+        precondition(PhoneReportingPolicy.interval(for: alerting, speed: 0) == 10)
+        alerting.alertingInterval = 3600
+        precondition(PhoneReportingPolicy.interval(for: alerting, speed: 0) == 600)
+        alerting.alertingInterval = 0
+        expect(.invalidField("alerting interval")) { _ = try alerting.validated(now: now) }
+        alerting.alertingInterval = nil
+        expect(.invalidField("alerting interval")) { _ = try alerting.validated(now: now) }
+        alerting = identity
+        alerting.alertingInterval = 15
+        alerting.alertActive = false
+        precondition(PhoneReportingPolicy.interval(for: alerting, speed: 1) == 30)
+        alerting.constantStrategy = true
+        precondition(PhoneReportingPolicy.interval(for: alerting, speed: 1) == 60)
+        var legacyPayload = try JSONSerialization.jsonObject(with: identity.contextValue()) as! [String: Any]
+        legacyPayload.removeValue(forKey: "alertingInterval")
+        legacyPayload.removeValue(forKey: "alertActive")
+        let legacy = try WatchReportingIdentity.decode(contextValue: JSONSerialization.data(withJSONObject: legacyPayload))
+        precondition(legacy == identity)
         precondition(PhoneReportingPolicy.staleLifetime(interval: 30) == 150)
         precondition(PhoneReportingPolicy.staleLifetime(interval: 86_400) == 1_860)
         precondition(PhoneReportingPolicy.isDue(lastSentAt: nil, interval: 30, now: now))
@@ -138,7 +169,7 @@ struct PhoneLocationReportingChecks {
         if case .blocked = gate(active: false) {} else { fatalError("While-in-use must not start from background") }
         precondition(gate(active: false, running: true) == .run)
         precondition(gate(auth: .always, active: false) == .run)
-        print("PASS: watch identity guards, bounded intervals, fix accuracy/time guards, PLI shape/timestamps, duplicate PLI suppression and start/stop gating")
+        print("PASS: watch identity guards, alert override and cancellation, legacy identity compatibility, bounded intervals, fix accuracy/time guards, PLI shape/timestamps, duplicate PLI suppression and start/stop gating")
     }
 
     private static func expect(_ failure: WatchReportingIdentity.Failure, _ body: () throws -> Void) {

@@ -11,9 +11,7 @@ enum EnrollmentClient {
             throw CompanionFailure.message("Enter a username, password, and valid enrollment port.")
         }
         let trustDelegate = EnrollmentTrustDelegate(host: host, ca: trustedCA)
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 60
+        let configuration = TAKHTTPS.configuration(requestTimeout: 30, resourceTimeout: 60)
         let session = URLSession(configuration: configuration, delegate: trustDelegate, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
         var url = URLComponents()
@@ -141,14 +139,12 @@ private final class EnrollmentTrustDelegate: NSObject, URLSessionDelegate, URLSe
             completionHandler(.performDefaultHandling, nil)
             return
         }
-        SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host as CFString))
-        if let ca, let certificate = SecCertificateCreateWithData(nil, ca as CFData) {
-            SecTrustSetAnchorCertificates(trust, [certificate] as CFArray)
-            SecTrustSetAnchorCertificatesOnly(trust, true)
+        do {
+            try CertificateStore.evaluateServerTrust(trust, host: host, certificates: [], trustedCA: ca)
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } catch {
+            completionHandler(.cancelAuthenticationChallenge, nil)
         }
-        var error: CFError?
-        if SecTrustEvaluateWithError(trust, &error) { completionHandler(.useCredential, URLCredential(trust: trust)) }
-        else { completionHandler(.cancelAuthenticationChallenge, nil) }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,

@@ -6,7 +6,7 @@ import FoundationXML
 /// The watch user's TAK identity and reporting settings, published by the watch through
 /// WatchConnectivity application context. Companion reports phone GPS only under this identity.
 struct WatchReportingIdentity: Codable, Equatable {
-    static let contextKey = "WearTAKWatch.reportingIdentity"
+    nonisolated static let contextKey = "WearTAKWatch.reportingIdentity"
     static let currentVersion = 1
     static let maximumAge: TimeInterval = 7 * 86_400
     static let maximumClockSkew: TimeInterval = 300
@@ -23,6 +23,8 @@ struct WatchReportingIdentity: Codable, Equatable {
     var onFootInterval: Int
     var vehicleInterval: Int
     var issuedAt: Date
+    var alertingInterval: Int?
+    var alertActive: Bool?
 
     /// Matches the watch's own PLI callsign fallback so both sources describe the same user.
     var resolvedCallSign: String {
@@ -49,6 +51,12 @@ struct WatchReportingIdentity: Codable, Equatable {
         guard Self.isSafe(role, maximum: 64, allowEmpty: true) else { throw Failure.invalidField("role") }
         for value in [constantInterval, stationaryInterval, onFootInterval, vehicleInterval] where !(1...86_400).contains(value) {
             throw Failure.invalidField("reporting interval")
+        }
+        if let alertingInterval, !(1...86_400).contains(alertingInterval) {
+            throw Failure.invalidField("alerting interval")
+        }
+        if alertActive == true, alertingInterval == nil {
+            throw Failure.invalidField("alerting interval")
         }
         guard issuedAt.timeIntervalSince(now) <= Self.maximumClockSkew else { throw Failure.futureDated }
         guard now.timeIntervalSince(issuedAt) <= Self.maximumAge else { throw Failure.stale }
@@ -114,7 +122,9 @@ enum PhoneReportingPolicy {
     /// Uses the watch's reporting strategy, bounded so the phone neither floods servers nor goes silent.
     static func interval(for identity: WatchReportingIdentity, speed: Double) -> TimeInterval {
         let base: Int
-        if identity.constantStrategy { base = identity.constantInterval }
+        if identity.alertActive == true, let alertingInterval = identity.alertingInterval {
+            base = alertingInterval
+        } else if identity.constantStrategy { base = identity.constantInterval }
         else if speed < 0.5 { base = identity.stationaryInterval }
         else if speed < 2.5 { base = identity.onFootInterval }
         else { base = identity.vehicleInterval }

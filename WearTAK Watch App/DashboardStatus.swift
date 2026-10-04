@@ -10,7 +10,21 @@ enum DashboardPhysiologySeverity {
     }
 }
 
+enum DashboardLocationStatus: String {
+    case watch = "Watch location enabled"
+    case phone = "Phone location enabled"
+    case disabled = "Location disabled or unavailable"
+
+    var symbol: String { self == .disabled ? "location.slash" : "location.fill" }
+
+    static func resolve(watchEnabled: Bool, phoneEnabled: Bool) -> Self {
+        if phoneEnabled { return .phone }
+        return watchEnabled ? .watch : .disabled
+    }
+}
+
 enum DashboardNetworkConnectivity: String {
+    case phone = "Phone reachable"
     case wifi = "WiFi"
     case cellular = "Cellular"
     case offline = "No network connection"
@@ -18,6 +32,7 @@ enum DashboardNetworkConnectivity: String {
 
     var symbol: String {
         switch self {
+        case .phone: return "iphone.radiowaves.left.and.right"
         case .wifi: return "wifi"
         case .cellular: return "antenna.radiowaves.left.and.right"
         case .offline: return "wifi.slash"
@@ -25,7 +40,8 @@ enum DashboardNetworkConnectivity: String {
         }
     }
 
-    static func resolve(satisfied: Bool, wifi: Bool, cellular: Bool) -> Self {
+    static func resolve(satisfied: Bool, wifi: Bool, cellular: Bool, phoneReachable: Bool = false) -> Self {
+        if phoneReachable { return .phone }
         guard satisfied else { return .offline }
         if wifi { return .wifi }
         if cellular { return .cellular }
@@ -53,6 +69,17 @@ struct DashboardTAKStatus: Equatable {
 
     var displayed: [DashboardTAKTransport] { active.isEmpty ? configured : active }
     var isConnected: Bool { !active.isEmpty }
+    var usesServerIcon: Bool {
+        active.contains { $0 != .multicast } || configured.contains { $0 != .multicast }
+    }
+    var isServerConnected: Bool { active.contains { $0 != .multicast } }
+    var indicatorLabel: String {
+        if usesServerIcon { return isServerConnected ? "TAK server connected" : "TAK server not connected" }
+        if configured.contains(.multicast) || active.contains(.multicast) {
+            return active.contains(.multicast) ? "TAK multicast ready" : "TAK multicast not ready"
+        }
+        return "No TAK connection"
+    }
     var label: String {
         if isConnected { return active.map(\.rawValue).joined(separator: " and ") + " connected" }
         if configured == [.phoneRelay] { return "TAK BLE relay incomplete" }

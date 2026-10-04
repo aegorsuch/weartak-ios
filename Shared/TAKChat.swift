@@ -12,6 +12,7 @@ struct TAKChatMessage: Identifiable, Equatable {
     let sentAt: Date
 
     static let maximumTextBytes = 2_000
+    static let quickMessages = ["Roger", "Negative", "Objective Sighted", "In Position"]
 
     static func outgoing(senderUID: String, senderCallSign: String, recipientUID: String,
                          recipientCallSign: String, text: String, now: Date = Date()) throws -> String {
@@ -62,6 +63,49 @@ struct TAKChatMessage: Identifiable, Equatable {
     enum ChatError: LocalizedError {
         case invalidMessage
         var errorDescription: String? { "Enter a message of 1 to 2,000 UTF-8 bytes for a different contact." }
+    }
+}
+
+struct TAKChatInbox<Conversation: Hashable> {
+    private(set) var messages: [Conversation: [TAKChatMessage]] = [:]
+    private(set) var unreadCounts: [Conversation: Int] = [:]
+    private var visibleConversation: Conversation?
+
+    var unreadCount: Int { unreadCounts.values.reduce(0, +) }
+
+    var conversations: [Conversation] {
+        messages.keys.sorted {
+            (messages[$0]?.last?.sentAt ?? .distantPast) > (messages[$1]?.last?.sentAt ?? .distantPast)
+        }
+    }
+
+    mutating func setVisible(_ conversation: Conversation, visible: Bool) {
+        if visible {
+            visibleConversation = conversation
+            unreadCounts.removeValue(forKey: conversation)
+        } else if visibleConversation == conversation {
+            visibleConversation = nil
+        }
+    }
+
+    // Returns true only when a new incoming message should notify the user.
+    mutating func record(_ message: TAKChatMessage, conversation: Conversation, ownUID: String) -> Bool {
+        guard message.senderUID == ownUID || message.recipientUID == ownUID else { return false }
+        var history = messages[conversation] ?? []
+        guard !history.contains(where: { $0.id == message.id }) else { return false }
+        history.append(message)
+        history.sort { $0.sentAt < $1.sentAt }
+        messages[conversation] = Array(history.suffix(50))
+        let notify = message.senderUID != ownUID && visibleConversation != conversation
+        if notify {
+            unreadCounts[conversation] = min((unreadCounts[conversation] ?? 0) + 1, 50)
+        }
+        if messages.count > 50,
+           let oldest = messages.min(by: { ($0.value.last?.sentAt ?? .distantPast) < ($1.value.last?.sentAt ?? .distantPast) })?.key {
+            messages.removeValue(forKey: oldest)
+            unreadCounts.removeValue(forKey: oldest)
+        }
+        return notify && messages[conversation] != nil
     }
 }
 

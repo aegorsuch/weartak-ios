@@ -5,6 +5,7 @@ import WatchConnectivity
 @MainActor
 final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessionDelegate {
     @Published private(set) var configured = false
+    @Published private(set) var isPhoneReachable = false
     @Published private(set) var serverReady = false
     @Published private(set) var status = "Configure on phone"
     @Published private(set) var channelServers: [TAKChannelServer] = []
@@ -14,6 +15,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     @Published private(set) var mapRefreshError: String?
     @Published private(set) var mapLastChecked: Date?
     @Published private(set) var phoneReportingStatus: String?
+    @Published private(set) var phoneLocationEnabled = false
     @Published private(set) var identitySyncError: String?
     var onStateChange: (() -> Void)?
     var onCoT: ((BridgeWire.Message) -> Void)?
@@ -32,6 +34,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     private var selection: AnyCancellable?
     private var identitySubscription: AnyCancellable?
     private var publishedIdentity: WatchReportingIdentity?
+    private var alertActive = false
     private var handshakeInFlight = false
     private var pending: [UUID: CheckedContinuation<BridgeWire.Message, Error>] = [:]
     private var timeouts: [UUID: Task<Void, Never>] = [:]
@@ -72,6 +75,12 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         else { publishIdentity(); refresh() }
     }
 
+    func setAlertActive(_ active: Bool) {
+        guard alertActive != active else { return }
+        alertActive = active
+        publishIdentity()
+    }
+
     /// Shares this watch's TAK UID, callsign, team, role and reporting settings so Companion can report
     /// phone GPS as this same user. Application context is delivered even when Companion is not running.
     func publishIdentity(force: Bool = false) {
@@ -83,7 +92,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             constantInterval: settings.constantReportingInterval,
             stationaryInterval: settings.stationaryReportingInterval,
             onFootInterval: settings.onFootReportingInterval,
-            vehicleInterval: settings.vehicleReportingInterval, issuedAt: Date())
+            vehicleInterval: settings.vehicleReportingInterval, issuedAt: Date(),
+            alertingInterval: settings.alertingReportingInterval, alertActive: alertActive)
         if !force, let published = publishedIdentity, published.hasSameSettings(as: identity),
            identity.issuedAt.timeIntervalSince(published.issuedAt) < 3_600 { return }
         do {
@@ -96,6 +106,9 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     private func refresh() {
+        let reachable = WCSession.isSupported() &&
+            WCSession.default.activationState == .activated && WCSession.default.isReachable
+        if isPhoneReachable != reachable { isPhoneReachable = reachable }
         guard active, settings.relayProvider == .companion, WCSession.default.activationState == .activated,
               WCSession.default.isReachable else {
             if active, settings.relayProvider == .companion {
@@ -106,6 +119,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         }
         if lastConfirmation.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
             serverReady = false
+            phoneLocationEnabled = false
             onStateChange?()
         }
         guard !handshakeInFlight else { return }
@@ -161,6 +175,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         if let configured = message.configured { self.configured = configured }
         serverReady = message.ready == true
         if let reporting = message.phoneReporting { phoneReportingStatus = reporting }
+        phoneLocationEnabled = message.phoneLocationEnabled == true
         lastConfirmation = Date()
         status = message.detail ?? (serverReady ? "Connected" : "Not connected")
         onStateChange?()
@@ -175,6 +190,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
 
     private func invalidate() {
         serverReady = false
+        phoneLocationEnabled = false
         lastConfirmation = nil
         status = configured ? "Companion not connected" : "Configure on phone"
         for task in timeouts.values { task.cancel() }

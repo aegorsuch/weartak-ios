@@ -138,7 +138,7 @@ private struct WiFiBatteryPreferencesView: View {
     }
 }
 
-private struct ReportingStrategyView: View {
+struct ReportingStrategyView: View {
     @ObservedObject var settings: AppSettings
 
     private let commonIntervals = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]
@@ -497,17 +497,7 @@ struct NetworkPreferencesView: View {
             NavigationLink {
                 RelayProviderView(model: model, settings: settings)
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("TAK Relay (\(settings.relayProvider.rawValue))")
-                    if settings.relayProvider == .companion && !model.companionServerConfigured {
-                        Text("Configure on phone")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if settings.relayProvider == .companion {
-                        CompanionPhoneGPSStatusView(client: model.companionClient)
-                    }
-                }
+                Text("TAK Relay (\(settings.relayProvider.rawValue))")
             }
             NavigationLink {
                 MulticastPreferencesView(settings: settings)
@@ -658,22 +648,6 @@ private struct RelayProviderView: View {
             }
         }
         .navigationTitle("TAK Relay")
-    }
-}
-
-private struct CompanionPhoneGPSStatusView: View {
-    @ObservedObject var client: WatchCompanionOutput
-
-    var body: some View {
-        if let error = client.identitySyncError {
-            Text(error)
-                .font(.caption2)
-                .foregroundStyle(.orange)
-        } else if let status = client.phoneReportingStatus {
-            Text("Phone GPS: \(status)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
     }
 }
 

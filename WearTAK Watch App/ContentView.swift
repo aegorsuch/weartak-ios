@@ -42,13 +42,7 @@ struct ContentView: View {
         .sheet(isPresented: $showPointTypePicker) {
             NavigationStack {
                 PointTypePickerView(model: model) { kind in
-                    guard let coordinate = model.lastLocation?.coordinate else {
-                        model.requestLocation()
-                        return false
-                    }
-                    guard model.addMarker(at: coordinate, kind: kind, title: model.defaultPointTitle(), remark: "") else { return false }
                     showToast("\(kind.rawValue) point dropped")
-                    return true
                 }
             }
         }
@@ -56,7 +50,8 @@ struct ContentView: View {
             model.setAppActive(true)
             model.requestLocation()
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--preview-point-picker") {
+            if ProcessInfo.processInfo.arguments.contains("--preview-point-picker") ||
+                ProcessInfo.processInfo.arguments.contains("--preview-point-confirmation") {
                 showPointTypePicker = true
             }
             if ProcessInfo.processInfo.arguments.contains("--preview-map-filters") {
@@ -208,11 +203,8 @@ private struct WatchDashboardView: View {
                 NavigationLink {
                     NetworkPreferencesView(model: model, settings: settings, sitxClient: model.sitxClient)
                 } label: {
-                    Image(systemName: model.networkConnectivity.symbol)
-                        .font(.system(size: small ? 12 : 15, weight: .semibold))
-                        .frame(width: 28, height: small ? 12 : 16)
+                    DashboardNetworkIndicator(model: model, small: small)
                 }
-                .accessibilityLabel("Network preferences: \(model.networkConnectivity.rawValue)")
             }
             Spacer(minLength: 0)
             NavigationLink {
@@ -245,13 +237,11 @@ private struct WatchDashboardView: View {
                 : "Select metric. Heart rate \(physiology.heartRate.map { "\($0) beats per minute" } ?? "unavailable")")
             Spacer(minLength: 0)
             VStack(spacing: small ? 2 : 3) {
-                Button { model.requestLocation() } label: {
-                    Image(systemName: "location.fill")
-                        .font(.system(size: small ? 18 : 20))
-                        .foregroundStyle(model.lastLocation == nil ? .gray : .white)
-                        .frame(width: 28, height: small ? 20 : 24)
+                NavigationLink {
+                    ReportingStrategyView(settings: settings)
+                } label: {
+                    DashboardLocationIndicator(model: model, small: small)
                 }
-                .accessibilityLabel("Refresh location")
                 TimelineView(.periodic(from: .now, by: 30)) { _ in
                     let battery = WKInterfaceDevice.current().batteryLevel
                     Image(systemName: battery < 0 ? "battery.0percent" : battery < 0.25 ? "battery.25percent" : battery < 0.5 ? "battery.50percent" : battery < 0.75 ? "battery.75percent" : "battery.100percent")
@@ -290,8 +280,18 @@ private struct WatchDashboardView: View {
                     ChatView(model: model, settings: settings)
                 } label: {
                     roundControl("message.fill", color: accent, size: small ? 28 : 34)
+                        .overlay(alignment: .topTrailing) {
+                            if model.unreadChatCount > 0 {
+                                Text(model.unreadChatCount > 99 ? "99+" : "\(model.unreadChatCount)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(3)
+                                    .background(.red, in: Capsule())
+                                    .offset(x: 4, y: -3)
+                            }
+                        }
                 }
-                .accessibilityLabel("Chat")
+                .accessibilityLabel("Chat, \(model.unreadChatCount) unread messages")
             }
             NavigationLink {
                 SettingsView(model: model, settings: settings)
@@ -424,24 +424,70 @@ private struct DashboardMetricPreferencesView: View {
     }
 }
 
+private struct DashboardLocationIndicator: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var companion: WatchCompanionOutput
+    let small: Bool
+
+    init(model: WatchSessionModel, small: Bool) {
+        self.model = model
+        companion = model.companionClient
+        self.small = small
+    }
+
+    var body: some View {
+        let state = DashboardLocationStatus.resolve(
+            watchEnabled: model.watchLocationEnabled,
+            phoneEnabled: companion.isPhoneReachable && companion.phoneLocationEnabled
+        )
+        Image(systemName: state.symbol)
+            .font(.system(size: small ? 18 : 20))
+            .foregroundStyle(state == .disabled ? .gray : .white)
+            .frame(width: 28, height: small ? 20 : 24)
+            .accessibilityLabel("\(state.rawValue). Reporting settings")
+    }
+}
+
+private struct DashboardNetworkIndicator: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var companion: WatchCompanionOutput
+    let small: Bool
+
+    init(model: WatchSessionModel, small: Bool) {
+        self.model = model
+        companion = model.companionClient
+        self.small = small
+    }
+
+    var body: some View {
+        let state: DashboardNetworkConnectivity = companion.isPhoneReachable ? .phone : model.networkConnectivity
+        Image(systemName: state.symbol)
+            .font(.system(size: small ? 12 : 15, weight: .semibold))
+            .frame(width: 28, height: small ? 12 : 16)
+            .accessibilityLabel("Network preferences: \(state.rawValue)")
+    }
+}
+
 private struct DashboardTAKIndicator: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     @ObservedObject var sitx: SitxClient
     @ObservedObject var multicast: MulticastTAKTransport
+    @ObservedObject var companion: WatchCompanionOutput
 
     init(model: WatchSessionModel, settings: AppSettings) {
         self.model = model
         self.settings = settings
         sitx = model.sitxClient
         multicast = model.multicastClient
+        companion = model.companionClient
     }
 
     var body: some View {
         let state = DashboardTAKStatus.resolve(
             multicastReady: multicast.isReady,
             sitxConnected: sitx.isSitxConnected,
-            phoneRelayConnected: model.isPhoneRelayConnected,
+            phoneRelayConnected: companion.isReady,
             multicastEnabled: settings.multicastEnabled,
             sitxEnabled: settings.sitxEnabled,
             relaySelected: settings.relayProvider != .notSet
@@ -450,27 +496,25 @@ private struct DashboardTAKIndicator: View {
             NetworkPreferencesView(model: model, settings: settings, sitxClient: sitx)
         } label: {
             ZStack(alignment: .bottomTrailing) {
-                HStack(spacing: 0) {
-                    if state.displayed.isEmpty {
-                        Image(systemName: "network")
-                            .frame(width: 24)
-                    } else {
-                        ForEach(state.displayed, id: \.self) { output in
-                            Image(systemName: output.symbol)
-                                .frame(width: CGFloat(24 / state.displayed.count))
-                        }
-                    }
+                if state.usesServerIcon {
+                    Image("TAKLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
+                    Image(systemName: state.isServerConnected ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(state.isServerConnected ? .green : .red)
+                        .background(.black, in: Circle())
+                        .offset(x: 3, y: 2)
+                } else {
+                    Image(systemName: state.configured.isEmpty && state.active.isEmpty
+                          ? "network" : DashboardTAKTransport.multicast.symbol)
+                        .font(.system(size: 19))
+                        .foregroundStyle(state.isConnected ? Color(red: 0.67, green: 0.80, blue: 0.98) : .gray)
                 }
-                .font(.system(size: state.displayed.count > 2 ? 8 : state.displayed.count > 1 ? 11 : 19))
-                .foregroundStyle(state.isConnected ? Color(red: 0.67, green: 0.80, blue: 0.98) : .gray)
-                Image(systemName: state.isConnected ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(state.isConnected ? .green : .orange)
-                    .background(.black, in: Circle())
-                    .offset(x: 3, y: 2)
             }
         }
-        .accessibilityLabel(state.label + ". Network preferences")
+        .accessibilityLabel(state.indicatorLabel + ". Network preferences")
     }
 }
 
@@ -509,6 +553,28 @@ private struct ChatView: View {
 
     var body: some View {
         List {
+            ForEach(model.chatConversations) { conversation in
+                NavigationLink {
+                    ContactChatView(model: model, uid: conversation.uid, route: conversation.route,
+                                    title: model.chatTitle(for: conversation))
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(model.chatTitle(for: conversation))
+                            if let unread = model.unreadChatCounts[conversation], unread > 0 {
+                                Text("\(unread)")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(3)
+                                    .background(.red, in: Capsule())
+                            }
+                        }
+                        if let message = model.contactMessages[conversation]?.last {
+                            Text(message.text).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                }
+            }
             NavigationLink {
                 TacticalMapView(model: model, settings: settings)
             } label: {
@@ -624,56 +690,7 @@ private struct TacticalMapView: View {
         ZStack {
             MapReader { proxy in
                 Map(position: $cameraPosition, selection: $selectedMapPoint) {
-                    if let location = model.lastLocation {
-                        if let target = model.bloodhoundTarget {
-                            MapPolyline(coordinates: [location.coordinate, target.coordinate])
-                                .stroke(settings.teamColor.mapColor, lineWidth: 3)
-                        }
-                        Annotation("Self", coordinate: location.coordinate, anchor: .center) {
-                            Image(systemName: "location.fill")
-                                .font(.title3)
-                                .foregroundStyle(settings.teamColor.mapColor)
-                                .padding(4)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-                        .tag(MapPointSelection.selfMarker)
-                    }
-                    ForEach(model.markers) { marker in
-                        Annotation(marker.displayTitle, coordinate: marker.coordinate, anchor: .center) {
-                            ZStack {
-                                if marker.id == model.bloodhoundTargetID,
-                                   let location = model.lastLocation,
-                                   let reading = model.bloodhoundReading(from: location) {
-                                    Image(systemName: "arrowtriangle.up.fill")
-                                        .font(.system(size: 18, weight: .bold))
-                                        .foregroundStyle(settings.teamColor.mapColor)
-                                        .shadow(color: .black, radius: 2)
-                                        .offset(y: 22)
-                                        .rotationEffect(.degrees(reading.bearingDegrees - cameraHeading))
-                                        .allowsHitTesting(false)
-                                        .accessibilityLabel("Direction to Bloodhound target")
-                                }
-                                MapPointSymbol(kind: marker.kind)
-                            }
-                        }
-                            .tag(MapPointSelection.marker(marker.id))
-                    }
-                    ForEach(model.incomingEntities) { entity in
-                        if entity.isUser {
-                            if settings.isMapUserVisible(team: entity.team, role: entity.role) {
-                                Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
-                                    IncomingUserMarker(title: incomingMapTitle(entity), lastSeen: entity.lastSeen,
-                                                       team: entity.teamColor, badge: entity.roleBadge,
-                                                       teamName: entity.team, role: entity.role)
-                                }
-                                .annotationTitles(.hidden)
-                                .tag(MapPointSelection.contact(entity.id))
-                            }
-                        } else {
-                            Marker(incomingMapTitle(entity), systemImage: "mappin", coordinate: entity.coordinate)
-                                .tint(incomingMapColor(entity))
-                        }
-                    }
+                    tacticalMapContent
                 }
                 .onMapCameraChange(frequency: .continuous) { context in
                     visibleRegion = context.region
@@ -819,11 +836,11 @@ private struct TacticalMapView: View {
                 } else {
                     SelfCoordinateView(coordinate: draft.coordinate)
                 }
-                .sheet(item: $contactSelection) { selection in
-                    NavigationStack {
-                        MapContactDetailView(model: model, uid: selection.id)
-                    }
-                }
+            }
+        }
+        .sheet(item: $contactSelection) { selection in
+            NavigationStack {
+                MapContactDetailView(model: model, uid: selection.id)
             }
         }
         .sheet(isPresented: $showLayersMenu) {
@@ -843,6 +860,65 @@ private struct TacticalMapView: View {
                 #else
                 MapChannelsMenuView(client: model.companionClient, settings: settings)
                 #endif
+            }
+        }
+    }
+
+    @MapContentBuilder
+    private var tacticalMapContent: some MapContent {
+        if let location = model.lastLocation {
+            if let target = model.bloodhoundTarget {
+                MapPolyline(coordinates: [location.coordinate, target.coordinate])
+                    .stroke(settings.teamColor.mapColor, lineWidth: 3)
+            }
+            Annotation("Self", coordinate: location.coordinate, anchor: .center) {
+                Image(systemName: model.headingDegrees == nil ? "circle.fill" : "location.north.fill")
+                    .font(.title3)
+                    .foregroundStyle(settings.teamColor.mapColor)
+                    .rotationEffect(.degrees(model.headingDegrees.map { $0 - cameraHeading } ?? 0))
+                    .padding(4)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .accessibilityLabel(model.headingDegrees.map {
+                        "Self, \(settings.teamColor.rawValue), heading \(Int($0.rounded())) degrees"
+                    } ?? "Self, \(settings.teamColor.rawValue), compass unavailable")
+            }
+            .annotationTitles(.hidden)
+            .tag(MapPointSelection.selfMarker)
+        }
+        ForEach(model.markers) { marker in
+            Annotation(marker.displayTitle, coordinate: marker.coordinate, anchor: .center) {
+                ZStack {
+                    if marker.id == model.bloodhoundTargetID,
+                       let location = model.lastLocation,
+                       let reading = model.bloodhoundReading(from: location) {
+                        Image(systemName: "arrowtriangle.up.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(settings.teamColor.mapColor)
+                            .shadow(color: .black, radius: 2)
+                            .offset(y: 22)
+                            .rotationEffect(.degrees(reading.bearingDegrees - cameraHeading))
+                            .allowsHitTesting(false)
+                            .accessibilityLabel("Direction to Bloodhound target")
+                    }
+                    MapPointSymbol(kind: marker.kind)
+                }
+            }
+            .tag(MapPointSelection.marker(marker.id))
+        }
+        ForEach(model.incomingEntities) { entity in
+            if entity.isUser {
+                if settings.isMapUserVisible(team: entity.team, role: entity.role) {
+                    Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
+                        IncomingUserMarker(title: incomingMapTitle(entity), lastSeen: entity.lastSeen,
+                                           team: entity.teamColor, badge: entity.roleBadge,
+                                           teamName: entity.team, role: entity.role)
+                    }
+                    .annotationTitles(.hidden)
+                    .tag(MapPointSelection.contact(entity.id))
+                }
+            } else {
+                Marker(incomingMapTitle(entity), systemImage: "mappin", coordinate: entity.coordinate)
+                    .tint(incomingMapColor(entity))
             }
         }
     }
@@ -990,11 +1066,8 @@ private struct MapChannelsMenuView: View {
 
     var body: some View {
         List {
-            if settings.relayProvider != .companion {
-                Text("Channels unavailable for this relay.")
-                    .foregroundStyle(.secondary)
-            } else if !client.isReady {
-                Text(client.status)
+            if settings.relayProvider != .companion || !client.isReady {
+                Text("Connect to a TAK Server to configure channels.")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(client.channelServers) { server in
@@ -1011,7 +1084,7 @@ private struct MapChannelsMenuView: View {
                     }
                 }
                 if client.channelServers.isEmpty && !client.channelsLoading && client.channelError == nil {
-                    Text("No enabled TAK servers")
+                    Text("Connect to a TAK Server to configure channels.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -1126,12 +1199,6 @@ private struct MapContactDetailView: View {
                 Button(model.bloodhoundContactID == uid ? "Stop Bloodhound" : "Bloodhound to Contact") {
                     model.toggleContactBloodhound(uid: uid)
                 }
-                TimelineView(.periodic(from: .now, by: 5)) { context in
-                    Text("Last position \(MapContactAge(lastSeen: contact.lastSeen, now: context.date).spokenText)")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let team = contact.team { Text("Team: \(team)").font(.caption) }
-                if let role = contact.role { Text("Role: \(role)").font(.caption) }
             } else {
                 Text("Contact unavailable or expired.").foregroundStyle(.secondary)
             }
@@ -1149,6 +1216,8 @@ private struct ContactChatView: View {
     @State private var sending = false
     @State private var error: String?
     @State private var sent = false
+    @Environment(\.scenePhase) private var scenePhase
+    private var conversation: ContactConversation { ContactConversation(uid: uid, route: route) }
 
     var body: some View {
         List {
@@ -1177,8 +1246,23 @@ private struct ContactChatView: View {
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
             if sent { Text("Accepted by transport; recipient delivery is not confirmed.").font(.caption) }
+            Section("Quick Messages") {
+                ForEach(TAKChatMessage.quickMessages, id: \.self) { message in
+                    Button(message) {
+                        text = message
+                        error = nil
+                        sent = false
+                    }
+                    .disabled(sending)
+                }
+            }
         }
         .navigationTitle(title)
+        .onAppear { model.setConversationVisible(conversation, visible: scenePhase == .active) }
+        .onDisappear { model.setConversationVisible(conversation, visible: false) }
+        .onChange(of: scenePhase) { _, phase in
+            model.setConversationVisible(conversation, visible: phase == .active)
+        }
     }
 }
 

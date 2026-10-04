@@ -1,12 +1,13 @@
+import CoreLocation
 import SwiftUI
 
 struct PointTypePickerView: View {
     @ObservedObject var model: WatchSessionModel
-    let onSelect: (MarkerKind) -> Bool
+    let onDrop: (MarkerKind) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showTools = false
     @State private var locationUnavailable = false
-    @State private var isSelecting = false
+    @State private var dropDraft: PointDropDraft?
 
     var body: some View {
         GeometryReader { geometry in
@@ -54,12 +55,26 @@ struct PointTypePickerView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .navigationDestination(isPresented: $showTools) { PointToolsView(model: model) }
+        .sheet(item: $dropDraft) { draft in
+            NavigationStack {
+                PointDropConfirmationView(model: model, draft: draft) {
+                    onDrop(draft.kind)
+                    dismiss()
+                }
+            }
+        }
         .alert("Location unavailable", isPresented: $locationUnavailable) {
             Button("OK", role: .cancel) {}
         }
         .onAppear {
             #if DEBUG
             showTools = ProcessInfo.processInfo.arguments.contains("--preview-marker-tools")
+            if ProcessInfo.processInfo.arguments.contains("--preview-point-confirmation") {
+                dropDraft = PointDropDraft(
+                    coordinate: CLLocationCoordinate2D(latitude: 41.88, longitude: -87.64),
+                    kind: .unknown
+                )
+            }
             #endif
         }
     }
@@ -67,13 +82,14 @@ struct PointTypePickerView: View {
     private func sector(_ kind: MarkerKind, angle: Double, diameter: CGFloat) -> some View {
         let shape = PointTypeSector(start: .degrees(angle - 43), end: .degrees(angle + 43))
         return Button {
-            guard !isSelecting else { return }
-            isSelecting = true
-            if onSelect(kind) { dismiss() }
-            else {
-                isSelecting = false
+            guard dropDraft == nil else { return }
+            guard let coordinate = model.lastLocation?.coordinate,
+                  CLLocationCoordinate2DIsValid(coordinate) else {
+                model.requestLocation()
                 locationUnavailable = true
+                return
             }
+            dropDraft = PointDropDraft(coordinate: coordinate, kind: kind)
         } label: {
             shape.fill(Color(white: 0.26))
                 .overlay {
@@ -88,8 +104,54 @@ struct PointTypePickerView: View {
                 }
                 .contentShape(shape)
         }
-        .disabled(isSelecting)
         .accessibilityLabel("Drop \(kind.rawValue) point")
+    }
+}
+
+struct PointDropDraft: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let kind: MarkerKind
+}
+
+struct PointDropConfirmationView: View {
+    @ObservedObject var model: WatchSessionModel
+    let draft: PointDropDraft
+    let onDrop: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var remark = ""
+    @State private var locationUnavailable = false
+    @State private var isDropping = false
+
+    var body: some View {
+        List {
+            TextField("Title (optional)", text: $title)
+            TextField("Remark (optional)", text: $remark)
+            Button("Drop") {
+                guard !isDropping else { return }
+                isDropping = true
+                let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard model.addMarker(
+                    at: draft.coordinate,
+                    kind: draft.kind,
+                    title: trimmedTitle.isEmpty ? model.defaultPointTitle() : trimmedTitle,
+                    remark: remark.trimmingCharacters(in: .whitespacesAndNewlines)
+                ) else {
+                    isDropping = false
+                    locationUnavailable = true
+                    return
+                }
+                onDrop()
+                dismiss()
+            }
+            .disabled(isDropping)
+            Button("Cancel", role: .cancel) { dismiss() }
+        }
+        .navigationTitle("Drop \(draft.kind.rawValue)")
+        .alert("Location unavailable", isPresented: $locationUnavailable) {
+            Button("OK", role: .cancel) {}
+        }
     }
 }
 

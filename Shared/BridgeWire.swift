@@ -29,6 +29,7 @@ enum BridgeWire {
         var snapshotTruncated: Bool?
         var refreshError: String?
         var phoneReporting: String?
+        var phoneLocationEnabled: Bool?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)

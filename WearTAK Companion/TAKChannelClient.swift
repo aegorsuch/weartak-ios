@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Security
 
 @MainActor
@@ -11,9 +12,7 @@ final class TAKChannelClient {
         self.host = host
         let delegate = ChannelTrustDelegate(host: host, identity: identity, trustedCA: trustedCA)
         trustDelegate = delegate
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = requestTimeout
-        configuration.timeoutIntervalForResource = requestTimeout + 5
+        let configuration = TAKHTTPS.configuration(requestTimeout: requestTimeout, resourceTimeout: requestTimeout + 5)
         session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
     }
 
@@ -65,11 +64,14 @@ final class TAKChannelClient {
         guard (200..<300).contains(http.statusCode) else {
             throw CompanionFailure.message("\(endpoint): HTTP \(http.statusCode).")
         }
+        Logger(subsystem: "com.aegorsuch.weartak", category: "ChannelsTLS")
+            .notice("Channels API response: HTTP \(http.statusCode)")
         return data
     }
 }
 
 private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
+    private let logger = Logger(subsystem: "com.aegorsuch.weartak", category: "ChannelsTLS")
     let host: String
     let identity: ClientIdentity
     let trustedCA: Data?
@@ -83,6 +85,7 @@ private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessi
 
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        logger.notice("Channels authentication challenge: \(challenge.protectionSpace.authenticationMethod, privacy: .public)")
         guard challenge.protectionSpace.host.caseInsensitiveCompare(host) == .orderedSame else {
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
@@ -100,8 +103,10 @@ private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessi
         do {
             try CertificateStore.evaluateServerTrust(trust, host: host,
                 certificates: identity.certificates, trustedCA: trustedCA)
+            logger.notice("Channels server trust accepted")
             completionHandler(.useCredential, URLCredential(trust: trust))
         } catch {
+            logger.error("Channels server trust rejected: \(error.localizedDescription, privacy: .public)")
             diagnostics.record(error)
             completionHandler(.cancelAuthenticationChallenge, nil)
         }

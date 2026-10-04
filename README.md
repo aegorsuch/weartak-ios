@@ -88,6 +88,12 @@ and simulated behavior, not hardware sensors, LAN multicast behavior, or
 real-device signing. If you do not have approved provisioning, use an approved
 TestFlight build once available rather than trying to install an unsigned app.
 
+Runnable simulator builds need ad-hoc signing for Keychain access. Use
+`CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Automatic` with
+`xcodebuild` for simulator destinations. Unsigned builds can produce Keychain
+error `-34018`; rebuild signed and reinstall without erasing simulator data.
+Enroll or import certificates separately on the simulator and physical devices.
+
 ### Maintainers: publish a beta and GitHub release
 
 GitHub hosts versioned source, notes, and installation links. TestFlight/App
@@ -113,7 +119,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `4`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `6`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -143,7 +149,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `4`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `6`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -154,6 +160,35 @@ and fall back to Ad Hoc export, which asks for devices. Do not resolve that by
 registering devices for TestFlight: use the container scheme and profiles above.
 Unsigned packaging checks are not uploadable builds, and no upload or App Store
 validation is implied by a successful local archive build.
+
+### Build 6 release checks
+
+Both app bundles include a privacy manifest declaring app-only UserDefaults
+access (`CA92.1`) and no tracking. These required-reason declarations are not a
+substitute for App Store Connect's App Privacy answers or the privacy policy.
+Review collection disclosures based on the operated TAK/Sit(x) services and
+their retention: transmitted positions, persistent TAK UID/callsign, messages,
+point remarks, and opted-in physiological alert descriptions. Raw heart-rate
+readings are used on the watch; they are not included in PLI messages.
+
+Suggested ATS review explanation: WearTAK connects to user-configured TAK
+servers, including administrator-managed private certificate authorities.
+Their hostnames cannot be listed ahead of time in static ATS domain exceptions.
+Companion uses HTTPS-only enrollment and Channels endpoints, TLS 1.2 or newer,
+hostname and certificate-chain validation, approved CA anchors, and mutual TLS
+for Channels. Redirects are rejected. The ATS exception does not bypass
+certificate verification or add an HTTP fallback.
+
+Before upload, verify on a physical paired phone/watch: enrollment and Channels;
+incoming chat badge, haptic, read clearing and replies; dashboard point Drop
+and Cancel, persisted title/remark and live server receipt; phone PLI with its
+screen locked; alert interval activation and restoration after cancellation.
+Watch reporting/chat reception is not guaranteed while the watch app is
+backgrounded. WinTAK/TAKX interoperability remains unverified.
+Archive validation, export-compliance answers, beta review credentials and
+privacy disclosures still require App Store Connect/Organizer review. Commit
+the tested source before the final archive so its embedded Git revision
+identifies the released changes.
 
 Apple references:
 [TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview)
@@ -195,10 +230,19 @@ physiological warning and a red outline for an active physiological alert.
 Alerts take priority over warnings; the outline clears when neither is active.
 This does not change the compass/Bloodhound ring.
 
-The network icon reflects the active WiFi, cellular, unavailable, or other
-network path and opens Network Preferences. A cellular path does not expose its
-radio generation or signal strength. Phone-proxied paths may appear as another
-network type rather than identifiable WiFi or cellular.
+The network icon gives a currently reachable paired phone priority over WiFi.
+Otherwise it reflects the active WiFi, cellular, unavailable, or other network
+path and opens Network Preferences. Phone reachability is independent of TAK
+server health. A cellular path does not expose its radio generation or strength.
+The TAK indicator above it shows multicast in multicast-only mode. A configured
+server transport takes priority and shows the compact TAK logo with a small green
+check for a confirmed server connection or red X when disconnected. Working
+multicast does not turn a disconnected server's badge green. GPS stays at the
+upper right.
+The GPS icon is filled when watch location permission/services are enabled or
+a reachable Companion confirms its phone location session is running. It is
+crossed out otherwise; cached positions do not enable it. Phone status expires
+with the live handshake. Tapping it opens Reporting Strategy settings.
 
 The TAK indicator distinguishes multicast broadcasts, the Sit(x) cloud, and a
 phone-relay icon. Green checks require a ready transport, not just an enabled
@@ -211,8 +255,11 @@ also opens Network Preferences.
 ### Dropped markers
 
 The dashboard point-drop button opens a radial Hostile, Neutral, Friendly,
-and Unknown picker. Selecting a type drops a point at the current location;
-missing location is reported without creating a point. Tap the center X to
+and Unknown picker. Selecting a type opens a confirmation form at the current
+location with optional Title and Remark fields, plus Drop and Cancel buttons.
+Drop saves and sends the point; Cancel leaves saved points unchanged. A blank
+title uses the existing callsign/UTC-time default. Missing location is reported
+without creating a point. Tap the center X to
 cancel, or hold it to open marker tools: Dropped Markers, Back, and Clear Last
 Marker. Clear Last Marker removes the newest saved point after confirmation.
 
@@ -223,11 +270,22 @@ points after confirmation. Incoming network entities remain on the map and
 are not included in these local-marker deletion actions.
 
 Map long-press starts with Unknown and then uses the most recently dropped or
-changed marker type, remembered across launches. Dropping or changing a point
+changed marker type, remembered across launches. It immediately drops a point
+at the pressed coordinate without prompting for a title or remark; tap the
+dropped point to edit it. Dropping or changing a point
 to Unknown restores Unknown as the default. Title/remark-only edits do not
 change the default type.
 
+Text fields use native watchOS entry. On Apple Watch SE 3, use Scribble,
+dictation, or the paired iPhone's Apple Watch Keyboard notification. In
+Simulator, enable Connect Hardware Keyboard to type using the Mac keyboard.
+
 ### Map Layers Menu
+
+The self marker uses the selected team color. When the watch compass supplies
+a valid heading, its arrow rotates with the watch orientation relative to the
+map's camera heading. Without compass data it shows a colored dot; it does not
+infer watch orientation from phone GPS or a cached position.
 
 The stacked-layers icon at the top of the map opens Layers Menu. Map Buttons
 shows or hides zoom and snap controls; Layers, Channels and Back remain available.
@@ -304,6 +362,10 @@ that enrollment port, not the separately entered CoT stream port. Client
 identities and import passwords are stored in endpoint-scoped Keychain entries.
 Enrollment passwords are not persisted; renew by enrolling again. The UI
 reports certificate expiration and a renewal warning within three days.
+Authentication shows "Certificate ready" after validation, "Save to finish setup"
+for an unsaved certificate, and "Connected" only for a live server connection.
+Password fields mask entered text but are cleared after enrollment; placeholder
+dots are not used as a substitute for certificate or connection status.
 
 If a legacy stream certificate covers a different DNS name, disable the server
 and edit Advanced TLS identity > Stream TLS name. Enter only an
@@ -321,11 +383,15 @@ at least one server socket accepted the write, not that a remote TAK user
 received it. Incoming CoT is forwarded to a reachable watch. Readiness is
 confirmed by a live handshake and expires if confirmations stop. Direct Sit(x)
 pauses only while Companion is actually ready; multicast remains independent.
-Live messaging availability is not TAK server health. When the watch is
-backgrounded, the phone may show "Waiting for watch app"; this does not mean
-the devices are unpaired.
+The Companion's Watch status row shows "Paired" or "Not paired" using the phone's
+watch pairing state, independently of whether the watch app is foregrounded.
+Pairing status is not TAK server health or live-message availability.
 
 ### Phone GPS location reporting
+
+Companion does not display a Phone Location Reporting section. The watch's
+Network Preferences TAK Relay row shows only the selected provider, without
+phone reporting details. These UI choices do not disable automatic reporting.
 
 There is no separate tracking switch. Companion starts reporting this iPhone's
 GPS automatically when all of these are true: at least one enabled TAK server
@@ -340,7 +406,8 @@ The position source is the phone's GPS, not the watch's. Reports are
 `a-f-G-U-C` PLI using the watch's UID, callsign, team and role, with
 `how="m-g"`, `precisionlocation` GPS and `takv` platform "WearTAK Companion".
 The watch publishes this identity, plus its relay selection and reporting
-intervals, through WatchConnectivity application context whenever those
+intervals and combined manual/physiological/environmental alert state, through
+WatchConnectivity application context whenever those
 settings change, at session activation, and on watch app resume when the last
 publish is over an hour old.
 Companion verifies the UID and field bounds and rejects identities older than
@@ -353,8 +420,12 @@ unavailable, the identity is missing or invalid, or the watch sends PLI with a
 different UID, reporting stops and the reason is shown.
 
 The interval follows the watch's Constant or Activity-based setting, chosen
-from the phone's GPS speed, and is bounded to 10-600 seconds. The phone's Wi-Fi
-battery multiplier and alert interval are not applied. Fixes are rejected if
+from the phone's GPS speed, and is bounded to 10-600 seconds. While any watch
+alert is active, the watch's While Alerting Reporting Interval overrides both
+strategies, subject to the same bounds. Cancelling the last active alert restores
+the normal strategy. Older watches without alert-state fields retain normal
+Dynamic/Constant behavior. The phone's Wi-Fi battery multiplier is not applied.
+Fixes are rejected if
 they are invalid or `0,0`, have accuracy worse than 100 m, are older than 30
 seconds, or are dated more than 5 seconds in the future. `time` is the send
 time, `start` is the fix time, and `stale` is three intervals plus 60 seconds.
@@ -370,9 +441,8 @@ continue using watch GPS. Watch alerts, alert cancels and dropped points are
 always relayed. iTAK and TAK Aware do not supply WearTAK location or connectivity;
 Companion requires its own permissions and TAK connection.
 
-Companion shows the reporting state, identity, location access, interval, last
-report and any error, and the watch shows the same state under its TAK Relay
-setting. iOS shows a location indicator while Companion reports in the
+The reporting details are not displayed in Companion or under TAK Relay.
+iOS shows a location indicator while Companion reports in the
 background. The app uses the `location` background mode only for this active
 location session; there is no workout session, silent audio or keepalive timer.
 While reporting is active, server streams remain open and reconnect after
@@ -436,6 +506,7 @@ appear first, followed by Start Chat and Bloodhound to Contact. Bloodhound uses
 the contact's latest received position as it moves, shares the dashboard
 direction/range and map line with point navigation, and stops when the contact
 expires. Selecting a local point instead replaces the contact target.
+The contact panel omits team, role and last-seen text; contact expiry still applies.
 
 Contact chat uses GeoChat CoT through the contact's source: Companion, local
 multicast or standalone Sit(x). Companion sends through that contact's
@@ -445,7 +516,14 @@ point-to-point transport. A successful send means the transport accepted the
 message, not confirmed recipient delivery.
 Replies addressed to the watch UID appear in the matching source/contact
 conversation. Conversations are in-memory and bounded to 50 contacts with 50
-messages each. Unknown or unavailable sources show an explicit unavailable message;
+messages each. The dashboard Chat button shows the total unread count; the inbox
+lists conversations with per-conversation counts. Opening an active conversation
+marks it read. New unread incoming messages trigger a haptic when Chat is enabled.
+These are in-app notifications while the watch app receives messages, not system
+notifications or guaranteed background delivery. Quick Messages (Roger, Negative,
+Objective Sighted, In Position) fill the draft; Send is still required. Known
+conversations remain replyable without a current map contact, using their original
+source. Unknown or unavailable sources show an explicit unavailable message;
 live ATAK interoperability still needs paired-device/server testing.
 
 The dashboard metric uses smaller, single-line, scaling text and a smaller
@@ -456,6 +534,7 @@ icon to preserve the full exertion percentage on small watch screens.
 The connected-nodes button at the watch map's top right opens Channels; Layers
 remains top center. Choose an enabled Companion server to load its assigned
 channels, then toggle membership on the watch. Refresh reloads the server state.
+When no server is available, the menu shows "Connect to a TAK Server to configure channels."
 Selections are shown only after the server confirms them. Empty, unsupported,
 disconnected, and request-failure states are displayed explicitly.
 
@@ -478,6 +557,20 @@ CA; otherwise the client certificate's CA chain supplements system trust roots,
 allowing an API listener with a publicly trusted certificate. Invalid configured
 CA data is reported rather than silently ignored. Client-certificate challenges
 are handled at both the URLSession session and task levels.
+
+Enroll or import a client certificate (`.p12`) to access Channels. Successful
+enrollment stores the client identity and CA chain; no additional `.p12` import
+is needed. The server must support Channels and authorize the account.
+Companion opts out of ATS's additional restrictions to support private CAs on
+user-configured server names, which cannot be enumerated in a static domain
+exception list. Enrollment and Channels still construct HTTPS-only URLs, require
+TLS 1.2 or newer, validate certificate trust and hostname, and reject redirects.
+Never trust a CA simply because an unauthenticated server supplies it.
+Enrollment initially requires system trust (including an administrator-installed
+trusted CA profile) or an explicitly imported server CA. After verified enrollment,
+the stored CA chain supplements system roots for Channels and stream TLS.
+This app-wide ATS exception requires App Store justification; any future
+Companion URLSession requests must preserve the same safeguards.
 
 Channels requires a TAK server supporting these group APIs. Multicast,
 standalone Sit(x), iTAK and TAK Aware do not currently expose this channel menu's
@@ -594,7 +687,7 @@ Watch reporting is foreground-only; continuous screen-off/background watch
 tracking is not implemented. Background PLI is available only from the phone's
 GPS through Companion, as described in Phone GPS location reporting. Direct Sit(x) pauses only when the optional Companion transport is
 confirmed ready. Physical Bluetooth pairing alone is not proof of relay
-readiness. Chat delivery is not implemented.
+readiness. GeoChat sends are transport-accepted, not recipient delivery receipts.
 
 watchOS cannot identify connected WiFi SSIDs or list saved networks. All WiFi
 Connections and No WiFi Connections are supported; Some WiFi Connections is
@@ -654,7 +747,8 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 ```
 
 Directed GeoChat checks cover recipient addressing, XML escaping, message
-bounds, incoming reply parsing and chat exclusion from map snapshots:
+bounds, incoming reply parsing, chat exclusion from map snapshots, unread/read
+state, duplicate suppression, source isolation, quick messages and inbox eviction:
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
@@ -680,5 +774,5 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 certificate/key matching, expiry, `.p12` import/password handling, private-CA
 server trust, hostname rejection, explicit CA restrictions, invalid CA data,
 and endpoint/error diagnostics with temporary test identities. It requires the resolved SwiftASN1 module linked
-alongside CertificateStore and EnrollmentClient. No simulator or mock test
+alongside CertificateStore, EnrollmentClient and TAKHTTPS. No simulator or mock test
 establishes physical-device background reliability or live server compatibility.

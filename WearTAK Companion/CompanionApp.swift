@@ -35,31 +35,14 @@ struct CompanionSetupView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Watch") {
-                    LabeledContent("Live messaging", value: bridge.watchStatus)
-                    Text("Open WearTAK on the watch to request a short map refresh, even while this phone is locked. Map refreshes are separate from phone location reporting.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Section {
+                    LabeledContent("Watch status", value: bridge.isWatchPaired ? "Paired" : "Not paired")
+                    if let error = bridge.watchSetupError {
+                        Text(error).font(.caption).foregroundStyle(.orange)
+                    }
                     if let error = bridge.mapCacheError {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
-                }
-                Section("Phone Location Reporting") {
-                    LabeledContent("Status", value: bridge.phoneReporting.running ? bridge.phoneReporting.state : "Off")
-                    if let detail = bridge.phoneReporting.detail {
-                        Text(detail).font(.caption).foregroundStyle(.orange)
-                    }
-                    LabeledContent("Reporting as", value: bridge.phoneReporting.identity ?? "Waiting for watch identity")
-                    LabeledContent("Location access", value: bridge.phoneReporting.permission)
-                    if let interval = bridge.phoneReporting.interval {
-                        LabeledContent("Interval", value: "\(Int(interval)) s")
-                    }
-                    if let last = bridge.phoneReporting.lastReportAt {
-                        LabeledContent("Last report") { Text(last, style: .relative) }
-                    }
-                    Text("Position comes from this iPhone's GPS and is sent automatically to enabled TAK servers as the watch's callsign, team, role and UID while WearTAK Companion is the watch's TAK Relay. The watch's own position report is not relayed while the phone is reporting; watch alerts and points are still sent. iOS shows a location indicator while reporting in the background. Reporting stops when no server is enabled, location access is removed or Companion is force-quit.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 Section("TAK Servers") {
                     if bridge.servers.isEmpty {
@@ -147,6 +130,7 @@ private struct CompanionServerEditor: View {
     @State private var p12Password = ""
     @State private var authentication = "Enroll"
     @State private var certificateStatus = "Not configured"
+    @State private var certificateReady = false
     @State private var busy = false
     @State private var enrollmentTask: Task<Void, Never>?
     @State private var showImporter = false
@@ -190,12 +174,21 @@ private struct CompanionServerEditor: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
-                    Text("Leave blank to validate the server address. Only use a DNS name in the server certificate's SAN confirmed by your administrator. This changes certificate validation and TLS SNI for the CoT stream only, not the connection address, enrollment, or Channels. Trust and expiration checks remain enabled. Reissuing the server certificate for its address is preferred.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 .disabled(busy || connected)
                 Section("Authentication") {
+                    if connected {
+                        Label("Connected", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else if certificateReady {
+                        Label("Certificate ready", systemImage: "checkmark.shield.fill")
+                            .foregroundStyle(.green)
+                        if pendingIdentity != nil {
+                            Text("Save to finish setup")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Picker("Method", selection: $authentication) {
                         Text("Enroll").tag("Enroll")
                         Text("Import .p12").tag("Import .p12")
@@ -270,11 +263,13 @@ private struct CompanionServerEditor: View {
     }
 
     private func refreshCertificate() {
+        certificateReady = false
         guard let endpoint else { certificateStatus = "Not configured"; return }
         trustedCA = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(endpoint.key)")
         do {
             guard let stored = try (pendingIdentity ?? CertificateStore.read(endpoint: endpoint.key)) else { certificateStatus = "Not configured"; return }
             let identity = try CertificateStore.resolve(stored)
+            certificateReady = true
             certificateStatus = "Expires " + identity.expires.formatted(date: .abbreviated, time: .omitted)
             if identity.expires.timeIntervalSinceNow < 3 * 86_400 { certificateStatus += " - renew soon" }
         } catch { certificateStatus = error.localizedDescription }

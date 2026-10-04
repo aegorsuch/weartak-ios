@@ -4,6 +4,9 @@ import Security
 @main
 struct CompanionSecurityChecks {
     static func main() throws {
+        let configuration = TAKHTTPS.configuration(requestTimeout: 15, resourceTimeout: 20)
+        precondition(configuration.tlsMinimumSupportedProtocolVersion == .TLSv12)
+        precondition(configuration.timeoutIntervalForRequest == 15 && configuration.timeoutIntervalForResource == 20)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("weartak-security-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -78,7 +81,7 @@ struct CompanionSecurityChecks {
         let server = try certificate("server.pem")
         let ca = try certificate("ca.pem")
         let otherCA = try certificate("other-ca.pem")
-        func evaluate(host: String = "fixture.example", chain: [SecCertificate],
+        func evaluate(host: String = "fixture.example", chain: [SecCertificate], date: Date = Date(),
                       explicitCA: Data? = nil) throws {
             var trust: SecTrust?
             let status = SecTrustCreateWithCertificates([server, ca] as CFArray,
@@ -87,11 +90,16 @@ struct CompanionSecurityChecks {
                 throw CompanionFailure.message("Unable to create fixture trust (\(status)).")
             }
             SecTrustSetNetworkFetchAllowed(trust, false)
+            SecTrustSetVerifyDate(trust, date as CFDate)
             try CertificateStore.evaluateServerTrust(trust, host: host, certificates: chain, trustedCA: explicitCA)
         }
         let caData = SecCertificateCopyData(ca) as Data
         try evaluate(chain: [client, ca])
         try evaluate(chain: [client], explicitCA: caData)
+        do {
+            try evaluate(chain: [client, ca], date: Date().addingTimeInterval(3 * 86_400))
+            fatalError("Expired TLS server certificate accepted")
+        } catch {}
         do {
             try evaluate(host: "wrong.example", chain: [client, ca])
             fatalError("TLS hostname mismatch accepted")

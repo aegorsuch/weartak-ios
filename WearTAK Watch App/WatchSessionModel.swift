@@ -2,6 +2,7 @@ import Combine
 import CoreLocation
 import Foundation
 import Network
+import OSLog
 import WatchKit
 import WatchConnectivity
 
@@ -107,9 +108,10 @@ struct BloodhoundDestination {
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
 }
 
-struct ContactConversation: Hashable {
+struct ContactConversation: Hashable, Identifiable {
     let uid: String
     let route: ContactChatRoute
+    var id: Self { self }
 }
 
 enum ContactChatRoute: Hashable {
@@ -158,6 +160,7 @@ struct UnconfiguredTAKTransport: TAKTransport {
 
 @MainActor
 final class WatchSessionModel: NSObject, ObservableObject {
+    private let chatLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "GeoChat")
     private static let markerStorageKey = "WearTAK.droppedPoints"
     private static let companionCacheKey = "WearTAK.cachedCompanionMap"
     private var companionMapCache = CompanionMapCache()
@@ -176,7 +179,25 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
     @Published private(set) var bloodhoundTargetID: UUID?
     @Published private(set) var bloodhoundContactID: String?
-    @Published private(set) var contactMessages: [ContactConversation: [TAKChatMessage]] = [:]
+    @Published private var chatInbox = TAKChatInbox<ContactConversation>()
+
+    var contactMessages: [ContactConversation: [TAKChatMessage]] { chatInbox.messages }
+    var unreadChatCounts: [ContactConversation: Int] { chatInbox.unreadCounts }
+    var unreadChatCount: Int { chatInbox.unreadCount }
+
+    var chatConversations: [ContactConversation] { chatInbox.conversations }
+
+    func chatTitle(for conversation: ContactConversation) -> String {
+        if let sender = contactMessages[conversation]?.last(where: { $0.senderUID == conversation.uid }) {
+            return sender.senderCallSign
+        }
+        return incomingEntities.first { $0.id == conversation.uid && $0.chatRoute == conversation.route }?.callSign ??
+            conversation.uid
+    }
+
+    func setConversationVisible(_ conversation: ContactConversation, visible: Bool) {
+        chatInbox.setVisible(conversation, visible: visible)
+    }
     @Published private(set) var headingDegrees: Double?
     @Published private(set) var activeAlertType: ManualAlertType?
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
@@ -209,6 +230,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var sourceGenerations: [UUID: Int] = [:]
     private let networkPathMonitor = NWPathMonitor()
     @Published private(set) var networkConnectivity: DashboardNetworkConnectivity = .offline
+    @Published private(set) var watchLocationEnabled = false
     var isOnWiFi: Bool { networkConnectivity == .wifi }
     var isPhoneRelayConnected: Bool {
         companionClient.isReady
@@ -259,11 +281,15 @@ final class WatchSessionModel: NSObject, ObservableObject {
             guard let self, let xml = message.xml else { return }
             if let source = message.sourceServerID,
                let chat = TAKChatMessage.parse(xml, ownUID: SitxClient.deviceID()) {
+                self.chatLogger.notice("Companion GeoChat parsed for this watch")
                 self.recordChat(chat, route: .companion(source))
                 return
             }
             let now = Date()
             let header = CoTMapHeader.parse(xml)
+            if header?.type == "b-t-f" {
+                self.chatLogger.notice("Companion GeoChat ignored: missing source, unrelated recipient or invalid message")
+            }
             let seen = min(header?.time ?? now, now)
             if let id = message.sourceServerID {
                 self.companionMapCache.receive(CompanionMapEvent(xml: xml, sourceServerID: id,
@@ -368,6 +394,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func requestLocation() {
+        updateLocationAvailability()
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
             locationManager.requestLocation()
@@ -378,6 +405,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
         @unknown default:
             break
         }
+    }
+
+    private func updateLocationAvailability() {
+        watchLocationEnabled = CLLocationManager.locationServicesEnabled() &&
+            (locationManager.authorizationStatus == .authorizedAlways ||
+             locationManager.authorizationStatus == .authorizedWhenInUse)
     }
 
     private func startHeadingUpdates() {
@@ -552,19 +585,23 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func sendContactChat(uid: String, route: ContactChatRoute, text: String) async throws {
-        guard let contact = incomingEntities.first(where: { $0.id == uid && $0.chatRoute == route }) else {
+        let conversation = ContactConversation(uid: uid, route: route)
+        let contact = incomingEntities.first(where: { $0.id == uid && $0.chatRoute == route })
+        guard contact != nil || contactMessages[conversation] != nil else {
             throw ContactChatFailure.message("This contact is no longer available on that transport.")
         }
-        if let reason = chatUnavailableReason(for: contact) { throw ContactChatFailure.message(reason) }
+        guard settings.chatEnabled else { throw ContactChatFailure.message("Enable Chat in settings.") }
+        if let contact, let reason = chatUnavailableReason(for: contact) { throw ContactChatFailure.message(reason) }
         let ownUID = SitxClient.deviceID()
         let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
             senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
-            recipientUID: contact.id, recipientCallSign: contact.callSign ?? contact.id, text: text)
+            recipientUID: uid, recipientCallSign: contact?.callSign ?? chatTitle(for: conversation), text: text)
         switch route {
         case .companion(let serverID): try await companionClient.sendChat(xml, serverID: serverID)
         case .multicast: try await multicastClient.send(xml)
         case .sitx: try await sitxClient.sendContactChat(xml)
         }
+        chatLogger.notice("Outgoing GeoChat accepted by transport")
         guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
             throw ContactChatFailure.message("Unable to record the outgoing chat message.")
         }
@@ -575,14 +612,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let ownUID = SitxClient.deviceID()
         let other = message.senderUID == ownUID ? message.recipientUID : message.senderUID
         let key = ContactConversation(uid: other, route: route)
-        var messages = contactMessages[key] ?? []
-        guard !messages.contains(where: { $0.id == message.id }) else { return }
-        messages.append(message)
-        messages.sort { $0.sentAt < $1.sentAt }
-        contactMessages[key] = Array(messages.suffix(50))
-        if contactMessages.count > 50,
-           let oldest = contactMessages.min(by: { ($0.value.last?.sentAt ?? .distantPast) < ($1.value.last?.sentAt ?? .distantPast) })?.key {
-            contactMessages.removeValue(forKey: oldest)
+        if chatInbox.record(message, conversation: key, ownUID: ownUID), settings.chatEnabled {
+            WKInterfaceDevice.current().play(.notification)
+            chatLogger.notice("New unread GeoChat recorded; notification haptic requested")
         }
     }
 
@@ -690,6 +722,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func startEmergencyAlert(type: ManualAlertType) {
         guard activeAlertType == nil else { return }
         activeAlertType = type
+        publishAlertReportingState()
         Task {
             try? await transport.sendEmergencyAlert(state: .alert, type: type.rawValue)
         }
@@ -698,6 +731,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func cancelEmergencyAlert() {
         guard let type = activeAlertType else { return }
         activeAlertType = nil
+        publishAlertReportingState()
         Task {
             try? await transport.sendEmergencyAlert(state: .cancel, type: type.rawValue)
         }
@@ -707,6 +741,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard category != activeAutomaticAlert else { return }
         let previousCategory = activeAutomaticAlert
         activeAutomaticAlert = category
+        publishAlertReportingState()
         automaticAlertDeliveryFailed = category != nil && connectionState != .connected
         if category != nil {
             WKInterfaceDevice.current().play(.notification)
@@ -748,6 +783,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         } else {
             activeEnvironmentalAlerts.remove(category)
         }
+        publishAlertReportingState()
         if active && connectionState != .connected {
             automaticAlertDeliveryFailed = true
         }
@@ -773,6 +809,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
 extension WatchSessionModel: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        updateLocationAvailability()
         guard isAppActive else { return }
         guard manager.authorizationStatus == .authorizedAlways ||
                 manager.authorizationStatus == .authorizedWhenInUse else {
@@ -831,6 +868,12 @@ extension WatchSessionModel: CLLocationManagerDelegate {
                 if !sitxClient.hasReadyOutput { connectionState = .failed }
             }
         }
+    }
+
+    private func publishAlertReportingState() {
+        companionClient.setAlertActive(
+            activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
+        )
     }
 
     private func checkBloodhoundProximity(at location: CLLocation) {

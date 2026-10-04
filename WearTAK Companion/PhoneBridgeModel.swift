@@ -1,14 +1,19 @@
 import Combine
 import Foundation
+import OSLog
 import WatchConnectivity
 import UIKit
 
 @MainActor
 final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
+    private let chatLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "GeoChat")
+    private let reportingLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "PhoneReporting")
+    private var lastReportingDiagnostic: String?
     @Published private(set) var servers: [CompanionServer] = []
     @Published private(set) var serverStates: [UUID: ServerState] = [:]
     @Published private(set) var status = "No servers configured"
-    @Published private(set) var watchStatus = "Watch unavailable"
+    @Published private(set) var isWatchPaired = false
+    @Published private(set) var watchSetupError: String?
     @Published private(set) var configured = false
     @Published private(set) var connected = false
     @Published private(set) var mapCacheError: String?
@@ -68,7 +73,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         super.init()
         reporter.onFix = { [weak self] fix in self?.reportPhoneFix(fix) }
         reporter.onAuthorizationChange = { [weak self] in self?.publishState() }
-        reporter.onError = { [weak self] message in self?.phoneReporting.detail = message }
+        reporter.onError = { [weak self] message in
+            self?.phoneReporting.detail = message
+            self?.reportingLogger.error("Phone GPS: \(message, privacy: .public)")
+        }
         active = UIApplication.shared.applicationState == .active
         if let data = defaults.data(forKey: Self.mapStorageKey) {
             do {
@@ -215,7 +223,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     private func snapshot(id: UUID = UUID()) -> BridgeWire.Message {
         BridgeWire.Message(kind: .status, id: id, ready: canRelay && connected, configured: configured, detail: status,
-                   sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary)
+                   sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary,
+                   phoneLocationEnabled: reporter.isRunning)
     }
 
     private var phoneReportingSummary: String {
@@ -271,6 +280,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         if case .success(let identity) = watchIdentity {
             phoneReporting.identity = "\(identity.resolvedCallSign) - \(identity.team) - \(identity.resolvedRole) (UID \(identity.uid.prefix(8)))"
         } else { phoneReporting.identity = nil }
+        let diagnostic = "\(phoneReporting.state); \(phoneReporting.permission); \(phoneReporting.detail ?? "")"
+        if diagnostic != lastReportingDiagnostic {
+            lastReportingDiagnostic = diagnostic
+            reportingLogger.notice("Phone reporting state: \(diagnostic, privacy: .public)")
+        }
         if reporter.isRunning != wasRunning { synchronize() }
     }
 
@@ -280,6 +294,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         do { try PhoneReportingPolicy.validate(fix) }
         catch {
             phoneReporting.detail = error.localizedDescription
+            reportingLogger.error("Phone GPS fix rejected: \(error.localizedDescription, privacy: .public)")
             return
         }
         let interval = PhoneReportingPolicy.interval(for: identity, speed: fix.speed)
@@ -309,6 +324,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                   current.hasSameSettings(as: identity) else { return }
             self.phoneReportsByServer.merge(delivered) { _, latest in latest }
             if !delivered.isEmpty {
+                self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s)")
                 self.lastPhoneReportAt = Date()
                 self.phoneReporting.lastReportAt = self.lastPhoneReportAt
             }
@@ -379,14 +395,18 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         connected = canRelay && serverStates.values.contains { $0.connected }
         status = !canRelay ? "Waiting for watch refresh" : connected ? "Connected" : configured ? "No connected servers" : "Configure on phone"
         let session = WCSession.default
+        isWatchPaired = WCSession.isSupported() && session.isPaired
         guard session.activationState == .activated else { return }
         let context: [String: Any] = [
             "WearTAKCompanion.serverConfigured": configured,
             "WearTAKCompanion.serverReady": canRelay && connected
         ]
-        do { try session.updateApplicationContext(context) }
-        catch { watchStatus = "Unable to update watch setup state" }
-        watchStatus = session.isReachable ? "Available for live messages" : "Waiting for watch app"
+        do {
+            try session.updateApplicationContext(context)
+            watchSetupError = nil
+        } catch {
+            watchSetupError = "Unable to update watch setup state: \(error.localizedDescription)"
+        }
         if session.isReachable, let data = try? snapshot().encoded() {
             session.sendMessageData(data, replyHandler: nil, errorHandler: { _ in })
         }
@@ -395,17 +415,28 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private func forward(_ xml: String, sourceID: UUID) {
         let event = CompanionMapEvent(xml: xml, sourceServerID: sourceID,
                                       sourceGeneration: sourceGenerations[sourceID, default: 0], receivedAt: Date())
+        let isChat = event.header?.type == "b-t-f"
+        if isChat { chatLogger.notice("Server GeoChat received") }
         if event.isValid { lastMapEventReceivedAt = event.receivedAt }
         mapCache.receive(event)
         saveMapCache()
         guard canRelay, connected, WCSession.default.isReachable, incomingInFlight < 16,
               let data = try? BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: sourceID,
-                  sourceGeneration: sourceGenerations[sourceID, default: 0], sessionID: bridgeSessionID).encoded() else { return }
+                  sourceGeneration: sourceGenerations[sourceID, default: 0], sessionID: bridgeSessionID).encoded() else {
+            if isChat { chatLogger.notice("GeoChat not forwarded: bridge unavailable or receive queue full") }
+            return
+        }
         incomingInFlight += 1
         WCSession.default.sendMessageData(data, replyHandler: { [weak self] _ in
-            Task { @MainActor in self?.incomingInFlight = max(0, (self?.incomingInFlight ?? 1) - 1) }
-        }, errorHandler: { [weak self] _ in
-            Task { @MainActor in self?.incomingInFlight = max(0, (self?.incomingInFlight ?? 1) - 1) }
+            Task { @MainActor in
+                self?.incomingInFlight = max(0, (self?.incomingInFlight ?? 1) - 1)
+                if isChat { self?.chatLogger.notice("GeoChat acknowledged by watch bridge") }
+            }
+        }, errorHandler: { [weak self] error in
+            Task { @MainActor in
+                self?.incomingInFlight = max(0, (self?.incomingInFlight ?? 1) - 1)
+                if isChat { self?.chatLogger.error("GeoChat bridge send failed: \(error.localizedDescription, privacy: .public)") }
+            }
         })
     }
 
@@ -429,7 +460,6 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         Task { @MainActor [weak self] in
-            self?.watchStatus = "Watch session inactive"
             self?.setWatchIdentity(.failure(.watchUnavailable))
         }
     }
@@ -542,7 +572,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         let reply = BridgeWire.Message(kind: .mapSnapshot, id: message.id, ready: connected,
             configured: configured, detail: status, sessionID: bridgeSessionID,
             enabledServerIDs: enabled.map(\.id), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"),
-            phoneReporting: phoneReportingSummary)
+            phoneReporting: phoneReportingSummary, phoneLocationEnabled: reporter.isRunning)
         return try mapCache.filling(reply)
     }
 
