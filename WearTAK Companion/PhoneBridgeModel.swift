@@ -12,11 +12,23 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var configured = false
     @Published private(set) var connected = false
     @Published private(set) var mapCacheError: String?
+    @Published private(set) var phoneReporting = PhoneReportingStatus()
 
     struct ServerState {
         var configured = false
         var connected = false
         var detail = "Disabled"
+    }
+
+    struct PhoneReportingStatus {
+        var running = false
+        var state = "Not started"
+        var detail: String?
+        var identity: String?
+        var permission = "Not requested"
+        var interval: TimeInterval?
+        var lastReportAt: Date?
+        var suppressedWatchPLIs = 0
     }
 
     private var sessions: [UUID: CompanionServerSession] = [:]
@@ -28,7 +40,17 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var mapCache = CompanionMapCache()
     private var lastMapEventReceivedAt: Date?
     private static let mapStorageKey = "WearTAK.companion.mapCache"
-    private var canRelay: Bool { active || backgroundTask != .invalid }
+    // An active phone location session keeps Companion running, so server sessions stay up while it reports.
+    private var canRelay: Bool { active || backgroundTask != .invalid || reporter.isRunning }
+    private let reporter: PhoneLocationReporter
+    private var watchIdentity: Result<WatchReportingIdentity, WatchReportingIdentity.Failure> = .failure(.missing)
+    private var lastPhoneReportAt: Date?
+    private var phoneReportsByServer: [UUID: Date] = [:]
+    private var latestPhoneFix: PhoneLocationFix?
+    private var phoneInterval = PhoneReportingPolicy.minimumInterval
+    private var phoneSendInFlight = false
+    private var evaluatingReporting = false
+    private var requestedWhenInUse = false
     private var completedMessages: [UUID: Set<UUID>] = [:]
     private var completedOrder: [UUID] = []
     private var incomingInFlight = 0
@@ -42,7 +64,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
+        reporter = PhoneLocationReporter(defaults: defaults)
         super.init()
+        reporter.onFix = { [weak self] fix in self?.reportPhoneFix(fix) }
+        reporter.onAuthorizationChange = { [weak self] in self?.publishState() }
+        reporter.onError = { [weak self] message in self?.phoneReporting.detail = message }
         active = UIApplication.shared.applicationState == .active
         if let data = defaults.data(forKey: Self.mapStorageKey) {
             do {
@@ -64,7 +90,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             var checked: [CompanionServer] = []
             for record in servers {
                 let endpoint = try CompanionEndpoint.parse(address: record.host, streamPort: "\(record.port)", enrollmentPort: "\(record.enrollmentPort)")
-                checked = try CompanionServer.saving(CompanionServer(id: record.id, endpoint: endpoint, enabled: record.enabled), into: checked)
+                checked = try CompanionServer.saving(CompanionServer(id: record.id, endpoint: endpoint,
+                    enabled: record.enabled, streamTLSName: record.streamTLSName), into: checked)
             }
             servers = checked
             synchronize()
@@ -112,12 +139,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     func setActive(_ active: Bool) {
         self.active = active
-        if active { endBackgroundRefresh() }
+        if active {
+            endBackgroundRefresh()
+            reporter.refreshServicesEnabled()
+        }
         synchronize()
     }
 
+    /// Short, bounded time for one watch request. Not used while phone location reporting keeps Companion running.
     private func beginBackgroundRefresh() throws {
-        guard !active, backgroundTask == .invalid else { return }
+        guard !active, backgroundTask == .invalid, !reporter.isRunning else { return }
         let generation = UUID()
         backgroundGeneration = generation
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Watch TAK refresh") { [weak self] in
@@ -184,10 +215,166 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     private func snapshot(id: UUID = UUID()) -> BridgeWire.Message {
         BridgeWire.Message(kind: .status, id: id, ready: canRelay && connected, configured: configured, detail: status,
-                   sessionID: bridgeSessionID)
+                   sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary)
+    }
+
+    private var phoneReportingSummary: String {
+        guard phoneReporting.running else { return "Off - " + (phoneReporting.detail ?? phoneReporting.state) }
+        return phoneReporting.state
+    }
+
+    /// Starts or stops phone GPS reporting from current servers, watch identity and location authorization.
+    private func evaluateReporting() {
+        guard !evaluatingReporting else { return }
+        evaluatingReporting = true
+        defer { evaluatingReporting = false }
+        let wasRunning = reporter.isRunning
+        if case .success(let identity) = watchIdentity {
+            do { _ = try identity.validated() }
+            catch let failure as WatchReportingIdentity.Failure { watchIdentity = .failure(failure) }
+            catch { watchIdentity = .failure(.invalidField("identity payload")) }
+        }
+        let enabledConfigured = servers.filter { $0.enabled && serverStates[$0.id]?.configured == true }.count
+        let decision = PhoneReportingGate.decide(enabledConfiguredServers: enabledConfigured, identity: watchIdentity,
+            authorization: reporter.authorization, preciseLocation: reporter.preciseLocation,
+            servicesEnabled: reporter.servicesEnabled, appActive: active, alreadyRunning: reporter.isRunning)
+        switch decision {
+        case .run:
+            if !reporter.isRunning {
+                lastPhoneReportAt = nil
+                phoneReportsByServer = [:]
+                latestPhoneFix = nil
+                phoneReporting.lastReportAt = nil
+                phoneReporting.detail = nil
+                phoneReporting.state = "Waiting for phone GPS fix"
+                reporter.start(appActive: active)
+            }
+        case .requestWhenInUse:
+            reporter.stop()
+            phoneReporting.state = "Requesting location permission"
+            phoneReporting.detail = nil
+            if !requestedWhenInUse {
+                requestedWhenInUse = true
+                reporter.requestWhenInUse()
+            }
+        case .blocked(let reason):
+            reporter.stop()
+            lastPhoneReportAt = nil
+            phoneReportsByServer = [:]
+            latestPhoneFix = nil
+            phoneReporting.state = "Stopped"
+            phoneReporting.detail = reason
+            phoneReporting.interval = nil
+        }
+        phoneReporting.running = reporter.isRunning
+        phoneReporting.permission = reporter.permissionSummary
+        if case .success(let identity) = watchIdentity {
+            phoneReporting.identity = "\(identity.resolvedCallSign) - \(identity.team) - \(identity.resolvedRole) (UID \(identity.uid.prefix(8)))"
+        } else { phoneReporting.identity = nil }
+        if reporter.isRunning != wasRunning { synchronize() }
+    }
+
+    private func reportPhoneFix(_ fix: PhoneLocationFix) {
+        guard reporter.isRunning, case .success(let identity) = watchIdentity else { return }
+        latestPhoneFix = fix
+        do { try PhoneReportingPolicy.validate(fix) }
+        catch {
+            phoneReporting.detail = error.localizedDescription
+            return
+        }
+        let interval = PhoneReportingPolicy.interval(for: identity, speed: fix.speed)
+        phoneInterval = interval
+        phoneReporting.interval = interval
+        guard !phoneSendInFlight, PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt, interval: interval) else { return }
+        let enabled = Set(servers.filter(\.enabled).map(\.id))
+        let ready = sessions.filter { enabled.contains($0.key) && $0.value.state.connected }
+        guard !ready.isEmpty else {
+            updatePhoneReportingState("Waiting for TAK server connection",
+                detail: "No enabled TAK server is connected; Companion retries automatically.")
+            return
+        }
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let xml = PhonePLI.event(identity: identity, fix: fix, interval: interval, appVersion: version,
+                                 osVersion: "iOS \(UIDevice.current.systemVersion)")
+        phoneSendInFlight = true
+        Task {
+            defer { self.phoneSendInFlight = false }
+            var failures: [String] = []
+            var delivered: [UUID: Date] = [:]
+            for (id, session) in ready {
+                do { try await session.send(xml); delivered[id] = Date() }
+                catch { failures.append("\(self.servers.first { $0.id == id }?.host ?? "Server"): \(error.localizedDescription)") }
+            }
+            guard self.reporter.isRunning, case .success(let current) = self.watchIdentity,
+                  current.hasSameSettings(as: identity) else { return }
+            self.phoneReportsByServer.merge(delivered) { _, latest in latest }
+            if !delivered.isEmpty {
+                self.lastPhoneReportAt = Date()
+                self.phoneReporting.lastReportAt = self.lastPhoneReportAt
+            }
+            self.updatePhoneReportingState(!delivered.isEmpty ? "Reporting phone GPS" : "Report failed; reconnecting",
+                detail: failures.isEmpty ? nil : failures.joined(separator: "\n"))
+        }
+    }
+
+    private func updatePhoneReportingState(_ state: String, detail: String?) {
+        phoneReporting.detail = detail
+        guard phoneReporting.state != state else { return }
+        phoneReporting.state = state
+        publishState()
+    }
+
+    /// Accepts identity only from the activated session of a paired watch with WearTAK installed. WatchConnectivity
+    /// persists that context per paired watch, so Companion keeps no separate copy that could outlive a watch switch.
+    private func refreshWatchIdentity(contextValue: Data? = nil) {
+        let session = WCSession.default
+        guard WCSession.isSupported(), session.activationState == .activated, session.isPaired,
+              session.isWatchAppInstalled else {
+            setWatchIdentity(.failure(.watchUnavailable))
+            return
+        }
+        let value: Any? = contextValue ?? session.receivedApplicationContext[WatchReportingIdentity.contextKey]
+        do {
+            guard let identity = try WatchReportingIdentity.decode(contextValue: value) else {
+                setWatchIdentity(.failure(.missing))
+                return
+            }
+            setWatchIdentity(.success(try identity.validated()))
+        } catch let failure as WatchReportingIdentity.Failure {
+            setWatchIdentity(.failure(failure))
+        } catch { setWatchIdentity(.failure(.invalidField("identity payload"))) }
+    }
+
+    private func setWatchIdentity(_ identity: Result<WatchReportingIdentity, WatchReportingIdentity.Failure>) {
+        if case .success(let new) = identity, case .success(let old) = watchIdentity, new.hasSameSettings(as: old) {
+            watchIdentity = identity
+        } else {
+            watchIdentity = identity
+            // A different user or changed settings is reported on the next valid fix, and never suppresses the watch until then.
+            lastPhoneReportAt = nil
+            phoneReportsByServer = [:]
+            latestPhoneFix = nil
+        }
+        publishState()
+    }
+
+    /// Drops the watch's own PLI only while the phone recently reported that same user. Alerts and points pass through.
+    private func shouldSuppressWatchPLI(_ xml: String, serverID: UUID) -> Bool {
+        guard let header = PhonePLI.header(xml), header.type == PhonePLI.type,
+              case .success(let identity) = watchIdentity else { return false }
+        guard header.uid == identity.uid else {
+            setWatchIdentity(.failure(.mismatchedUID))
+            return false
+        }
+        guard reporter.isRunning,
+              PhoneReportingPolicy.canUsePhonePLI(lastPhoneReportAt: phoneReportsByServer[serverID],
+                  latestFix: latestPhoneFix, interval: phoneInterval) else { return false }
+        phoneReporting.suppressedWatchPLIs += 1
+        return true
     }
 
     private func publishState() {
+        evaluateReporting()
         configured = serverStates.values.contains { $0.configured }
         connected = canRelay && serverStates.values.contains { $0.connected }
         status = !canRelay ? "Waiting for watch refresh" : connected ? "Connected" : configured ? "No connected servers" : "Configure on phone"
@@ -223,7 +410,17 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        Task { @MainActor [weak self] in self?.publishState() }
+        Task { @MainActor [weak self] in self?.refreshWatchIdentity() }
+    }
+
+    nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
+        Task { @MainActor [weak self] in self?.refreshWatchIdentity() }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        guard let value = applicationContext[WatchReportingIdentity.contextKey] else { return }
+        let data = value as? Data ?? Data()
+        Task { @MainActor [weak self] in self?.refreshWatchIdentity(contextValue: data) }
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
@@ -231,7 +428,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
-        Task { @MainActor [weak self] in self?.watchStatus = "Watch session inactive" }
+        Task { @MainActor [weak self] in
+            self?.watchStatus = "Watch session inactive"
+            self?.setWatchIdentity(.failure(.watchUnavailable))
+        }
     }
 
     nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }
@@ -266,8 +466,21 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 self.watchWritesInFlight += 1
                 defer { self.watchWritesInFlight -= 1 }
                 var successful = self.completedMessages[message.id] ?? []
-                let ready = self.sessions.filter { $0.value.state.connected }
+                let enabled = Set(self.servers.filter(\.enabled).map(\.id))
+                var ready = self.sessions.filter { enabled.contains($0.key) && $0.value.state.connected }
+                if let target = message.serverID {
+                    // Directed CoT (for example GeoChat) goes only to its source server and is never broadcast.
+                    guard self.servers.contains(where: { $0.id == target && $0.enabled }),
+                          let session = ready[target] else {
+                        throw CompanionFailure.message("The contact's TAK server is not connected. Message not sent.")
+                    }
+                    ready = [target: session]
+                }
                 for (id, server) in ready where !successful.contains(id) {
+                    if self.shouldSuppressWatchPLI(xml, serverID: id) {
+                        successful.insert(id)
+                        continue
+                    }
                     do { try await server.send(xml); successful.insert(id) }
                     catch { continue }
                 }
@@ -328,7 +541,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         saveMapCache()
         let reply = BridgeWire.Message(kind: .mapSnapshot, id: message.id, ready: connected,
             configured: configured, detail: status, sessionID: bridgeSessionID,
-            enabledServerIDs: enabled.map(\.id), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"))
+            enabledServerIDs: enabled.map(\.id), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"),
+            phoneReporting: phoneReportingSummary)
         return try mapCache.filling(reply)
     }
 
@@ -410,7 +624,8 @@ private final class CompanionServerSession {
         do {
             guard let stored = try CertificateStore.read(endpoint: record.endpoint.key) else { throw CompanionFailure.message("Certificate required.") }
             let ca = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(record.endpoint.key)")
-            try connection.connect(endpoint: record.endpoint, identity: CertificateStore.resolve(stored), trustedCA: ca)
+            try connection.connect(endpoint: record.endpoint, identity: CertificateStore.resolve(stored),
+                                   trustedCA: ca, streamTLSName: record.streamTLSName)
         } catch { state.detail = error.localizedDescription; state.connected = false; onState?(state) }
     }
 

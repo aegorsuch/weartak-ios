@@ -182,11 +182,9 @@ private struct WatchDashboardView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task {
             WKInterfaceDevice.current().isBatteryMonitoringEnabled = true
-            model.startHeadingUpdates()
             await physiology.startViewing()
         }
         .onDisappear {
-            model.stopHeadingUpdates()
             physiology.stopViewing()
         }
     }
@@ -224,15 +222,18 @@ private struct WatchDashboardView: View {
                     Text(settings.dashboardMetric.rawValue)
                         .font(.system(size: small ? 10 : 12))
                         .foregroundStyle(.secondary)
-                    HStack(spacing: 4) {
+                    HStack(spacing: 2) {
                         Image(systemName: settings.dashboardMetric.symbol)
-                            .font(.system(size: 16))
+                            .font(.system(size: small ? 11 : 13))
                             .foregroundStyle(accent)
                         Text(settings.dashboardMetric == .exertion
                             ? physiology.exertionPercent.map { "\($0)%" } ?? "--%"
                             : physiology.heartRate.map { "\($0)" } ?? "--")
-                            .font(.system(size: small ? 21 : 24, weight: .semibold))
+                            .font(.system(size: small ? 16 : 18, weight: .semibold))
                             .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .layoutPriority(1)
                     }
                 }
                 .padding(.horizontal, 4)
@@ -613,6 +614,7 @@ private struct TacticalMapView: View {
     )
     @State private var hasCentered = false
     @State private var pointDraft: MapPointDraft?
+    @State private var contactSelection: MapContactSelection?
     @State private var showLayersMenu = false
     @State private var showChannelsMenu = false
     @State private var longPressStart: CGPoint?
@@ -665,6 +667,7 @@ private struct TacticalMapView: View {
                                                        teamName: entity.team, role: entity.role)
                                 }
                                 .annotationTitles(.hidden)
+                                .tag(MapPointSelection.contact(entity.id))
                             }
                         } else {
                             Marker(incomingMapTitle(entity), systemImage: "mappin", coordinate: entity.coordinate)
@@ -722,6 +725,8 @@ private struct TacticalMapView: View {
                     if let marker = model.markers.first(where: { $0.id == id }) {
                         pointDraft = MapPointDraft(marker: marker)
                     }
+                case .contact(let uid):
+                    contactSelection = MapContactSelection(id: uid)
                 }
                 selectedMapPoint = nil
             }
@@ -763,7 +768,8 @@ private struct TacticalMapView: View {
                 }
             }
             .padding(.trailing, 5)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .top) {
@@ -797,40 +803,35 @@ private struct TacticalMapView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if settings.relayProvider == .companion {
-                    CompanionMapStatusView(model: model, client: model.companionClient)
-                }
-                bloodhoundPanel
-            }
+            bloodhoundPanel
         }
         .onAppear {
-            updateBloodhoundHeading()
             #if DEBUG
             showChannelsMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-channels")
             showLayersMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-filters") ||
                 ProcessInfo.processInfo.arguments.contains("--preview-empty-layers")
             #endif
         }
-        .onDisappear { model.stopHeadingUpdates() }
-        .onChange(of: model.bloodhoundTargetID) { _, _ in
-            updateBloodhoundHeading()
-        }
-        .sheet(item: $pointDraft, onDismiss: updateBloodhoundHeading) { draft in
+        .sheet(item: $pointDraft) { draft in
             NavigationStack {
                 if let marker = draft.marker {
                     PointDetailView(model: model, marker: marker)
                 } else {
                     SelfCoordinateView(coordinate: draft.coordinate)
                 }
+                .sheet(item: $contactSelection) { selection in
+                    NavigationStack {
+                        MapContactDetailView(model: model, uid: selection.id)
+                    }
+                }
             }
         }
-        .sheet(isPresented: $showLayersMenu, onDismiss: updateBloodhoundHeading) {
+        .sheet(isPresented: $showLayersMenu) {
             NavigationStack {
                 MapLayersMenuView(model: model, settings: settings)
             }
         }
-        .sheet(isPresented: $showChannelsMenu, onDismiss: updateBloodhoundHeading) {
+        .sheet(isPresented: $showChannelsMenu) {
             NavigationStack {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--preview-map-channels"),
@@ -879,14 +880,6 @@ private struct TacticalMapView: View {
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(.regularMaterial)
-        }
-    }
-
-    private func updateBloodhoundHeading() {
-        if model.bloodhoundTarget != nil {
-            model.startHeadingUpdates()
-        } else {
-            model.stopHeadingUpdates()
         }
     }
 
@@ -1099,6 +1092,94 @@ private struct MapServerChannelsView: View {
 private enum MapPointSelection: Hashable {
     case selfMarker
     case marker(UUID)
+    case contact(String)
+}
+
+private struct MapContactSelection: Identifiable {
+    let id: String
+}
+
+private struct MapContactDetailView: View {
+    @ObservedObject var model: WatchSessionModel
+    let uid: String
+    private var contact: IncomingMapEntity? { model.incomingEntities.first { $0.id == uid && $0.isUser } }
+
+    var body: some View {
+        List {
+            if let contact {
+                Text(String(format: "Lat: %.5f", contact.latitude))
+                Text(String(format: "Lon: %.5f", contact.longitude))
+                Text(MapCoordinateFormatter.mgrs(contact.coordinate) ?? "MGRS unavailable")
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                if let route = contact.chatRoute {
+                    NavigationLink("Start Chat") {
+                        ContactChatView(model: model, uid: contact.id, route: route,
+                                        title: contact.callSign ?? contact.id)
+                    }
+                    .disabled(model.chatUnavailableReason(for: contact) != nil)
+                } else {
+                    Text("Start Chat").foregroundStyle(.secondary)
+                }
+                if let reason = model.chatUnavailableReason(for: contact) {
+                    Text(reason).font(.caption).foregroundStyle(.secondary)
+                }
+                Button(model.bloodhoundContactID == uid ? "Stop Bloodhound" : "Bloodhound to Contact") {
+                    model.toggleContactBloodhound(uid: uid)
+                }
+                TimelineView(.periodic(from: .now, by: 5)) { context in
+                    Text("Last position \(MapContactAge(lastSeen: contact.lastSeen, now: context.date).spokenText)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if let team = contact.team { Text("Team: \(team)").font(.caption) }
+                if let role = contact.role { Text("Role: \(role)").font(.caption) }
+            } else {
+                Text("Contact unavailable or expired.").foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle(contact?.callSign ?? "Contact")
+    }
+}
+
+private struct ContactChatView: View {
+    @ObservedObject var model: WatchSessionModel
+    let uid: String
+    let route: ContactChatRoute
+    let title: String
+    @State private var text = ""
+    @State private var sending = false
+    @State private var error: String?
+    @State private var sent = false
+
+    var body: some View {
+        List {
+            ForEach(model.contactMessages[ContactConversation(uid: uid, route: route)] ?? []) { message in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(message.senderUID == SitxClient.deviceID() ? "You" : message.senderCallSign)
+                        .font(.caption2).foregroundStyle(.secondary)
+                    Text(message.text)
+                }
+            }
+            TextField("Message", text: $text)
+                .disabled(sending)
+            Button(sending ? "Sending..." : "Send") {
+                sending = true
+                error = nil
+                sent = false
+                Task {
+                    defer { sending = false }
+                    do {
+                        try await model.sendContactChat(uid: uid, route: route, text: text)
+                        text = ""
+                        sent = true
+                    } catch { self.error = error.localizedDescription }
+                }
+            }
+            .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+            if sent { Text("Accepted by transport; recipient delivery is not confirmed.").font(.caption) }
+        }
+        .navigationTitle(title)
+    }
 }
 
 private struct MapPointDraft: Identifiable {
@@ -1116,57 +1197,6 @@ private struct MapPointDraft: Identifiable {
         id = "self"
         self.coordinate = coordinate
         marker = nil
-    }
-}
-
-private struct CompanionMapStatusView: View {
-    @ObservedObject var model: WatchSessionModel
-    @ObservedObject var client: WatchCompanionOutput
-    @State private var showDetails = false
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { context in
-            HStack(spacing: 6) {
-                Button { showDetails = true } label: {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(client.mapRefreshing ? "Refreshing TAK..." : client.isReady ? "TAK connected" : "Cached TAK")
-                        if let error = client.mapRefreshError ?? model.mapCacheError {
-                            Text(error).foregroundStyle(.orange).lineLimit(1)
-                        } else if let latest = model.incomingEntities.filter({ $0.sourceServerID != nil }).map(\.lastSeen).max() {
-                            Text("Newest position \(max(0, Int(context.date.timeIntervalSince(latest))))s old")
-                        } else {
-                            Text("No current contacts")
-                        }
-                    }
-                    .font(.system(size: 10))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    Task { await client.refreshMap() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .frame(width: 28, height: 28)
-                }
-                .disabled(client.mapRefreshing)
-                .accessibilityLabel("Refresh TAK map")
-            }
-            .padding(.horizontal, 8)
-            .background(.regularMaterial)
-        }
-        .sheet(isPresented: $showDetails) {
-            NavigationStack {
-                List {
-                    Text(client.status)
-                    if let error = client.mapRefreshError { Text(error).foregroundStyle(.orange) }
-                    if let error = model.mapCacheError { Text(error).foregroundStyle(.orange) }
-                    Text("Positions show their reported age. Cached positions are not live and expire after five minutes or their CoT stale time.")
-                        .font(.caption)
-                    Button("Refresh TAK map") { Task { await client.refreshMap() } }
-                        .disabled(client.mapRefreshing)
-                }
-                .navigationTitle("Map freshness")
-            }
-        }
     }
 }
 
@@ -1340,8 +1370,6 @@ private struct BloodhoundView: View {
             }
         }
         .navigationTitle(model.bloodhoundTarget == nil ? "Compass" : "Navigation")
-        .onAppear { model.startHeadingUpdates() }
-        .onDisappear { model.stopHeadingUpdates() }
     }
 }
 
@@ -1654,9 +1682,7 @@ private struct PointDetailView: View {
         .navigationTitle("Point Details")
         .onAppear {
             model.requestLocation()
-            model.startHeadingUpdates()
         }
-        .onDisappear { model.stopHeadingUpdates() }
         .confirmationDialog("Delete point?", isPresented: $confirmDelete) {
             Button("Delete Marker", role: .destructive) {
                 model.deleteMarker(id: marker.id)

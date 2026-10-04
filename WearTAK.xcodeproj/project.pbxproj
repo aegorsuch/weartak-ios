@@ -493,6 +493,9 @@
 				DEVELOPMENT_TEAM = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "WearTAK Companion";
+				INFOPLIST_FILE = "WearTAKCompanion-Info.plist";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK Companion automatically sends this iPhone's GPS position to your enabled TAK servers as your paired watch's TAK identity.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Always lets WearTAK Companion resume sending this iPhone's GPS position to your enabled TAK servers when your watch wakes it in the background.";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;
@@ -519,6 +522,9 @@
 				DEVELOPMENT_TEAM = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "WearTAK Companion";
+				INFOPLIST_FILE = "WearTAKCompanion-Info.plist";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WearTAK Companion automatically sends this iPhone's GPS position to your enabled TAK servers as your paired watch's TAK identity.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Always lets WearTAK Companion resume sending this iPhone's GPS position to your enabled TAK servers when your watch wakes it in the background.";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 5.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aegorsuch.weartak;

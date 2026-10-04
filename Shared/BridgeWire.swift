@@ -28,6 +28,7 @@ enum BridgeWire {
         var enabledServerIDs: [UUID]?
         var snapshotTruncated: Bool?
         var refreshError: String?
+        var phoneReporting: String?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)

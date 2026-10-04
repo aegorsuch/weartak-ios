@@ -54,6 +54,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     private var isAppActive = true
     var onReady: (() -> Void)?
     var onDisconnected: (() -> Void)?
+    var onChat: ((TAKChatMessage) -> Void)?
     var currentLocation: CLLocation?
     var additionalOutput: (any CoTOutput)?
     var companionOutput: (any CoTOutput)?
@@ -161,6 +162,10 @@ final class SitxClient: ObservableObject, TAKTransport {
                         case .data(let bytes): data = bytes
                         @unknown default: continue
                         }
+                        if let chat = TAKChatMessage.parse(String(decoding: data, as: UTF8.self), ownUID: Self.deviceID()) {
+                            self.onChat?(chat)
+                            continue
+                        }
                         for entity in SitxCoT.parse(data, excluding: Self.deviceID()) {
                             self.entityContinuation?.yield(entity)
                         }
@@ -214,6 +219,11 @@ final class SitxClient: ObservableObject, TAKTransport {
                         if self.socket === socket { connectionFailed(error) }
             throw error
         }
+    }
+
+    func sendContactChat(_ xml: String) async throws {
+        guard isSitxConnected else { throw TAKTransportError.notConfigured }
+        try await sendXML(xml)
     }
 
     private func sendEvent(_ xml: String, key: String) async throws {

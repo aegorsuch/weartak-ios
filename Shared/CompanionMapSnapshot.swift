@@ -11,7 +11,7 @@ struct CompanionMapEvent: Codable {
 
     var isValid: Bool {
         sourceGeneration >= 0 && receivedAt.timeIntervalSince1970.isFinite &&
-            CoTStreamFramer.isEvent(Data(xml.utf8)) && header != nil
+            CoTStreamFramer.isEvent(Data(xml.utf8)) && header != nil && header?.type != "b-t-f"
     }
 
     var header: CoTMapHeader? { CoTMapHeader.parse(xml) }
@@ -87,6 +87,7 @@ struct CompanionMapCache: Codable {
 
 struct CoTMapHeader {
     let uid: String
+    let type: String?
     let time: Date?
     let stale: Date?
 
@@ -110,7 +111,7 @@ struct CoTMapHeader {
         let stale = date(attributes["stale"])
         guard attributes["time"] == nil || time != nil,
               attributes["stale"] == nil || stale != nil else { return nil }
-        return Self(uid: uid, time: time, stale: stale)
+        return Self(uid: uid, type: attributes["type"], time: time, stale: stale)
     }
 }
 

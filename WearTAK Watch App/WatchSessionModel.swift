@@ -70,6 +70,12 @@ struct IncomingMapEntity: Identifiable {
     let sourceGeneration: Int
     let expiresAt: Date?
     let isUser: Bool
+    var sourceTransport: ContactChatRoute? = nil
+
+    var chatRoute: ContactChatRoute? {
+        if let sourceServerID { return .companion(sourceServerID) }
+        return sourceTransport
+    }
 
     var teamColor: TeamColor? { TeamColor(cotName: team) }
     var roleBadge: String? { SitxCoT.roleBadge(role) }
@@ -92,6 +98,27 @@ enum MarkerKind: String, CaseIterable, Identifiable, Codable {
     case hostile = "Hostile"
 
     var id: String { rawValue }
+}
+
+struct BloodhoundDestination {
+    let latitude: Double
+    let longitude: Double
+    let displayTitle: String
+    var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
+}
+
+struct ContactConversation: Hashable {
+    let uid: String
+    let route: ContactChatRoute
+}
+
+enum ContactChatRoute: Hashable {
+    case companion(UUID), multicast, sitx
+}
+
+private enum ContactChatFailure: LocalizedError {
+    case message(String)
+    var errorDescription: String? { switch self { case .message(let text): return text } }
 }
 
 enum PLIReportingRoute {
@@ -148,6 +175,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
         MapUserGroup.make(values: incomingEntities.filter(\.isUser).compactMap(\.role))
     }
     @Published private(set) var bloodhoundTargetID: UUID?
+    @Published private(set) var bloodhoundContactID: String?
+    @Published private(set) var contactMessages: [ContactConversation: [TAKChatMessage]] = [:]
     @Published private(set) var headingDegrees: Double?
     @Published private(set) var activeAlertType: ManualAlertType?
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
@@ -213,7 +242,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 self.locationManager.stopUpdatingLocation()
             }
         }
-        multicastClient.onEntity = { [weak self] entity in self?.receiveEntity(entity) }
+        multicastClient.onEntity = { [weak self] entity in self?.receiveEntity(entity, sourceTransport: .multicast) }
+        multicastClient.onChat = { [weak self] chat in self?.recordChat(chat, route: .multicast) }
+        sitxClient.onChat = { [weak self] chat in self?.recordChat(chat, route: .sitx) }
         companionClient.onStateChange = { [weak self] in
             guard let self else { return }
             self.companionServerConfigured = self.companionClient.configured
@@ -226,6 +257,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         companionClient.onCoT = { [weak self] message in
             guard let self, let xml = message.xml else { return }
+            if let source = message.sourceServerID,
+               let chat = TAKChatMessage.parse(xml, ownUID: SitxClient.deviceID()) {
+                self.recordChat(chat, route: .companion(source))
+                return
+            }
             let now = Date()
             let header = CoTMapHeader.parse(xml)
             let seen = min(header?.time ?? now, now)
@@ -318,7 +354,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func setAppActive(_ active: Bool) {
         isAppActive = active
-        if active { pruneIncomingEntities() }
+        if active {
+            pruneIncomingEntities()
+            startHeadingUpdates()
+        } else {
+            stopHeadingUpdates()
+        }
         companionClient.setActive(active)
         multicastClient.setAppActive(active)
         sitxClient.setAppActive(active)
@@ -339,13 +380,15 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
     }
 
-    func startHeadingUpdates() {
-        guard CLLocationManager.headingAvailable(), !isUpdatingHeading else { return }
+    private func startHeadingUpdates() {
+        guard isAppActive, CLLocationManager.headingAvailable(), !isUpdatingHeading,
+              locationManager.authorizationStatus == .authorizedAlways ||
+                locationManager.authorizationStatus == .authorizedWhenInUse else { return }
         isUpdatingHeading = true
         locationManager.startUpdatingHeading()
     }
 
-    func stopHeadingUpdates() {
+    private func stopHeadingUpdates() {
         guard isUpdatingHeading else { return }
         isUpdatingHeading = false
         locationManager.stopUpdatingHeading()
@@ -372,7 +415,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 incomingEntityTask = Task {
                     for await payload in incoming {
                         guard !Task.isCancelled else { break }
-                        receiveEntity(payload)
+                        receiveEntity(payload, sourceTransport: .sitx)
                     }
                 }
                 requestLocation()
@@ -471,13 +514,76 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func toggleBloodhound(id: UUID) {
+        bloodhoundContactID = nil
         bloodhoundTargetID = (bloodhoundTargetID == id) ? nil : id
         bloodhoundProximityNotified = false
     }
 
-    var bloodhoundTarget: WatchMarker? {
-        guard let bloodhoundTargetID else { return nil }
-        return markers.first { $0.id == bloodhoundTargetID }
+    func toggleContactBloodhound(uid: String) {
+        guard incomingEntities.contains(where: { $0.id == uid && $0.isUser }) else { return }
+        bloodhoundTargetID = nil
+        bloodhoundContactID = bloodhoundContactID == uid ? nil : uid
+        bloodhoundProximityNotified = false
+        requestLocation()
+    }
+
+    var bloodhoundTarget: BloodhoundDestination? {
+        if let uid = bloodhoundContactID, let contact = incomingEntities.first(where: { $0.id == uid && $0.isUser }) {
+            return BloodhoundDestination(latitude: contact.latitude, longitude: contact.longitude,
+                displayTitle: contact.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? contact.id)
+        }
+        guard let id = bloodhoundTargetID, let marker = markers.first(where: { $0.id == id }) else { return nil }
+        return BloodhoundDestination(latitude: marker.latitude, longitude: marker.longitude, displayTitle: marker.displayTitle)
+    }
+
+    func chatUnavailableReason(for contact: IncomingMapEntity) -> String? {
+        if !settings.chatEnabled { return "Enable Chat in settings." }
+        if !contact.isUser { return "Chat is available for user contacts only." }
+        guard let route = contact.chatRoute else { return "The contact's chat transport is unknown." }
+        switch route {
+        case .companion:
+            if !companionClient.isReady { return "Connect Companion to the contact's TAK server to send chat." }
+        case .multicast:
+            if !multicastClient.isReady { return "Connect local TAK multicast to send chat." }
+        case .sitx:
+            if !sitxClient.isSitxConnected { return "Connect to this contact's Sit(x) source to send chat." }
+        }
+        return nil
+    }
+
+    func sendContactChat(uid: String, route: ContactChatRoute, text: String) async throws {
+        guard let contact = incomingEntities.first(where: { $0.id == uid && $0.chatRoute == route }) else {
+            throw ContactChatFailure.message("This contact is no longer available on that transport.")
+        }
+        if let reason = chatUnavailableReason(for: contact) { throw ContactChatFailure.message(reason) }
+        let ownUID = SitxClient.deviceID()
+        let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
+            senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
+            recipientUID: contact.id, recipientCallSign: contact.callSign ?? contact.id, text: text)
+        switch route {
+        case .companion(let serverID): try await companionClient.sendChat(xml, serverID: serverID)
+        case .multicast: try await multicastClient.send(xml)
+        case .sitx: try await sitxClient.sendContactChat(xml)
+        }
+        guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
+            throw ContactChatFailure.message("Unable to record the outgoing chat message.")
+        }
+        recordChat(message, route: route)
+    }
+
+    private func recordChat(_ message: TAKChatMessage, route: ContactChatRoute) {
+        let ownUID = SitxClient.deviceID()
+        let other = message.senderUID == ownUID ? message.recipientUID : message.senderUID
+        let key = ContactConversation(uid: other, route: route)
+        var messages = contactMessages[key] ?? []
+        guard !messages.contains(where: { $0.id == message.id }) else { return }
+        messages.append(message)
+        messages.sort { $0.sentAt < $1.sentAt }
+        contactMessages[key] = Array(messages.suffix(50))
+        if contactMessages.count > 50,
+           let oldest = contactMessages.min(by: { ($0.value.last?.sentAt ?? .distantPast) < ($1.value.last?.sentAt ?? .distantPast) })?.key {
+            contactMessages.removeValue(forKey: oldest)
+        }
     }
 
     func bloodhoundReading(from location: CLLocation) -> (bearingDegrees: Double, rangeMeters: Double)? {
@@ -519,7 +625,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date(), sourceServerID: UUID? = nil,
-                       sourceGeneration: Int = 0, expiresAt: Date? = nil) {
+                       sourceGeneration: Int = 0, expiresAt: Date? = nil, sourceTransport: ContactChatRoute? = nil) {
         if let sourceServerID, sourceGeneration < sourceGenerations[sourceServerID, default: 0] { return }
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
@@ -535,7 +641,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             type: payload.type, lastSeen: now,
             callSign: metadata.callSign, team: metadata.team, role: metadata.role,
             sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt,
-            isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type)
+            isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type), sourceTransport: sourceTransport
         )
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
             incomingEntities[index] = entity
@@ -554,6 +660,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
             now.timeIntervalSince($0.lastSeen) > 300 || ($0.expiresAt.map { $0 <= now } ?? false)
         }
         companionMapCache.prune(now: now)
+        if let uid = bloodhoundContactID, !incomingEntities.contains(where: { $0.id == uid }) {
+            bloodhoundContactID = nil
+            bloodhoundProximityNotified = false
+        }
     }
 
     private func refreshSource(_ id: UUID, generation: Int) {
@@ -663,8 +773,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
 extension WatchSessionModel: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        guard isAppActive else { return }
         guard manager.authorizationStatus == .authorizedAlways ||
-                manager.authorizationStatus == .authorizedWhenInUse else { return }
+                manager.authorizationStatus == .authorizedWhenInUse else {
+            stopHeadingUpdates()
+            return
+        }
+        startHeadingUpdates()
         if connectionState == .connected, transport.pliReportingRoute == .standaloneSitx {
             manager.startUpdatingLocation()
         } else {

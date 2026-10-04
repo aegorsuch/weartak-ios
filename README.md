@@ -305,6 +305,17 @@ identities and import passwords are stored in endpoint-scoped Keychain entries.
 Enrollment passwords are not persisted; renew by enrolling again. The UI
 reports certificate expiration and a renewal warning within three days.
 
+If a legacy stream certificate covers a different DNS name, disable the server
+and edit Advanced TLS identity > Stream TLS name. Enter only an
+administrator-confirmed DNS name covered by that server certificate's SAN.
+Blank restores validation against the connection host. The override changes
+CoT stream certificate hostname validation and TLS SNI, but not the connection
+address, port, certificate storage key, enrollment, or Channels HTTPS identity.
+CA trust, validity dates and client authentication remain enforced. Names
+are never selected automatically from a presented certificate. Reissuing the
+server certificate with the actual connection hostname in its SAN is preferred.
+The override cannot repair a certificate with no acceptable SAN.
+
 Watch CoT is sent to all connected, enabled servers. An acknowledgement means
 at least one server socket accepted the write, not that a remote TAK user
 received it. Incoming CoT is forwarded to a reachable watch. Readiness is
@@ -314,16 +325,80 @@ Live messaging availability is not TAK server health. When the watch is
 backgrounded, the phone may show "Waiting for watch app"; this does not mean
 the devices are unpaired.
 
+### Phone GPS location reporting
+
+There is no separate tracking switch. Companion starts reporting this iPhone's
+GPS automatically when all of these are true: at least one enabled TAK server
+has a client certificate, the paired watch has shared a verified WearTAK
+identity, the watch's TAK Relay is Companion, Location Services are on, and
+Companion has precise location access. The first start must happen while
+Companion is open. iOS first asks for While Using access, then, once only, for
+Always access. With Always, a watch request that wakes Companion can also
+resume reporting in the background.
+
+The position source is the phone's GPS, not the watch's. Reports are
+`a-f-G-U-C` PLI using the watch's UID, callsign, team and role, with
+`how="m-g"`, `precisionlocation` GPS and `takv` platform "WearTAK Companion".
+The watch publishes this identity, plus its relay selection and reporting
+intervals, through WatchConnectivity application context whenever those
+settings change, at session activation, and on watch app resume when the last
+publish is over an hour old.
+Companion verifies the UID and field bounds and rejects identities older than
+seven days or dated more than five minutes in the future. It accepts identity
+only from an activated session with a paired watch that has WearTAK installed.
+Companion keeps no separate identity copy; WatchConnectivity persists the
+latest context per paired watch, so switching watches cannot reuse another
+user's identity. Companion never generates a phone UID. If the watch is
+unavailable, the identity is missing or invalid, or the watch sends PLI with a
+different UID, reporting stops and the reason is shown.
+
+The interval follows the watch's Constant or Activity-based setting, chosen
+from the phone's GPS speed, and is bounded to 10-600 seconds. The phone's Wi-Fi
+battery multiplier and alert interval are not applied. Fixes are rejected if
+they are invalid or `0,0`, have accuracy worse than 100 m, are older than 30
+seconds, or are dated more than 5 seconds in the future. `time` is the send
+time, `start` is the fix time, and `stale` is three intervals plus 60 seconds.
+Phone GPS is preferred on the Companion relay. After a server accepts a phone
+report, Companion suppresses the watch's own PLI for the same UID on that server
+only, while the latest phone fix remains valid and the last accepted report is
+within the interval plus 90 seconds. If phone GPS becomes stale or inaccurate,
+reporting stops, or that server has no recent accepted phone report, watch PLI
+is relayed again while the watch app is active and its relay is available.
+This fallback cannot run while watchOS suspends the watch app, and cannot
+bypass an unavailable Companion connection. Direct Sit(x) and multicast
+continue using watch GPS. Watch alerts, alert cancels and dropped points are
+always relayed. iTAK and TAK Aware do not supply WearTAK location or connectivity;
+Companion requires its own permissions and TAK connection.
+
+Companion shows the reporting state, identity, location access, interval, last
+report and any error, and the watch shows the same state under its TAK Relay
+setting. iOS shows a location indicator while Companion reports in the
+background. The app uses the `location` background mode only for this active
+location session; there is no workout session, silent audio or keepalive timer.
+While reporting is active, server streams remain open and reconnect after
+failures every 10 seconds. iOS still does not guarantee that sockets survive
+network changes or suspension, and reports are not queued while disconnected.
+Reporting stops when no enabled server has a certificate, location access is
+revoked or reduced to approximate, Location Services are turned off, or the
+identity becomes invalid. If access is While Using only, reporting can start
+only while Companion is open. Force-quitting Companion, iOS terminating it,
+or rebooting the phone stops reporting until Companion is opened again.
+
 ### Locked-phone map refresh
 
 The foreground watch automatically requests a map refresh on resume and every
-30 seconds while open; the map's refresh button can request one sooner.
+30 seconds while open. There is no connection-status or manual map-refresh
+entry in Layers.
+Live readiness confirmations run separately every five seconds, so a slow
+snapshot request does not block the heartbeat or cause the 15-second readiness
+deadline to expire. A missed confirmation still marks the relay unavailable.
 WatchConnectivity can wake the iPhone app, which requests up to 25 seconds of
 iOS background execution and reconnects enabled TAK streams. It requests
 `/Marti/api/groups/all?useCache=true&sendLatestSA=true` to ask supported servers
 to resend recent situational awareness, then returns a bounded map snapshot.
 Streams stop when the background task expires and can reconnect on a subsequent
-watch request. This does not grant continuous background execution.
+watch request. This short refresh task is separate from phone location
+reporting and does not grant continuous background execution.
 
 Both apps cache up to 50 incoming Companion events. The watch displays cached
 positions immediately while refreshing. Cache replay preserves the original
@@ -331,12 +406,19 @@ CoT timestamp; reconnecting does not make an old position appear new. Entries
 expire at the CoT stale time or after five minutes, whichever comes first.
 Disabling/removing a server excludes its cached events on the next snapshot,
 and channel changes invalidate that source's cached events. Snapshot payloads
-are limited to 60 KB, with an explicit warning if contacts are omitted.
+are limited to 60 KB; truncation is recorded in the refresh error state.
 
-The map footer distinguishes refreshing, connected and cached states, shows
-the newest position's age, and opens detailed refresh errors. Failed refreshes
-leave unexpired cached contacts visible, not falsely labeled live. Local map
+The map and Layers menu do not display connection information. Incoming user
+dots retain their age labels and stale styling. The map Back
+button sits at the lower right, away from the upper-right Channels selector.
+Failed refreshes leave unexpired cached contacts visible, not falsely labeled live. Local map
 points and independent transports are not cleared by Companion restarts.
+
+Compass sensing is owned by the active watch session, not individual screens.
+Opening maps, sheets or point details cannot stop another screen's compass;
+heading updates restart when the app resumes or location permission is granted
+and stop when it backgrounds. Hardware without a compass, denied location
+permission, or invalid sensor accuracy can still make headings unavailable.
 
 Install matching phone/watch builds for snapshot support. The phone must be
 in range, unlocked at least once after restarting for Keychain access, and
@@ -346,6 +428,28 @@ a fresh snapshot. Test locked-phone and wrist-down/resume operation on paired
 hardware; simulator tests cannot guarantee background wake-up. There is no
 guaranteed continuous background relay, emergency-alert delivery, or durable
 offline PLI replay.
+
+### Map contact actions
+
+Tap an incoming user dot to open its contact panel. Latitude, longitude and MGRS
+appear first, followed by Start Chat and Bloodhound to Contact. Bloodhound uses
+the contact's latest received position as it moves, shares the dashboard
+direction/range and map line with point navigation, and stops when the contact
+expires. Selecting a local point instead replaces the contact target.
+
+Contact chat uses GeoChat CoT through the contact's source: Companion, local
+multicast or standalone Sit(x). Companion sends through that contact's
+source server only, never across all enabled servers. Multicast sends on the
+shared local network with the recipient UID in the message; it is not private
+point-to-point transport. A successful send means the transport accepted the
+message, not confirmed recipient delivery.
+Replies addressed to the watch UID appear in the matching source/contact
+conversation. Conversations are in-memory and bounded to 50 contacts with 50
+messages each. Unknown or unavailable sources show an explicit unavailable message;
+live ATAK interoperability still needs paired-device/server testing.
+
+The dashboard metric uses smaller, single-line, scaling text and a smaller
+icon to preserve the full exertion percentage on small watch screens.
 
 ### Map Channels
 
@@ -486,8 +590,9 @@ Multicast does not retain offline events or retry unacknowledged datagrams.
 
 ### Limitations
 
-Reporting is foreground-only; continuous screen-off/background tracking is not
-implemented. Direct Sit(x) pauses only when the optional Companion transport is
+Watch reporting is foreground-only; continuous screen-off/background watch
+tracking is not implemented. Background PLI is available only from the phone's
+GPS through Companion, as described in Phone GPS location reporting. Direct Sit(x) pauses only when the optional Companion transport is
 confirmed ready. Physical Bluetooth pairing alone is not proof of relay
 readiness. Chat delivery is not implemented.
 
@@ -509,6 +614,8 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/SitxCoT.swift' \
   'WearTAK Watch App/MulticastTAKTransport.swift' \
   'WearTAK Watch App/SitxClient.swift' \
+  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKChat.swift \
   Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
 ```
@@ -534,6 +641,39 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/TAKChannelModels.swift Tests/CompanionMapChecks.swift \
   -o /tmp/weartak-map-checks
 /tmp/weartak-map-checks
+```
+
+Stream TLS-name checks cover validation, persistence, older settings without an
+override, clearing the override and preserving the connection address:
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/CompanionEndpoint.swift Shared/CompanionServer.swift \
+  Tests/CompanionServerChecks.swift -o /tmp/weartak-server-checks
+/tmp/weartak-server-checks
+```
+
+Directed GeoChat checks cover recipient addressing, XML escaping, message
+bounds, incoming reply parsing and chat exclusion from map snapshots:
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKChat.swift Tests/TAKChatChecks.swift \
+  -o /tmp/weartak-chat-checks
+/tmp/weartak-chat-checks
+```
+
+Phone GPS reporting checks cover identity freshness and UID guards, interval and
+fix bounds, PLI XML shape and exact timestamps, watch PLI suppression scope and
+start/stop gating:
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/PhoneLocationReporting.swift \
+  Tests/PhoneLocationReportingChecks.swift -o /tmp/weartak-phone-checks
+/tmp/weartak-phone-checks
 ```
 
 `Tests/CompanionSecurityChecks.swift` also checks generated CSR signatures,

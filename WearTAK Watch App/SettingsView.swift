@@ -504,6 +504,9 @@ struct NetworkPreferencesView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    if settings.relayProvider == .companion {
+                        CompanionPhoneGPSStatusView(client: model.companionClient)
+                    }
                 }
             }
             NavigationLink {
@@ -655,6 +658,22 @@ private struct RelayProviderView: View {
             }
         }
         .navigationTitle("TAK Relay")
+    }
+}
+
+private struct CompanionPhoneGPSStatusView: View {
+    @ObservedObject var client: WatchCompanionOutput
+
+    var body: some View {
+        if let error = client.identitySyncError {
+            Text(error)
+                .font(.caption2)
+                .foregroundStyle(.orange)
+        } else if let status = client.phoneReportingStatus {
+            Text("Phone GPS: \(status)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

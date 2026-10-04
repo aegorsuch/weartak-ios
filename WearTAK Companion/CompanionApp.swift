@@ -37,12 +37,29 @@ struct CompanionSetupView: View {
             List {
                 Section("Watch") {
                     LabeledContent("Live messaging", value: bridge.watchStatus)
-                    Text("Open WearTAK on the watch to request a short refresh, even while this phone is locked. This is not continuous background tracking.")
+                    Text("Open WearTAK on the watch to request a short map refresh, even while this phone is locked. Map refreshes are separate from phone location reporting.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if let error = bridge.mapCacheError {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
+                }
+                Section("Phone Location Reporting") {
+                    LabeledContent("Status", value: bridge.phoneReporting.running ? bridge.phoneReporting.state : "Off")
+                    if let detail = bridge.phoneReporting.detail {
+                        Text(detail).font(.caption).foregroundStyle(.orange)
+                    }
+                    LabeledContent("Reporting as", value: bridge.phoneReporting.identity ?? "Waiting for watch identity")
+                    LabeledContent("Location access", value: bridge.phoneReporting.permission)
+                    if let interval = bridge.phoneReporting.interval {
+                        LabeledContent("Interval", value: "\(Int(interval)) s")
+                    }
+                    if let last = bridge.phoneReporting.lastReportAt {
+                        LabeledContent("Last report") { Text(last, style: .relative) }
+                    }
+                    Text("Position comes from this iPhone's GPS and is sent automatically to enabled TAK servers as the watch's callsign, team, role and UID while WearTAK Companion is the watch's TAK Relay. The watch's own position report is not relayed while the phone is reporting; watch alerts and points are still sent. iOS shows a location indicator while reporting in the background. Reporting stops when no server is enabled, location access is removed or Companion is force-quit.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Section("TAK Servers") {
                     if bridge.servers.isEmpty {
@@ -123,6 +140,7 @@ private struct CompanionServerEditor: View {
     @State private var host: String
     @State private var port: String
     @State private var enrollmentPort: String
+    @State private var streamTLSName: String
     @AppStorage("WearTAK.bridge.deviceID") private var deviceID = ""
     @State private var username = ""
     @State private var password = ""
@@ -144,6 +162,7 @@ private struct CompanionServerEditor: View {
         _host = State(initialValue: server?.host ?? "")
         _port = State(initialValue: "\(server?.port ?? 8089)")
         _enrollmentPort = State(initialValue: "\(server?.enrollmentPort ?? 8446)")
+        _streamTLSName = State(initialValue: server?.streamTLSName ?? "")
     }
 
     private var connected: Bool { bridge.serverStates[serverID]?.connected == true }
@@ -164,6 +183,16 @@ private struct CompanionServerEditor: View {
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                     }
+                }
+                .disabled(busy || connected)
+                Section("Advanced TLS identity") {
+                    TextField("Stream TLS name (optional)", text: $streamTLSName)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                    Text("Leave blank to validate the server address. Only use a DNS name in the server certificate's SAN confirmed by your administrator. This changes certificate validation and TLS SNI for the CoT stream only, not the connection address, enrollment, or Channels. Trust and expiration checks remain enabled. Reissuing the server certificate for its address is preferred.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 .disabled(busy || connected)
                 Section("Authentication") {
@@ -315,11 +344,13 @@ private struct CompanionServerEditor: View {
         guard let endpoint else { return }
         do {
             try validateUnique(endpoint)
+            let tlsName = try CompanionServer.validatedStreamTLSName(streamTLSName)
             if let pendingIdentity {
                 guard pendingEndpointKey == endpoint.key else { throw CompanionFailure.message("Enroll or import for this server again.") }
                 try CertificateStore.save(pendingIdentity, endpoint: endpoint.key)
             }
-            let record = CompanionServer(id: serverID, endpoint: endpoint, enabled: original?.enabled ?? false)
+            let record = CompanionServer(id: serverID, endpoint: endpoint, enabled: original?.enabled ?? false,
+                                         streamTLSName: tlsName)
             try bridge.save(record)
             saved = true
             dismiss()

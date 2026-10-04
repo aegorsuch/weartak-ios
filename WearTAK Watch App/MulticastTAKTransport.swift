@@ -14,6 +14,7 @@ final class MulticastTAKTransport: ObservableObject, CoTOutput {
     @Published private(set) var isReady = false
     var onStateChange: (() -> Void)?
     var onEntity: ((EntityRelayPayload) -> Void)?
+    var onChat: ((TAKChatMessage) -> Void)?
 
     private let settings: AppSettings
     private let queue = DispatchQueue(label: "WearTAK.multicast")
@@ -97,6 +98,10 @@ final class MulticastTAKTransport: ObservableObject, CoTOutput {
                 Task { @MainActor [weak self] in
                     guard let self, self.generation == currentGeneration, self.isAppActive,
                           self.settings.multicastEnabled else { return }
+                    if let chat = TAKChatMessage.parse(String(decoding: data, as: UTF8.self), ownUID: SitxClient.deviceID()) {
+                        self.onChat?(chat)
+                        return
+                    }
                     for entity in SitxCoT.parse(data, excluding: SitxClient.deviceID()) {
                         self.onEntity?(entity)
                     }

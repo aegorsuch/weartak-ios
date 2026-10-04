@@ -13,6 +13,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     @Published private(set) var mapRefreshing = false
     @Published private(set) var mapRefreshError: String?
     @Published private(set) var mapLastChecked: Date?
+    @Published private(set) var phoneReportingStatus: String?
+    @Published private(set) var identitySyncError: String?
     var onStateChange: (() -> Void)?
     var onCoT: ((BridgeWire.Message) -> Void)?
     var onSourceRefresh: ((UUID, Int) -> Void)?
@@ -28,6 +30,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     private var lastConfirmation: Date?
     private var timer: Timer?
     private var selection: AnyCancellable?
+    private var identitySubscription: AnyCancellable?
+    private var publishedIdentity: WatchReportingIdentity?
     private var handshakeInFlight = false
     private var pending: [UUID: CheckedContinuation<BridgeWire.Message, Error>] = [:]
     private var timeouts: [UUID: Task<Void, Never>] = [:]
@@ -50,6 +54,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         selection = settings.$relayProvider.dropFirst().sink { [weak self] _ in
             Task { @MainActor [weak self] in self?.refresh() }
         }
+        identitySubscription = settings.objectWillChange
+            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.publishIdentity() }
+            }
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.refresh() }
         }
@@ -60,7 +69,30 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         self.active = active
         if resumed { mapLastChecked = nil }
         if !active { invalidate() }
-        else { refresh() }
+        else { publishIdentity(); refresh() }
+    }
+
+    /// Shares this watch's TAK UID, callsign, team, role and reporting settings so Companion can report
+    /// phone GPS as this same user. Application context is delivered even when Companion is not running.
+    func publishIdentity(force: Bool = false) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        let identity = WatchReportingIdentity(uid: SitxClient.deviceID(), callSign: settings.callSign,
+            team: settings.teamColor.rawValue, role: settings.role,
+            companionSelected: settings.relayProvider == .companion,
+            constantStrategy: settings.reportingStrategy == .constant,
+            constantInterval: settings.constantReportingInterval,
+            stationaryInterval: settings.stationaryReportingInterval,
+            onFootInterval: settings.onFootReportingInterval,
+            vehicleInterval: settings.vehicleReportingInterval, issuedAt: Date())
+        if !force, let published = publishedIdentity, published.hasSameSettings(as: identity),
+           identity.issuedAt.timeIntervalSince(published.issuedAt) < 3_600 { return }
+        do {
+            try WCSession.default.updateApplicationContext([WatchReportingIdentity.contextKey: identity.contextValue()])
+            publishedIdentity = identity
+            identitySyncError = nil
+        } catch {
+            identitySyncError = "Unable to share watch identity with Companion: \(error.localizedDescription)"
+        }
     }
 
     private func refresh() {
@@ -82,10 +114,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             defer { handshakeInFlight = false }
             do {
                 let reply = try await request(BridgeWire.Message(kind: .hello))
+                guard active else { return }
                 guard reply.kind == .status else { throw TAKTransportError.notConfigured }
                 apply(reply)
                 if mapLastChecked.map({ Date().timeIntervalSince($0) >= 30 }) ?? true {
-                    await refreshMap()
+                    Task { await self.refreshMap() }
                 }
             } catch {
                 mapRefreshError = "Phone unavailable: \(error.localizedDescription)"
@@ -105,6 +138,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         defer { mapRefreshing = false }
         do {
             let reply = try await request(BridgeWire.Message(kind: .mapSnapshot), timeoutSeconds: 28)
+            guard active else { return }
             guard reply.kind == .mapSnapshot, let events = reply.mapEvents,
                   let enabled = reply.enabledServerIDs else {
                 throw CompanionRefreshFailure.message(reply.detail ?? "Update both WearTAK apps to refresh the map.")
@@ -126,6 +160,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         applySession(message)
         if let configured = message.configured { self.configured = configured }
         serverReady = message.ready == true
+        if let reporting = message.phoneReporting { phoneReportingStatus = reporting }
         lastConfirmation = Date()
         status = message.detail ?? (serverReady ? "Connected" : "Not connected")
         onStateChange?()
@@ -156,6 +191,14 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         guard reply.kind == .acknowledgement, reply.ready == true else {
             if reply.kind == .status { apply(reply) }
             throw TAKTransportError.notConfigured
+        }
+    }
+
+    func sendChat(_ xml: String, serverID: UUID) async throws {
+        guard isReady else { throw CompanionRefreshFailure.message("Companion is not connected to TAK.") }
+        let reply = try await request(BridgeWire.Message(kind: .cot, xml: xml, serverID: serverID))
+        guard reply.kind == .acknowledgement, reply.ready == true else {
+            throw CompanionRefreshFailure.message(reply.detail ?? "The contact's TAK server did not accept the chat.")
         }
     }
 
@@ -270,6 +313,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         let configured = session.receivedApplicationContext["WearTAKCompanion.serverConfigured"] as? Bool ?? false
         Task { @MainActor [weak self] in
             self?.configured = configured
+            self?.publishIdentity(force: true)
             self?.refresh()
         }
     }

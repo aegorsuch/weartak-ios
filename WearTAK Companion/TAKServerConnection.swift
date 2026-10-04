@@ -12,18 +12,18 @@ final class TAKServerConnection {
     var onState: ((Bool, String) -> Void)?
     var onCoT: ((String) -> Void)?
 
-    func connect(endpoint: CompanionEndpoint, identity: ClientIdentity, trustedCA: Data?) throws {
+    func connect(endpoint: CompanionEndpoint, identity: ClientIdentity, trustedCA: Data?, streamTLSName: String? = nil) throws {
         disconnect()
+        let host = try CompanionServer.validatedStreamTLSName(streamTLSName ?? "") ?? endpoint.host
         let tls = NWProtocolTLS.Options()
         guard let localIdentity = sec_identity_create_with_certificates(identity.identity, identity.certificates as CFArray) else {
             throw CompanionFailure.message("Unable to configure TLS client identity.")
         }
         sec_protocol_options_set_local_identity(tls.securityProtocolOptions, localIdentity)
-        sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, endpoint.host)
+        sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, host)
         sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
         let diagnostics = TLSConnectionDiagnostics()
         let certificates = identity.certificates
-        let host = endpoint.host
         sec_protocol_options_set_verify_block(tls.securityProtocolOptions, { _, securityTrust, complete in
             let trust = sec_trust_copy_ref(securityTrust).takeRetainedValue()
             do {
@@ -54,7 +54,7 @@ final class TAKServerConnection {
                     self.receive(socket)
                 case .waiting(let error), .failed(let error):
                     self.fail(socket, message: diagnostics.message(
-                        endpoint: "TAK stream \(endpoint.host):\(endpoint.streamPort)", error: error))
+                        endpoint: "TAK stream \(endpoint.host):\(endpoint.streamPort) (TLS name \(host))", error: error))
                 case .cancelled:
                     self.ready = false
                 default: break
