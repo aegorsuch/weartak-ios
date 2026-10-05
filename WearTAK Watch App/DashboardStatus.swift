@@ -15,8 +15,6 @@ enum DashboardLocationStatus: String {
     case phone = "Phone location enabled"
     case disabled = "Location disabled or unavailable"
 
-    var symbol: String { self == .disabled ? "mappin.slash" : "mappin" }
-
     static func resolve(watchEnabled: Bool, phoneEnabled: Bool) -> Self {
         if phoneEnabled { return .phone }
         return watchEnabled ? .watch : .disabled

@@ -124,6 +124,14 @@ private enum ContactChatFailure: LocalizedError {
     var errorDescription: String? { switch self { case .message(let text): return text } }
 }
 
+private struct PendingMapItemReply {
+    let recipientUID: String
+    let recipientCallSign: String
+    let text: String
+    let messageID: String
+    let createdAt: Date
+}
+
 enum PLIReportingRoute {
     case phoneRelay
     case standaloneSitx
@@ -181,6 +189,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var bloodhoundTargetID: UUID?
     @Published private(set) var bloodhoundContactID: String?
     @Published private(set) var bloodhoundMapItemID: String?
+    @Published private(set) var unseenIncomingPointIDs: Set<String> = []
+    private var dismissedPointIDs: [String: Date] = [:]
+    private static let dismissedPointsKey = "WearTAK.dismissedIncomingPoints"
+    private var pendingMapItemReplies: [PendingMapItemReply] = []
+    private static let mapItemReplyLifetime: TimeInterval = 24 * 60 * 60
     @Published private var chatInbox = TAKChatInbox<ContactConversation>()
 
     var contactMessages: [ContactConversation: [TAKChatMessage]] { chatInbox.messages }
@@ -280,7 +293,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 self.locationManager.stopUpdatingLocation()
             }
         }
-        multicastClient.onEntity = { [weak self] entity in self?.receiveEntity(entity, sourceTransport: .multicast) }
+        multicastClient.onEntity = { [weak self] entity in
+            self?.receiveEntity(entity, sourceTransport: .multicast, notifyNewPoint: true)
+        }
         multicastClient.onChat = { [weak self] chat in self?.recordChat(chat, route: .multicast) }
         sitxClient.onChat = { [weak self] chat in self?.recordChat(chat, route: .sitx) }
         companionClient.onStateChange = { [weak self] in
@@ -314,7 +329,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
             for entity in SitxCoT.parse(Data(xml.utf8), excluding: SitxClient.deviceID()) {
                 self.receiveEntity(entity, at: seen, sourceServerID: message.sourceServerID,
-                                   sourceGeneration: message.sourceGeneration ?? 0, expiresAt: header?.stale)
+                                   sourceGeneration: message.sourceGeneration ?? 0, expiresAt: header?.stale,
+                                   notifyNewPoint: true)
             }
             self.pruneIncomingEntities(now: now)
         }
@@ -352,6 +368,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         if let data = UserDefaults.standard.data(forKey: Self.markerStorageKey) {
             markers = (try? JSONDecoder().decode([WatchMarker].self, from: data)) ?? []
+        }
+        if let stored = UserDefaults.standard.dictionary(forKey: Self.dismissedPointsKey) as? [String: Double] {
+            let now = Date()
+            dismissedPointIDs = stored.mapValues { Date(timeIntervalSince1970: $0) }
+                .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         }
         if let data = UserDefaults.standard.data(forKey: Self.companionCacheKey) {
             do {
@@ -465,7 +486,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 incomingEntityTask = Task {
                     for await payload in incoming {
                         guard !Task.isCancelled else { break }
-                        receiveEntity(payload, sourceTransport: .sitx)
+                        receiveEntity(payload, sourceTransport: .sitx, notifyNewPoint: true)
                     }
                 }
                 requestLocation()
@@ -594,6 +615,24 @@ final class WatchSessionModel: NSObject, ObservableObject {
         return BloodhoundDestination(latitude: marker.latitude, longitude: marker.longitude, displayTitle: marker.displayTitle)
     }
 
+    func markIncomingPointsSeen() {
+        if !unseenIncomingPointIDs.isEmpty { unseenIncomingPointIDs = [] }
+    }
+
+    /// Hides a received point locally; later copies of the same UID stay hidden for a day.
+    func removeIncomingPoint(_ id: String) {
+        let now = Date()
+        dismissedPointIDs = dismissedPointIDs.filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
+        dismissedPointIDs[id] = now
+        UserDefaults.standard.set(dismissedPointIDs.mapValues(\.timeIntervalSince1970), forKey: Self.dismissedPointsKey)
+        incomingEntities.removeAll { $0.id == id && !$0.isUser }
+        unseenIncomingPointIDs.remove(id)
+        if bloodhoundMapItemID == id {
+            bloodhoundMapItemID = nil
+            bloodhoundProximityNotified = false
+        }
+    }
+
     func startBloodhound(toMapItem id: String) async throws {
         guard let item = incomingMapPoints.first(where: { $0.id == id }) else {
             throw ContactChatFailure.message("This map item is no longer available.")
@@ -603,9 +642,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         bloodhoundMapItemID = id
         bloodhoundProximityNotified = false
         requestLocation()
-        let sender = try mapItemSender(for: item)
-        try await sendContactChat(uid: sender.id, route: sender.route,
-            text: "Roger, bloodhouding to \(mapItemTitle(item))")
+        try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
     }
 
     func markInPosition() async throws {
@@ -615,29 +652,61 @@ final class WatchSessionModel: NSObject, ObservableObject {
         bloodhoundMapItemID = nil
         bloodhoundProximityNotified = false
         guard let item else { return }
-        let sender = try mapItemSender(for: item)
-        try await sendContactChat(uid: sender.id, route: sender.route,
-            text: "In Position at \(mapItemTitle(item))")
+        removeIncomingPoint(item.id)
+        try await sendMapItemReply(item, text: "In Position at \(mapItemTitle(item))")
     }
 
-    func mapItemResponseUnavailableReason(_ item: IncomingMapEntity) -> String? {
-        guard let senderUID = item.senderUID, senderUID != SitxClient.deviceID(),
-              let sender = incomingEntities.first(where: { $0.id == senderUID && $0.isUser }) else {
-            return "Sender unavailable."
+    /// Sends now on the best known route. If the sender isn't currently visible, the reply is also queued and
+    /// resent with the same message ID once their PLI arrives, so receivers de-duplicate it.
+    private func sendMapItemReply(_ item: IncomingMapEntity, text: String) async throws {
+        guard settings.chatEnabled else { throw ContactChatFailure.message("Enable Chat in settings.") }
+        guard let senderUID = item.senderUID, !senderUID.isEmpty, senderUID != SitxClient.deviceID() else {
+            throw ContactChatFailure.message("This point has no sender to reply to.")
         }
-        return chatUnavailableReason(for: sender)
+        let sender = incomingEntities.first { $0.id == senderUID && $0.isUser && $0.chatRoute != nil }
+        let reply = PendingMapItemReply(recipientUID: senderUID, recipientCallSign: sender?.callSign ?? senderUID,
+                                        text: text, messageID: UUID().uuidString, createdAt: Date())
+        if let sender, let route = sender.chatRoute, chatUnavailableReason(for: sender) == nil {
+            try await deliverMapItemReply(reply, route: route)
+            return
+        }
+        pendingMapItemReplies.append(reply)
+        chatLogger.notice("Map item reply queued until sender PLI is seen")
+        guard let route = item.chatRoute else { return }
+        do { try await deliverMapItemReply(reply, route: route) }
+        catch { chatLogger.error("Map item reply best-effort send failed: \(error.localizedDescription, privacy: .public)") }
     }
 
-    private func mapItemSender(for item: IncomingMapEntity) throws -> (id: String, route: ContactChatRoute) {
-        if let reason = mapItemResponseUnavailableReason(item) {
-            throw ContactChatFailure.message(reason)
+    private func deliverMapItemReply(_ reply: PendingMapItemReply, route: ContactChatRoute) async throws {
+        let ownUID = SitxClient.deviceID()
+        let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
+            senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
+            recipientUID: reply.recipientUID, recipientCallSign: reply.recipientCallSign,
+            text: reply.text, messageID: reply.messageID)
+        switch route {
+        case .companion(let serverID): try await companionClient.sendChat(xml, serverID: serverID)
+        case .multicast: try await multicastClient.send(xml)
+        case .sitx: try await sitxClient.sendContactChat(xml)
         }
-        guard let senderUID = item.senderUID,
-              let sender = incomingEntities.first(where: { $0.id == senderUID && $0.isUser }),
-              let route = sender.chatRoute else {
-            throw ContactChatFailure.message("The map item's sender is unavailable.")
+        chatLogger.notice("Map item reply accepted by transport")
+        if let message = TAKChatMessage.parse(xml, ownUID: ownUID) { recordChat(message, route: route) }
+    }
+
+    private func flushMapItemReplies(to sender: IncomingMapEntity) {
+        pendingMapItemReplies.removeAll { Date().timeIntervalSince($0.createdAt) > Self.mapItemReplyLifetime }
+        guard sender.isUser, let route = sender.chatRoute, chatUnavailableReason(for: sender) == nil else { return }
+        let due = pendingMapItemReplies.filter { $0.recipientUID == sender.id }
+        guard !due.isEmpty else { return }
+        pendingMapItemReplies.removeAll { $0.recipientUID == sender.id }
+        Task {
+            for reply in due {
+                do { try await deliverMapItemReply(reply, route: route) }
+                catch {
+                    pendingMapItemReplies.append(reply)
+                    chatLogger.error("Queued map item reply failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
         }
-        return (sender.id, route)
     }
 
     private func mapItemTitle(_ item: IncomingMapEntity) -> String {
@@ -732,9 +801,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date(), sourceServerID: UUID? = nil,
-                       sourceGeneration: Int = 0, expiresAt: Date? = nil, sourceTransport: ContactChatRoute? = nil) {
+                       sourceGeneration: Int = 0, expiresAt: Date? = nil, sourceTransport: ContactChatRoute? = nil,
+                       notifyNewPoint: Bool = false) {
         if let sourceServerID, sourceGeneration < sourceGenerations[sourceServerID, default: 0] { return }
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
+              dismissedPointIDs[payload.uid] == nil,
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
         if let sourceServerID { refreshSource(sourceServerID, generation: sourceGeneration) }
         if let existing = incomingEntities.first(where: { $0.id == payload.uid }),
@@ -756,7 +827,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
             incomingEntities[index] = entity
         } else {
             incomingEntities.append(entity)
+            // Only live traffic notifies; cache restores and snapshots repopulate silently.
+            if notifyNewPoint, !entity.isUser, expiresAt.map({ $0 > Date() }) ?? true {
+                unseenIncomingPointIDs.insert(entity.id)
+                WKInterfaceDevice.current().play(.notification)
+                chatLogger.notice("Incoming map point \(entity.type, privacy: .public) recorded; notification requested")
+            }
         }
+        if entity.isUser, !pendingMapItemReplies.isEmpty { flushMapItemReplies(to: entity) }
         pruneIncomingEntities(now: now)
         if incomingEntities.count > 50 {
             incomingEntities.sort { $0.lastSeen > $1.lastSeen }
@@ -769,6 +847,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
             now.timeIntervalSince($0.lastSeen) > 300 || ($0.expiresAt.map { $0 <= now } ?? false)
         }
         companionMapCache.prune(now: now)
+        if !unseenIncomingPointIDs.isEmpty {
+            let current = Set(incomingEntities.lazy.filter { !$0.isUser }.map(\.id))
+            unseenIncomingPointIDs.formIntersection(current)
+        }
         if let uid = bloodhoundContactID, !incomingEntities.contains(where: { $0.id == uid }) {
             bloodhoundContactID = nil
             bloodhoundProximityNotified = false

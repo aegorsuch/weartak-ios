@@ -27,16 +27,17 @@ struct ContentView: View {
             .navigationDestination(isPresented: $showMapPreview) {
                 TacticalMapView(model: model, settings: settings)
             }
-            .overlay(alignment: .bottom) {
-                if let toastMessage {
-                    Text(toastMessage)
-                        .font(.caption)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.regularMaterial, in: Capsule())
-                        .padding(.bottom, 8)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+        }
+        .overlay(alignment: .bottom) {
+            if let toastMessage {
+                Text(toastMessage)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .sheet(isPresented: $showPointTypePicker) {
@@ -329,6 +330,17 @@ private struct WatchDashboardView: View {
                         .foregroundStyle(hasHeading ? .red : .gray)
                         .frame(width: small ? 28 : 32, height: small ? 28 : 32)
                         .overlay(Circle().stroke(.gray, lineWidth: 2))
+                        .overlay(alignment: .topTrailing) {
+                            let count = model.unseenIncomingPointIDs.count
+                            if count > 0 {
+                                Text(count > 99 ? "99+" : "\(count)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(3)
+                                    .background(.red, in: Capsule())
+                                    .offset(x: 4, y: -3)
+                            }
+                        }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(model.bloodhoundTarget?.displayTitle ?? "Compass")
                             .font(.system(size: small ? 10 : 11, weight: .medium))
@@ -342,7 +354,8 @@ private struct WatchDashboardView: View {
                     Spacer(minLength: 0)
                 }
             }
-            .accessibilityLabel(model.bloodhoundTarget == nil ? "Compass" : "Bloodhound navigation")
+            .accessibilityLabel((model.bloodhoundTarget == nil ? "Compass" : "Bloodhound navigation") +
+                (model.unseenIncomingPointIDs.isEmpty ? "" : ", \(model.unseenIncomingPointIDs.count) new points"))
             NavigationLink {
                 TacticalMapView(model: model, settings: settings)
             } label: {
@@ -440,11 +453,49 @@ private struct DashboardLocationIndicator: View {
             watchEnabled: model.watchLocationEnabled,
             phoneEnabled: companion.isPhoneReachable && companion.phoneLocationEnabled
         )
-        Image(systemName: state.symbol)
-            .font(.system(size: small ? 18 : 20))
+        DashboardLocationPin()
+            .fill(style: FillStyle(eoFill: true))
+            .frame(width: small ? 13 : 15, height: small ? 18 : 21)
+            .overlay {
+                if state == .disabled {
+                    Rectangle()
+                        .frame(width: 2, height: small ? 22 : 25)
+                        .rotationEffect(.degrees(-40))
+                }
+            }
             .foregroundStyle(state == .disabled ? .gray : .white)
             .frame(width: 28, height: small ? 20 : 24)
             .accessibilityLabel("\(state.rawValue). Reporting settings")
+    }
+}
+
+private struct DashboardLocationPin: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.36),
+            control1: CGPoint(x: rect.minX + rect.width * 0.2, y: rect.minY + rect.height * 0.7),
+            control2: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.56)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY + rect.height * 0.36),
+            control1: CGPoint(x: rect.minX, y: rect.minY - rect.height * 0.12),
+            control2: CGPoint(x: rect.maxX, y: rect.minY - rect.height * 0.12)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.midX, y: rect.maxY),
+            control1: CGPoint(x: rect.maxX, y: rect.minY + rect.height * 0.56),
+            control2: CGPoint(x: rect.maxX - rect.width * 0.2, y: rect.minY + rect.height * 0.7)
+        )
+        path.closeSubpath()
+        let diameter = rect.width * 0.4
+        path.addEllipse(in: CGRect(
+            x: rect.midX - diameter / 2,
+            y: rect.minY + rect.height * 0.34 - diameter / 2,
+            width: diameter, height: diameter
+        ))
+        return path
     }
 }
 
@@ -1230,19 +1281,9 @@ private struct ContactChatView: View {
             }
             TextField("Message", text: $text)
                 .disabled(sending)
-            Button(sending ? "Sending..." : "Send") {
-                sending = true
-                error = nil
-                sent = false
-                Task {
-                    defer { sending = false }
-                    do {
-                        try await model.sendContactChat(uid: uid, route: route, text: text)
-                        text = ""
-                        sent = true
-                    } catch { self.error = error.localizedDescription }
-                }
-            }
+                .submitLabel(.send)
+                .onSubmit(sendMessage)
+            Button(sending ? "Sending..." : "Send", action: sendMessage)
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
             if sent { Text("Accepted by transport; recipient delivery is not confirmed.").font(.caption) }
@@ -1262,6 +1303,21 @@ private struct ContactChatView: View {
         .onDisappear { model.setConversationVisible(conversation, visible: false) }
         .onChange(of: scenePhase) { _, phase in
             model.setConversationVisible(conversation, visible: phase == .active)
+        }
+    }
+
+    private func sendMessage() {
+        guard !sending, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        sending = true
+        error = nil
+        sent = false
+        Task {
+            defer { sending = false }
+            do {
+                try await model.sendContactChat(uid: uid, route: route, text: text)
+                text = ""
+                sent = true
+            } catch { self.error = error.localizedDescription }
         }
     }
 }
@@ -1419,6 +1475,25 @@ private struct IncomingUserMarker: View {
 private struct BloodhoundView: View {
     @ObservedObject var model: WatchSessionModel
     @State private var responseError: String?
+    @State private var selectedPoint: IncomingMapEntity?
+
+    private func pointTitle(_ item: IncomingMapEntity) -> String {
+        item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id
+    }
+
+    private func pointDetail(_ item: IncomingMapEntity) -> String {
+        let affiliation: String
+        switch item.type.split(separator: "-").dropFirst().first {
+        case "f": affiliation = "Friendly"
+        case "h": affiliation = "Hostile"
+        case "n": affiliation = "Neutral"
+        case "u": affiliation = "Unknown"
+        default: affiliation = "Point"
+        }
+        guard let location = model.lastLocation else { return affiliation }
+        let meters = Int(location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)))
+        return "\(affiliation) · \(meters) m"
+    }
 
     var body: some View {
         Group {
@@ -1454,31 +1529,19 @@ private struct BloodhoundView: View {
                 }
             } else {
                 List {
-                    Section {
-                        VStack(spacing: 6) {
-                            Image(systemName: "location.north.fill")
-                                .font(.system(size: 42))
-                                .rotationEffect(.degrees(model.headingDegrees.map { (360 - $0).truncatingRemainder(dividingBy: 360) } ?? 0))
-                                .foregroundStyle(model.headingDegrees == nil ? .gray : .red)
-                            Text("Compass")
-                            Text(model.headingDegrees == nil ? "Compass unavailable" : "North")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    if !model.incomingMapPoints.isEmpty {
+                    if model.incomingMapPoints.isEmpty {
+                        Text("No incoming points")
+                            .foregroundStyle(.secondary)
+                    } else {
                         Section("Incoming Points") {
                             ForEach(model.incomingMapPoints) { item in
-                                HStack {
-                                    Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
-                                        .lineLimit(2)
-                                    Spacer(minLength: 4)
-                                    Button("RGR") {
-                                        Task {
-                                            do { try await model.startBloodhound(toMapItem: item.id) }
-                                            catch { responseError = error.localizedDescription }
-                                        }
+                                Button { selectedPoint = item } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
+                                            .lineLimit(2)
+                                        Text(pointDetail(item))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -1487,7 +1550,30 @@ private struct BloodhoundView: View {
                 }
             }
         }
+        .confirmationDialog(selectedPoint.map(pointTitle) ?? "Incoming Point", isPresented: Binding(
+            get: { selectedPoint != nil },
+            set: { if !$0 { selectedPoint = nil } }
+        ), titleVisibility: .visible, presenting: selectedPoint) { item in
+            Button("RGR") {
+                selectedPoint = nil
+                Task {
+                    do { try await model.startBloodhound(toMapItem: item.id) }
+                    catch { responseError = error.localizedDescription }
+                }
+            }
+            Button("Remove", role: .destructive) {
+                selectedPoint = nil
+                model.removeIncomingPoint(item.id)
+            }
+            Button("Cancel", role: .cancel) { selectedPoint = nil }
+        } message: { item in
+            Text(pointDetail(item))
+        }
         .navigationTitle(model.bloodhoundTarget == nil ? "Compass" : "Navigation")
+        .onAppear { model.markIncomingPointsSeen() }
+        .onChange(of: model.unseenIncomingPointIDs) { _, ids in
+            if !ids.isEmpty { model.markIncomingPointsSeen() }
+        }
         .alert("Bloodhound response", isPresented: Binding(
             get: { responseError != nil },
             set: { if !$0 { responseError = nil } }

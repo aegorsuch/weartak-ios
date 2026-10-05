@@ -207,8 +207,14 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             else {
                 session = CompanionServerSession()
                 session.onState = { [weak self] state in
-                    self?.serverStates[server.id] = state
-                    self?.publishState()
+                    guard let self else { return }
+                    let wasConnected = self.serverStates[server.id]?.connected == true
+                    self.serverStates[server.id] = state
+                    self.publishState()
+                    // A stationary phone may not produce another fix, so report the cached one on (re)connect.
+                    if state.connected, !wasConnected, let fix = self.latestPhoneFix {
+                        self.reportPhoneFix(fix)
+                    }
                 }
                 session.onCoT = { [weak self] xml in self?.forward(xml, sourceID: server.id) }
                 session.onChannelsChanged = { [weak self] in

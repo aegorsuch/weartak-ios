@@ -26,6 +26,12 @@ struct TAKChatChecks {
                                              with: "<![CDATA[Test <message> & reply]]>")
         precondition(TAKChatMessage.parse(cdata, ownUID: "atak-uid")?.text == incoming.text)
         precondition(TAKChatMessage.parse(xml, ownUID: "unrelated-uid") == nil)
+        let first = try TAKChatMessage.outgoing(senderUID: "watch", senderCallSign: "Watch", recipientUID: "atak",
+            recipientCallSign: "ATAK", text: "Roger", now: now, messageID: "reply-1")
+        let resend = try TAKChatMessage.outgoing(senderUID: "watch", senderCallSign: "Watch", recipientUID: "atak",
+            recipientCallSign: "ATAK", text: "Roger", now: now.addingTimeInterval(600), messageID: "reply-1")
+        precondition(first.contains("uid=\"GeoChat.watch.atak.reply-1\"") && resend.contains("uid=\"GeoChat.watch.atak.reply-1\""))
+        precondition(TAKChatMessage.parse(resend, ownUID: "atak")?.id == TAKChatMessage.parse(first, ownUID: "atak")?.id)
         precondition(TAKChatMessage.parse("<!DOCTYPE event><event/>", ownUID: "watch-uid") == nil)
         precondition(TAKChatMessage.parse(xml.replacingOccurrences(of: "type=\"b-t-f\"", with: "type=\"a-f-G-U-C\""),
                                          ownUID: "watch-uid") == nil)

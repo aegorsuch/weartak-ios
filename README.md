@@ -511,6 +511,23 @@ direction/range and map line with point navigation, and stops when the contact
 expires. Selecting a local point instead replaces the contact target.
 The contact panel omits team, role and last-seen text; contact expiry still applies.
 
+### Incoming points (RGR / nPos)
+
+Each newly received live (non-user) point plays a haptic and adds a red count
+badge to the dashboard Compass button; opening Compass clears it. Compass lists
+incoming points with affiliation and range. Tapping one offers **RGR** (start
+Bloodhound and send "Roger, bloodhounding to TITLE"), **Remove** (hide the point
+on this watch) or **Cancel**. During that Bloodhound, **nPos** stops navigation,
+removes the point and sends "In Position at TITLE". Removed points stay hidden
+for 24 hours even if re-sent.
+
+Replies go to the point's `link relation="p-p"` UID, which is the original
+creator. ATAK keeps that link when re-sending another user's point, so replies
+reach the creator, not the re-sender. If the creator is not currently visible,
+the reply is sent immediately through the point's source and queued in memory;
+it is resent with the same message ID when that user's PLI arrives (up to 24 hours,
+lost if the watch app restarts).
+
 Contact chat uses GeoChat CoT through the contact's source: Companion, local
 multicast or standalone Sit(x). Companion sends through that contact's
 source server only, never across all enabled servers. Multicast sends on the

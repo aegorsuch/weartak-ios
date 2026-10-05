@@ -15,10 +15,11 @@ struct TAKChatMessage: Identifiable, Equatable {
     static let quickMessages = ["Roger", "Negative", "Objective Sighted", "In Position"]
 
     static func outgoing(senderUID: String, senderCallSign: String, recipientUID: String,
-                         recipientCallSign: String, text: String, now: Date = Date()) throws -> String {
+                         recipientCallSign: String, text: String, now: Date = Date(),
+                         messageID: String = UUID().uuidString) throws -> String {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !senderUID.isEmpty, !recipientUID.isEmpty, senderUID != recipientUID,
-              !body.isEmpty, body.utf8.count <= maximumTextBytes,
+              !body.isEmpty, body.utf8.count <= maximumTextBytes, !messageID.isEmpty,
               !body.unicodeScalars.contains(where: { $0.value < 32 && $0 != "\n" && $0 != "\t" }) else {
             throw ChatError.invalidMessage
         }
@@ -27,7 +28,7 @@ struct TAKChatMessage: Identifiable, Equatable {
                 .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
                 .replacingOccurrences(of: "'", with: "&apos;")
         }
-        let id = UUID().uuidString
+        let id = escape(messageID)
         let formatter = ISO8601DateFormatter()
         let timestamp = formatter.string(from: now)
         let stale = formatter.string(from: now.addingTimeInterval(300))
