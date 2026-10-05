@@ -354,6 +354,16 @@ and local multicast without Companion.
   with its password. Save the server, then turn its individual switch on.
   Additional servers can be saved, edited, enabled independently, or removed
   with confirmation. The Watch status appears above the TAK Servers list.
+  Each server row has a status dot (green connected, yellow connecting, red
+  failed, gray off) and shows how long it has been connected or a
+  plain-language error with the original error underneath. It also shows the
+  client certificate expiry, in orange within 30 days or once it has expired.
+  The ↻ button drops the stream and reconnects immediately instead of waiting
+  for the 10-second retry. Open a server to see its full Status section at the
+  bottom: connected-since time, the complete current error, the last error with
+  its timestamp (kept after a reconnect), the certificate expiry, Reconnect Now
+  and Copy Details, which copies a plain-text report to paste into a chat or
+  ticket.
 3. On the watch, select Companion in Settings > Network Preferences > TAK
   Relay. Open the watch app while the paired phone is in range. A watch request
   can wake Companion for a short refresh while the phone is locked.
@@ -908,6 +918,17 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/CompanionEndpoint.swift Shared/CompanionServer.swift \
   Tests/CompanionServerChecks.swift -o /tmp/weartak-server-checks
 /tmp/weartak-server-checks
+```
+
+Server row status checks cover the status levels, connected-duration text,
+plain-language error mapping (ignoring the stream's "TLS name" prefix) and
+certificate expiry warnings:
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/CompanionServerStatus.swift \
+  Tests/CompanionServerStatusChecks.swift -o /tmp/weartak-status-checks
+/tmp/weartak-status-checks
 ```
 
 Directed GeoChat checks cover recipient addressing, XML escaping, message

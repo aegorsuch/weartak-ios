@@ -52,17 +52,22 @@ struct CompanionSetupView: View {
                     ForEach(bridge.servers) { server in
                         HStack(spacing: 12) {
                             Button { editor = ServerEditorRoute(server: server) } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(verbatim: "\(server.host):\(server.port)")
-                                        .foregroundStyle(.primary)
-                                    Text(bridge.serverStates[server.id]?.detail ?? "Disabled")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                                CompanionServerRowStatus(
+                                    title: "\(server.host):\(server.port)",
+                                    enabled: server.enabled,
+                                    state: bridge.serverStates[server.id]
+                                )
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Edit server \(server.host)")
+                            if server.enabled, bridge.serverStates[server.id]?.detail != "Connecting" {
+                                Button { bridge.reconnect(id: server.id) } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Reconnect \(server.host)")
+                            }
                             Toggle("Enable \(server.host)", isOn: Binding(
                                 get: { bridge.servers.first { $0.id == server.id }?.enabled ?? false },
                                 set: { enabled in
@@ -114,6 +119,148 @@ struct CompanionSetupView: View {
                 if phase == .background { bridge.setActive(false) }
                 else if phase == .active { bridge.setActive(true) }
             }
+        }
+    }
+}
+
+/// Server row body: status dot, connection time or plain-language error and certificate expiry.
+private struct CompanionServerRowStatus: View {
+    let title: String
+    let enabled: Bool
+    let state: PhoneBridgeModel.ServerState?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let status = CompanionServerStatus(enabled: enabled, connected: state?.connected == true,
+                                               detail: state?.detail ?? "Disabled",
+                                               connectedSince: state?.connectedSince, now: context.date)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Circle().fill(status.level.color).frame(width: 9, height: 9)
+                        .accessibilityHidden(true)
+                    Text(verbatim: title)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .truncationMode(.middle)
+                }
+                Text(status.summary)
+                    .font(.caption)
+                    .foregroundStyle(status.level == .failed ? .red : .secondary)
+                if enabled, let expires = state?.certificateExpires {
+                    let certificate = CompanionServerStatus.certificateText(expires: expires, now: context.date)
+                    HStack(spacing: 4) {
+                        Image(systemName: certificate.warning ? "exclamationmark.triangle.fill" : "checkmark.seal")
+                        Text(certificate.text)
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(certificate.warning ? .orange : .secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+/// Full connection status for one server: the summary, the complete error text, the last error and certificate expiry.
+private struct CompanionServerStatusSection: View {
+    @ObservedObject var bridge: PhoneBridgeModel
+    let serverID: UUID
+    let enabled: Bool
+    @State private var copied = false
+
+    var body: some View {
+        let state = bridge.serverStates[serverID]
+        let now = Date()
+        let status = CompanionServerStatus(enabled: enabled, connected: state?.connected == true,
+                                           detail: state?.detail ?? "Disabled",
+                                           connectedSince: state?.connectedSince, now: now)
+        Section("Status") {
+            HStack(spacing: 8) {
+                Circle().fill(status.level.color).frame(width: 10, height: 10)
+                    .accessibilityHidden(true)
+                Text(status.summary)
+                    .foregroundStyle(status.level == .failed ? .red : .primary)
+            }
+            if let since = state?.connectedSince, state?.connected == true {
+                LabeledContent("Connected since") {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(since.formatted(date: .abbreviated, time: .standard))
+                        Text(since, style: .relative).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if let detail = status.detail {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Error").font(.caption).foregroundStyle(.secondary)
+                    Text(detail).font(.footnote.monospaced()).textSelection(.enabled)
+                }
+            }
+            if let error = state?.lastError, let at = state?.lastErrorAt, error != status.detail {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Last error · \(at.formatted(date: .abbreviated, time: .standard))")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(error).font(.footnote.monospaced()).textSelection(.enabled)
+                }
+            }
+            if let expires = state?.certificateExpires {
+                let certificate = CompanionServerStatus.certificateText(expires: expires, now: now)
+                LabeledContent("Certificate") {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(expires.formatted(date: .abbreviated, time: .shortened))
+                        if certificate.warning {
+                            Text(certificate.text).font(.caption).foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+            if enabled, status.level != .connecting {
+                Button { bridge.reconnect(id: serverID) } label: {
+                    Label("Reconnect Now", systemImage: "arrow.clockwise")
+                }
+            }
+            Button {
+                UIPasteboard.general.string = report(status: status, state: state, now: Date())
+                copied = true
+            } label: {
+                Label(copied ? "Copied" : "Copy Details", systemImage: copied ? "checkmark" : "doc.on.doc")
+            }
+            .task(id: copied) {
+                guard copied else { return }
+                try? await Task.sleep(for: .seconds(2))
+                copied = false
+            }
+        }
+    }
+
+    /// Plain-text status report suitable for pasting into a chat or ticket.
+    private func report(status: CompanionServerStatus, state: PhoneBridgeModel.ServerState?, now: Date) -> String {
+        let server = bridge.servers.first { $0.id == serverID }
+        var lines = ["WearTAK Companion server status"]
+        if let server { lines.append("Server: \(server.host):\(server.port)") }
+        lines.append("Status: \(status.summary)")
+        if let since = state?.connectedSince, state?.connected == true {
+            lines.append("Connected since: \(since.formatted(.iso8601))")
+        }
+        if let detail = status.detail { lines.append("Error: \(detail)") }
+        if let error = state?.lastError, let at = state?.lastErrorAt {
+            lines.append("Last error (\(at.formatted(.iso8601))): \(error)")
+        }
+        if let expires = state?.certificateExpires {
+            lines.append("Certificate expires: \(expires.formatted(.iso8601))")
+        }
+        lines.append("Reported: \(now.formatted(.iso8601))")
+        return lines.joined(separator: "\n")
+    }
+}
+
+private extension CompanionServerStatus.Level {
+    var color: Color {
+        switch self {
+        case .connected: .green
+        case .connecting: .yellow
+        case .failed: .red
+        case .off: .gray
         }
     }
 }
@@ -228,6 +375,13 @@ private struct CompanionServerEditor: View {
                     LabeledContent("Certificate", value: certificateStatus)
                 }
                 .disabled(connected)
+                if let original {
+                    CompanionServerStatusSection(
+                        bridge: bridge,
+                        serverID: serverID,
+                        enabled: bridge.servers.first { $0.id == serverID }?.enabled ?? original.enabled
+                    )
+                }
             }
             .navigationTitle(original == nil ? "Add Server" : "Edit Server")
             .navigationBarTitleDisplayMode(.inline)

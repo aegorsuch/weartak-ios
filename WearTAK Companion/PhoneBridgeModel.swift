@@ -24,6 +24,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         var configured = false
         var connected = false
         var detail = "Disabled"
+        var connectedSince: Date?
+        var certificateExpires: Date?
+        var lastError: String?
+        var lastErrorAt: Date?
     }
 
     struct PhoneReportingStatus {
@@ -206,6 +210,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         do {
             defaults.set(try JSONEncoder().encode(mapCache), forKey: Self.mapStorageKey)
         } catch { mapCacheError = "Unable to cache map: \(error.localizedDescription)" }
+    }
+
+    func reconnect(id: UUID) {
+        sessions[id]?.reconnect()
     }
 
     private func persist(_ servers: [CompanionServer]) throws {
@@ -839,6 +847,9 @@ private final class CompanionServerSession {
     init() {
         connection.onState = { [weak self] ready, detail in
             guard let self else { return }
+            if ready, !self.state.connected { self.state.connectedSince = Date() }
+            if !ready { self.state.connectedSince = nil }
+            if !ready, detail != "Connecting" { self.state.lastError = detail; self.state.lastErrorAt = Date() }
             self.state.connected = ready
             self.state.detail = detail
             self.onState?(self.state)
@@ -855,15 +866,22 @@ private final class CompanionServerSession {
         if changed { stop() }
         do {
             if let stored = try CertificateStore.read(endpoint: record.endpoint.key) {
-                _ = try CertificateStore.resolve(stored)
+                state.certificateExpires = try CertificateStore.resolve(stored).expires
                 state.configured = true
-            } else { state.configured = false }
+            } else { state.configured = false; state.certificateExpires = nil }
             if !active { state.detail = "Paused in background" }
             else if !record.enabled { state.detail = "Disabled" }
             else if !state.configured { state.detail = "Configure certificate" }
             else if !connection.ready && state.detail != "Connecting" { connect() }
-        } catch { state.configured = false; state.detail = error.localizedDescription }
+        } catch { state.configured = false; state.certificateExpires = nil; state.detail = error.localizedDescription }
         onState?(state)
+    }
+
+    /// Drops the current stream and reconnects immediately instead of waiting for the retry timer.
+    func reconnect() {
+        guard let record else { return }
+        stop()
+        configure(record, active: active)
     }
 
     private func connect() {
@@ -873,7 +891,13 @@ private final class CompanionServerSession {
             let ca = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(record.endpoint.key)")
             try connection.connect(endpoint: record.endpoint, identity: CertificateStore.resolve(stored),
                                    trustedCA: ca, streamTLSName: record.streamTLSName)
-        } catch { state.detail = error.localizedDescription; state.connected = false; onState?(state) }
+        } catch {
+            state.detail = error.localizedDescription
+            state.connected = false
+            state.lastError = state.detail
+            state.lastErrorAt = Date()
+            onState?(state)
+        }
     }
 
     func stop() {
@@ -883,6 +907,7 @@ private final class CompanionServerSession {
         channelClient?.cancel()
         channelClient = nil
         state.connected = false
+        state.connectedSince = nil
         state.detail = "Disabled"
         onState?(state)
     }
