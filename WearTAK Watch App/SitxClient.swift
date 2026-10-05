@@ -3,17 +3,6 @@ import CoreLocation
 import Foundation
 import Security
 
-struct SitxGroup: Decodable, Identifiable {
-    let flowTag: String
-    let name: String
-    var id: String { flowTag }
-
-    enum CodingKeys: String, CodingKey {
-        case flowTag = "flow_tag"
-        case name
-    }
-}
-
 protocol SitxTokenStore {
     func read(account: String) -> String?
     func save(_ value: String, account: String) throws
@@ -32,7 +21,7 @@ final class SitxClient: ObservableObject, TAKTransport {
         static let expired = "Code expired; retry"
     }
 
-    private static let clientID = "D4RTE81TJjccxlc8LPD7QQ"
+    private static let clientID = SitxAPI.clientID
     private let settings: AppSettings
     private let session: URLSession
     private let tokenStore: any SitxTokenStore
@@ -52,12 +41,30 @@ final class SitxClient: ObservableObject, TAKTransport {
     @Published private(set) var pendingEvents: [String: String] = [:]
     private var connectionGeneration = 0
     private var isAppActive = true
+    private var connectInFlight = false
+    private var relayTask: Task<Void, Never>?
+    private var discardRelayedToken = false
+    private(set) var relayedHost: String?
+    private var relayedGroup: String?
+    /// Sends Sit(x) relay settings to Companion; set by the session model.
+    var relayHandler: ((SitxRelayConfig) async throws -> BridgeWire.Message)?
+    var onRelayChange: (() -> Void)?
+    /// WatchConnectivity reachability, independent of whether Companion has a connected TAK server.
+    var canReachPhone = false {
+        didSet { if canReachPhone != oldValue { reconcileRelay() } }
+    }
+    var phoneRelayStatus: String? {
+        didSet { if phoneRelayStatus != oldValue { updateRelayStatus() } }
+    }
+    var isRelayedViaPhone: Bool { relayedHost != nil }
     var onReady: (() -> Void)?
     var onDisconnected: (() -> Void)?
     var onChat: ((TAKChatMessage) -> Void)?
     var currentLocation: CLLocation?
     var additionalOutput: (any CoTOutput)?
     var companionOutput: (any CoTOutput)?
+    /// Latest watch vitals; stale readings are sent as N/A.
+    var biometrics = WatchBiometrics()
     var isSitxConnected: Bool {
         settings.sitxEnabled && !isPhoneReachable && socket != nil && status == State.connected
     }
@@ -89,6 +96,100 @@ final class SitxClient: ObservableObject, TAKTransport {
         selectedGroupID = group.id
         defaults.set(group.id, forKey: "WearTAK.sitxGroup")
         if settings.sitxEnabled { onReady?() }
+        reconcileRelay()
+    }
+
+    /// Keeps Companion's Sit(x) relay in step with the watch's settings. The refresh token has a single owner:
+    /// the watch deletes its copy once the phone accepts it, and takes it back when Sit(x) is turned Off.
+    func reconcileRelay() {
+        guard canReachPhone, relayTask == nil, let relayHandler else { updateRelayStatus(); return }
+        let host = Self.normalizedHost(settings.sitxApiHost)
+        let ownsToken = refreshToken != nil && tokenHost == host
+        if settings.sitxEnabled, let host, !selectedGroupID.isEmpty, ownsToken || relayedHost == host {
+            let token = ownsToken ? refreshToken : nil
+            if token != nil, pairingTask != nil || connectInFlight { return }
+            guard token != nil || relayedGroup != selectedGroupID else { updateRelayStatus(); return }
+            let group = selectedGroupID
+            let config = SitxRelayConfig(enabled: true, host: host, flowTag: group,
+                                         groupName: groups.first { $0.id == group }?.name, refreshToken: token)
+            status = "Handing Sit(x) to iPhone"
+            relayTask = Task {
+                do {
+                    let reply = try await relayHandler(config)
+                    if let token, refreshToken == token {
+                        disconnect()
+                        pendingEvents = [:]
+                        accessToken = nil
+                        clearTokens()
+                    }
+                    setRelayed(host: host, group: group)
+                    relayTask = nil
+                    if let sitxStatus = reply.sitxStatus { phoneRelayStatus = sitxStatus }
+                    updateRelayStatus()
+                    reconcileRelay()
+                } catch {
+                    relayTask = nil
+                    if relayedHost == nil { discardRelayedToken = false }
+                    status = "iPhone relay setup failed: \(error.localizedDescription)"
+                }
+            }
+        } else if let relayedHost {
+            let keepToken = !discardRelayedToken && host == relayedHost && refreshToken == nil
+            let config = SitxRelayConfig(enabled: false, host: relayedHost, flowTag: relayedGroup ?? "")
+            relayTask = Task {
+                do {
+                    let reply = try await relayHandler(config)
+                    if keepToken, refreshToken == nil, let token = reply.sitxConfig?.refreshToken, !token.isEmpty {
+                        try saveToken(token, account: "refresh")
+                        try saveToken(relayedHost, account: "host")
+                        refreshToken = token
+                        tokenHost = relayedHost
+                    }
+                    setRelayed(host: nil, group: nil)
+                    relayTask = nil
+                    if !settings.sitxEnabled { status = "Off" }
+                    reconcileRelay()
+                } catch {
+                    relayTask = nil
+                    status = "iPhone relay update failed: \(error.localizedDescription)"
+                }
+            }
+        } else {
+            updateRelayStatus()
+        }
+    }
+
+    private func setRelayed(host: String?, group: String?) {
+        relayedHost = host
+        relayedGroup = group
+        if host == nil { discardRelayedToken = false }
+        defaults.set(host, forKey: "WearTAK.sitxRelayedHost")
+        defaults.set(group, forKey: "WearTAK.sitxRelayedGroup")
+        onRelayChange?()
+    }
+
+    private func updateRelayStatus() {
+        if relayedHost == nil, refreshToken == nil, relayTask == nil, pairingTask == nil, authorizationCode.isEmpty {
+            // Sit(x) set up in Companion itself: the watch holds no credentials and just reports the phone's state.
+            if let phoneRelayStatus, !phoneRelayStatus.isEmpty {
+                status = Self.phoneSetupPrefix + phoneRelayStatus
+            } else if status.hasPrefix(Self.phoneSetupPrefix) {
+                status = settings.sitxEnabled ? State.unconfigured : "Off"
+            }
+            return
+        }
+        guard relayedHost != nil, settings.sitxEnabled, relayTask == nil else { return }
+        guard let phoneRelayStatus else {
+            status = "Via iPhone; phone not reachable"
+            return
+        }
+        if phoneRelayStatus.isEmpty {
+            // Companion dropped the relay (removed on the phone or authorization ended); a new auth is needed.
+            setRelayed(host: nil, group: nil)
+            if refreshToken == nil { status = "iPhone relay ended; select Re-auth" }
+            return
+        }
+        status = "Via iPhone: \(phoneRelayStatus)"
     }
 
     func resumeAuthorization() {
@@ -99,6 +200,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             if status.contains("failed") || status.contains("HTTP") {
                 scheduleReconnect()
             }
+            reconcileRelay()
         }
     }
 
@@ -106,7 +208,8 @@ final class SitxClient: ObservableObject, TAKTransport {
         settings.sitxEnabled = enabled
         if enabled {
             if refreshToken != nil { resumeAuthorization() }
-            else { refreshAuthorizationCode() }
+            else if relayedHost == nil { refreshAuthorizationCode() }
+            reconcileRelay()
         } else {
             pairingTask?.cancel()
             pairingTask = nil
@@ -115,6 +218,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             authorizationCode = ""
             verificationURL = ""
             status = "Off"
+            reconcileRelay()
         }
     }
 
@@ -124,11 +228,18 @@ final class SitxClient: ObservableObject, TAKTransport {
             pairingTask?.cancel()
             pairingTask = nil
             disconnect()
-            status = !settings.sitxEnabled ? "Off" : refreshToken == nil ? State.unconfigured : "Authorized; app inactive"
+            status = !settings.sitxEnabled ? "Off" : relayedHost != nil ? "Via iPhone" :
+                refreshToken == nil ? State.unconfigured : "Authorized; app inactive"
         }
     }
 
     func connect() async throws {
+        // Prefer the phone: watchOS hardware blocks the Sit(x) WebSocket, and Companion can hold it instead.
+        if relayedHost != nil || (canReachPhone && relayHandler != nil && refreshToken != nil) {
+            reconcileRelay()
+            if hasReadyOutput { return }
+            throw TAKTransportError.notConfigured
+        }
         guard settings.sitxEnabled, isAppActive, !isPhoneReachable, !selectedGroupID.isEmpty else {
             if hasReadyOutput { return }
             throw TAKTransportError.notConfigured
@@ -137,9 +248,19 @@ final class SitxClient: ObservableObject, TAKTransport {
         let generation = connectionGeneration
         reconnectTask?.cancel()
         status = "Connecting TAK group"
+        var streamRequested = false
         do {
-            let request = try await groupConnectionRequest()
+            connectInFlight = true
+            let request: URLRequest
+            do {
+                request = try await groupConnectionRequest()
+                connectInFlight = false
+            } catch {
+                connectInFlight = false
+                throw error
+            }
             guard isAppActive, !isPhoneReachable, generation == connectionGeneration else { throw CancellationError() }
+            streamRequested = true
             let task = session.webSocketTask(with: request)
             socket = task
             task.resume()
@@ -179,7 +300,15 @@ final class SitxClient: ObservableObject, TAKTransport {
                 try await sendEvent(xml, key: key)
             }
         } catch {
-            if generation == connectionGeneration { connectionFailed(error) }
+            if generation == connectionGeneration {
+                if streamRequested, Self.isWatchOSStreamBlocked(error) {
+                    disconnect()
+                    status = Self.streamBlockedStatus
+                    reconcileRelay()
+                } else {
+                    connectionFailed(error)
+                }
+            }
             if additionalOutput?.isReady == true { return }
             throw error
         }
@@ -261,7 +390,7 @@ final class SitxClient: ObservableObject, TAKTransport {
         let detail = SitxCoT.pliDetail(
             uid: Self.deviceID(), callSign: settings.callSign, team: settings.teamColor.rawValue, role: settings.role,
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
-            osVersion: "watchOS \(os.majorVersion).\(os.minorVersion)")
+            osVersion: "watchOS \(os.majorVersion).\(os.minorVersion)") + biometrics.fresh().pliDetail(uid: Self.deviceID())
         let lifetime = TimeInterval(max(settings.stationaryReportingInterval, settings.constantReportingInterval,
                                         settings.onFootReportingInterval, settings.vehicleReportingInterval)) * 6 + 120
         try await deliver(SitxCoT.event(uid: Self.deviceID(), type: SitxCoT.pliType, coordinate: coordinate,
@@ -292,7 +421,9 @@ final class SitxClient: ObservableObject, TAKTransport {
         let cancel = state == .cancel
         let emergency = cancel ? "<emergency cancel=\"true\">\(SitxCoT.escape(settings.callSign))</emergency>"
             : "<emergency type=\"\(SitxCoT.escape(type))\">\(SitxCoT.escape(settings.callSign))</emergency>"
-        let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\"/><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/><remarks>\(SitxCoT.escape(type))</remarks><biometrics alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertDescription=\"\(SitxCoT.escape(type))\"/>" + emergency
+        let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\"/><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/><remarks>\(SitxCoT.escape(type))</remarks>" +
+            biometrics.fresh().biometricsElement(uid: Self.deviceID(),
+                alertAttributes: " alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertCategory=\"\(SitxCoT.escape(type))\" alertPriority=\"1\" alertDescription=\"\(SitxCoT.escape(type))\"") + emergency
         try await deliver(SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
                           detail: detail, lifetime: 86_400), eventKey: uid)
     }
@@ -333,6 +464,10 @@ final class SitxClient: ObservableObject, TAKTransport {
         if status == State.connected || status == "Authorized; select Connect / Pair to verify" {
             return "Sit(x) Enabled"
         }
+        if status.hasPrefix("Via iPhone: Connected") || status.hasPrefix(Self.phoneSetupPrefix + "Connected") {
+            return "Sit(x) via iPhone"
+        }
+        if status == Self.streamBlockedStatus { return "Sit(x) Needs iPhone" }
         let lowercasedStatus = status.lowercased()
         if lowercasedStatus.contains("error") || lowercasedStatus.contains("failed") ||
             lowercasedStatus.contains("http ") || lowercasedStatus.contains("expired") {
@@ -351,12 +486,20 @@ final class SitxClient: ObservableObject, TAKTransport {
         accessToken = self.tokenStore.read(account: "access")
         refreshToken = self.tokenStore.read(account: "refresh")
         tokenHost = self.tokenStore.read(account: "host")
+        relayedHost = defaults.string(forKey: "WearTAK.sitxRelayedHost")
+        relayedGroup = defaults.string(forKey: "WearTAK.sitxRelayedGroup")
+        if let data = defaults.data(forKey: "WearTAK.sitxGroups"),
+           let saved = try? JSONDecoder().decode([SitxGroup].self, from: data) {
+            groups = saved
+        }
         if accessToken != nil || refreshToken != nil {
             status = "Authorized; select Connect / Pair to verify"
+        } else if relayedHost != nil {
+            status = "Via iPhone; phone not reachable"
         }
         hostSubscription = settings.$sitxApiHost.dropFirst().sink { [weak self] host in
-            guard let self, self.tokenHost != nil,
-                  self.tokenHost != Self.normalizedHost(host) else { return }
+            guard let self, let current = self.tokenHost ?? self.relayedHost,
+                  current != Self.normalizedHost(host) else { return }
             self.forgetAuthorization()
         }
         if !settings.sitxEnabled { status = "Off" }
@@ -368,6 +511,7 @@ final class SitxClient: ObservableObject, TAKTransport {
         pairingTask = Task {
             await beginPairing()
             pairingTask = nil
+            reconcileRelay()
         }
     }
 
@@ -380,9 +524,15 @@ final class SitxClient: ObservableObject, TAKTransport {
         authorizationCode = ""
         verificationURL = ""
         groups = []
+        defaults.removeObject(forKey: "WearTAK.sitxGroups")
         selectedGroupID = ""
         defaults.removeObject(forKey: "WearTAK.sitxGroup")
         status = State.unconfigured
+        if relayedHost != nil || relayTask != nil {
+            // Also covers Re-auth during a pending handoff: the token reaching the phone must not come back.
+            discardRelayedToken = true
+            reconcileRelay()
+        }
     }
 
     private func beginPairing() async {
@@ -397,6 +547,7 @@ final class SitxClient: ObservableObject, TAKTransport {
         if tokenHost != host {
             disconnect()
             groups = []
+            defaults.removeObject(forKey: "WearTAK.sitxGroups")
             selectedGroupID = ""
             pendingEvents = [:]
             defaults.removeObject(forKey: "WearTAK.sitxGroup")
@@ -497,7 +648,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             tokenHost = host
             await verifyAccount(host: host)
         } catch {
-            if error as? SitxError == .httpStatus(401) || error as? SitxError == .httpStatus(403) {
+            if let code = (error as? SitxError)?.statusCode, code == 401 || code == 403 {
                 clearTokens()
                 await requestDeviceCode(host: host)
             } else {
@@ -522,6 +673,7 @@ final class SitxClient: ObservableObject, TAKTransport {
                 return
             }
             groups = try JSONDecoder().decode([SitxGroup].self, from: data)
+            if let encoded = try? JSONEncoder().encode(groups) { defaults.set(encoded, forKey: "WearTAK.sitxGroups") }
             if !groups.contains(where: { $0.id == selectedGroupID }) {
                 selectedGroupID = ""
                 defaults.removeObject(forKey: "WearTAK.sitxGroup")
@@ -540,10 +692,25 @@ final class SitxClient: ObservableObject, TAKTransport {
         }
         let nsError = error as NSError
         if let urlError = error as? URLError {
-            return "\(context) network error \(urlError.code.rawValue)"
+            return "\(context) network error \(urlError.code.rawValue) (\(networkReason(urlError.code)))"
         }
         return "\(context) failed (\(nsError.domain) \(nsError.code))"
     }
+
+    private static func networkReason(_ code: URLError.Code) -> String { SitxAPI.networkReason(code) }
+
+    /// Real watchOS hardware rejects URLSessionWebSocketTask (TN3135) even though HTTPS works,
+    /// surfacing as "not connected to internet" right after the access-token request succeeded.
+    static func isWatchOSStreamBlocked(_ error: Error) -> Bool {
+        #if os(watchOS) && !targetEnvironment(simulator)
+        return (error as? URLError)?.code == .notConnectedToInternet
+        #else
+        return false
+        #endif
+    }
+
+    static let phoneSetupPrefix = "On iPhone: "
+    static let streamBlockedStatus = "Live stream needs WearTAK Companion; watchOS blocks direct Sit(x) streaming"
 
     private func postJSON(host: String, path: String, body: [String: String]) async throws -> [String: Any] {
         var request = URLRequest(url: URL(string: host + path)!)
@@ -578,10 +745,15 @@ final class SitxClient: ObservableObject, TAKTransport {
             }
         }
         guard (200..<300).contains(http.statusCode) else {
+            if let message = Self.serverMessage(from: data) {
+                throw SitxError.httpFailure(http.statusCode, message)
+            }
             throw SitxError.httpStatus(http.statusCode)
         }
         return (try JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     }
+
+    static func serverMessage(from data: Data) -> String? { SitxAPI.serverMessage(from: data) }
 
     private func clearTokens() {
         accessToken = nil
@@ -598,31 +770,7 @@ final class SitxClient: ObservableObject, TAKTransport {
         return value
     }
 
-    static func normalizedHost(_ value: String) -> String? {
-        let input = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !input.isEmpty else { return nil }
-        let urlText = input.contains("://") ? input : "https://" + input
-        guard var components = URLComponents(string: urlText),
-              components.scheme == "https" || components.scheme == "http",
-              components.user == nil, components.password == nil, components.port == nil,
-              components.query == nil, components.fragment == nil,
-              components.path.isEmpty || components.path == "/",
-              var hostname = components.host else { return nil }
-        if hostname != "sitx.io", !hostname.hasSuffix(".sitx.io") {
-            hostname += ".sitx.io"
-        }
-        let labels = hostname.split(separator: ".", omittingEmptySubsequences: false)
-        guard hostname.count <= 253, labels.allSatisfy({ label in
-            !label.isEmpty && label.count <= 63 && label.first != "-" && label.last != "-" &&
-            label.utf8.allSatisfy { byte in
-                (97...122).contains(byte) || (48...57).contains(byte) || byte == 45
-            }
-        }) else { return nil }
-        components.scheme = "https"
-        components.host = hostname
-        components.path = ""
-        return components.string
-    }
+    static func normalizedHost(_ value: String) -> String? { SitxAPI.normalizedHost(value) }
 
     private func saveToken(_ value: String, account: String) throws {
         try tokenStore.save(value, account: account)
@@ -680,7 +828,15 @@ private enum SitxError: Error, Equatable {
     case accountVerificationFailed
     case invalidResponse
     case httpStatus(Int)
+    case httpFailure(Int, String)
     case keychain(OSStatus)
+
+    var statusCode: Int? {
+        switch self {
+        case .httpStatus(let code), .httpFailure(let code, _): return code
+        default: return nil
+        }
+    }
 
     var localizedDescription: String {
         switch self {
@@ -690,6 +846,7 @@ private enum SitxError: Error, Equatable {
         case .accountVerificationFailed: return "Account verification failed"
         case .invalidResponse: return "Invalid Sit(x) response"
         case .httpStatus(let code): return "Sit(x) HTTP \(code)"
+        case .httpFailure(let code, let message): return "Sit(x) HTTP \(code): \(message)"
         case .keychain(let status): return "Secure token storage failed (\(status))"
         }
     }

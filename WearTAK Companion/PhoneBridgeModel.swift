@@ -37,6 +37,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private var sessions: [UUID: CompanionServerSession] = [:]
+    let sitx: CompanionSitxSession
     private var active = true
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var backgroundGeneration: UUID?
@@ -71,7 +72,22 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     init(defaults: UserDefaults) {
         self.defaults = defaults
         reporter = PhoneLocationReporter(defaults: defaults)
+        sitx = CompanionSitxSession(defaults: defaults)
         super.init()
+        if sitx.isConfigured { serverStates[SitxRelayConfig.serverID] = sitx.state }
+        sitx.onState = { [weak self] state in
+            guard let self else { return }
+            let id = SitxRelayConfig.serverID
+            let wasConnected = self.serverStates[id]?.connected == true
+            if self.sitx.isConfigured { self.serverStates[id] = state } else { self.serverStates.removeValue(forKey: id) }
+            if !self.sitx.isConfigured {
+                self.mapCache.remove(sourceID: id)
+                self.saveMapCache()
+            }
+            self.publishState()
+            if state.connected, !wasConnected, let fix = self.latestPhoneFix { self.reportPhoneFix(fix) }
+        }
+        sitx.onCoT = { [weak self] xml in self?.forward(xml, sourceID: SitxRelayConfig.serverID) }
         reporter.onFix = { [weak self] fix in self?.reportPhoneFix(fix) }
         reporter.onAuthorizationChange = { [weak self] in self?.publishState() }
         reporter.onError = { [weak self] message in
@@ -197,8 +213,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     private func synchronize() {
         let validIDs = Set(servers.map(\.id))
-        mapCache.prune(enabledServerIDs: Set(servers.filter(\.enabled).map(\.id)))
-        chatBuffer.prune(enabledServerIDs: Set(servers.filter(\.enabled).map(\.id)))
+        mapCache.prune(enabledServerIDs: enabledSourceIDs)
+        chatBuffer.prune(enabledServerIDs: enabledSourceIDs)
         saveMapCache()
         for id in Array(sessions.keys) where !validIDs.contains(id) { sessions.removeValue(forKey: id)?.stop() }
         for server in servers {
@@ -226,13 +242,51 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             }
             session.configure(server, active: canRelay)
         }
+        sitx.setActive(canRelay)
         publishState()
+    }
+
+    /// TAK server IDs plus the watch-provided Sit(x) relay, used to scope cached map and chat events.
+    private var enabledSourceIDs: Set<UUID> {
+        var ids = Set(servers.filter(\.enabled).map(\.id))
+        if sitx.isConfigured { ids.insert(SitxRelayConfig.serverID) }
+        return ids
+    }
+
+    /// Connected outputs (TAK servers and Sit(x)) keyed by source ID.
+    private func readyOutputs() -> [UUID: (String) async throws -> Void] {
+        let enabled = Set(servers.filter(\.enabled).map(\.id))
+        var outputs: [UUID: (String) async throws -> Void] = [:]
+        for (id, session) in sessions where enabled.contains(id) && session.state.connected {
+            outputs[id] = { xml in try await session.send(xml) }
+        }
+        if sitx.isConfigured, sitx.state.connected {
+            let sitx = self.sitx
+            outputs[SitxRelayConfig.serverID] = { xml in try await sitx.send(xml) }
+        }
+        return outputs
+    }
+
+    private func applySitx(_ config: SitxRelayConfig) throws {
+        try sitx.apply(config)
+        serverStates[SitxRelayConfig.serverID] = sitx.isConfigured ? sitx.state : nil
+        if !sitx.isConfigured { mapCache.remove(sourceID: SitxRelayConfig.serverID); saveMapCache() }
+        publishState()
+    }
+
+    private var sitxStatusSummary: String? {
+        sitx.isSetUp ? sitx.state.detail : nil
+    }
+
+    private func sourceName(_ id: UUID) -> String {
+        if id == SitxRelayConfig.serverID { return "Sit(x)" }
+        return servers.first { $0.id == id }?.host ?? "Server"
     }
 
     private func snapshot(id: UUID = UUID()) -> BridgeWire.Message {
         BridgeWire.Message(kind: .status, id: id, ready: canRelay && connected, configured: configured, detail: status,
                    sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary,
-                   phoneLocationEnabled: reporter.isRunning)
+                   phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "")
     }
 
     private var phoneReportingSummary: String {
@@ -252,6 +306,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             catch { watchIdentity = .failure(.invalidField("identity payload")) }
         }
         let enabledConfigured = servers.filter { $0.enabled && serverStates[$0.id]?.configured == true }.count
+            + (sitx.isConfigured ? 1 : 0)
         let decision = PhoneReportingGate.decide(enabledConfiguredServers: enabledConfigured, identity: watchIdentity,
             authorization: reporter.authorization, preciseLocation: reporter.preciseLocation,
             servicesEnabled: reporter.servicesEnabled, appActive: active, alreadyRunning: reporter.isRunning)
@@ -309,16 +364,17 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         phoneInterval = interval
         phoneReporting.interval = interval
         guard !phoneSendInFlight, PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt, interval: interval) else { return }
-        let enabled = Set(servers.filter(\.enabled).map(\.id))
-        let ready = sessions.filter { enabled.contains($0.key) && $0.value.state.connected }
+        let ready = readyOutputs()
         guard !ready.isEmpty else {
             updatePhoneReportingState("Waiting for TAK server connection",
                 detail: "No enabled TAK server is connected; Companion retries automatically.")
             return
         }
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let biometrics = WatchBiometrics.decode(contextValue: WCSession.default.receivedApplicationContext[WatchBiometrics.contextKey])
         let xml = PhonePLI.event(identity: identity, fix: fix, interval: interval, appVersion: version,
-                                 osVersion: "iOS \(UIDevice.current.systemVersion)")
+                                 osVersion: "iOS \(UIDevice.current.systemVersion)",
+                                 biometrics: biometrics ?? WatchBiometrics())
         phoneSendInFlight = true
         Task {
             defer {
@@ -331,15 +387,15 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             }
             var failures: [String] = []
             var delivered: [UUID: Date] = [:]
-            for (id, session) in ready {
-                do { try await session.send(xml); delivered[id] = Date() }
-                catch { failures.append("\(self.servers.first { $0.id == id }?.host ?? "Server"): \(error.localizedDescription)") }
+            for (id, send) in ready {
+                do { try await send(xml); delivered[id] = Date() }
+                catch { failures.append("\(self.sourceName(id)): \(error.localizedDescription)") }
             }
             guard self.reporter.isRunning, case .success(let current) = self.watchIdentity,
                   current.hasSameSettings(as: identity) else { return }
             self.phoneReportsByServer.merge(delivered) { _, latest in latest }
             if !delivered.isEmpty {
-                self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s)")
+                self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s); vitals \((biometrics ?? WatchBiometrics()).fresh().remarks, privacy: .public)")
                 self.lastPhoneReportAt = Date()
                 self.phoneReporting.lastReportAt = self.lastPhoneReportAt
             }
@@ -417,7 +473,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         guard session.activationState == .activated else { return }
         let context: [String: Any] = [
             "WearTAKCompanion.serverConfigured": configured,
-            "WearTAKCompanion.serverReady": canRelay && connected
+            "WearTAKCompanion.serverReady": canRelay && connected,
+            "WearTAKCompanion.sitxSetUp": sitx.isSetUp
         ]
         do {
             try session.updateApplicationContext(context)
@@ -444,9 +501,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         guard canRelay, connected, WCSession.default.isReachable, incomingInFlight < 16,
               let data = try? BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: sourceID,
                   sourceGeneration: sourceGenerations[sourceID, default: 0], sessionID: bridgeSessionID).encoded() else {
-            if isChat {
-                chatLogger.notice("GeoChat not forwarded: relay=\(self.canRelay), connected=\(self.connected), reachable=\(WCSession.default.isReachable), inFlight=\(self.incomingInFlight)")
-            }
+            chatLogger.notice("CoT \(event.header?.type ?? "?", privacy: .public) not forwarded: relay=\(self.canRelay), connected=\(self.connected), reachable=\(WCSession.default.isReachable), inFlight=\(self.incomingInFlight)")
             return
         }
         incomingInFlight += 1
@@ -499,8 +554,21 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 replyID = message.id
                 try self.beginBackgroundRefresh()
                 if message.kind == .hello {
-                    self.chatBuffer.prune(enabledServerIDs: Set(self.servers.filter(\.enabled).map(\.id)))
+                    self.chatBuffer.prune(enabledServerIDs: self.enabledSourceIDs)
                     replyHandler(try self.chatBuffer.filling(self.snapshot(id: message.id)).encoded())
+                    return
+                }
+                if message.kind == .sitxConfig, let config = message.sitxConfig {
+                    var released: SitxRelayConfig?
+                    if config.enabled {
+                        try self.applySitx(config)
+                    } else {
+                        let token = await self.sitx.release()
+                        released = SitxRelayConfig(enabled: false, host: config.host, flowTag: config.flowTag,
+                                                   refreshToken: token)
+                    }
+                    replyHandler(try BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true,
+                        sitxConfig: released, sitxStatus: self.sitxStatusSummary ?? "").encoded())
                     return
                 }
                 if message.kind == .mapSnapshot {
@@ -520,22 +588,20 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 self.watchWritesInFlight += 1
                 defer { self.watchWritesInFlight -= 1 }
                 var successful = self.completedMessages[message.id] ?? []
-                let enabled = Set(self.servers.filter(\.enabled).map(\.id))
-                var ready = self.sessions.filter { enabled.contains($0.key) && $0.value.state.connected }
+                var ready = self.readyOutputs()
                 if let target = message.serverID {
                     // Directed CoT (for example GeoChat) goes only to its source server and is never broadcast.
-                    guard self.servers.contains(where: { $0.id == target && $0.enabled }),
-                          let session = ready[target] else {
+                    guard self.enabledSourceIDs.contains(target), let send = ready[target] else {
                         throw CompanionFailure.message("The contact's TAK server is not connected. Message not sent.")
                     }
-                    ready = [target: session]
+                    ready = [target: send]
                 }
-                for (id, server) in ready where !successful.contains(id) {
+                for (id, send) in ready where !successful.contains(id) {
                     if self.shouldSuppressWatchPLI(xml, serverID: id) {
                         successful.insert(id)
                         continue
                     }
-                    do { try await server.send(xml); successful.insert(id) }
+                    do { try await send(xml); successful.insert(id) }
                     catch { continue }
                 }
                 guard !successful.isEmpty else { throw CompanionFailure.message("No server accepted the relay write.") }
@@ -564,10 +630,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         var failures: [String] = []
         if let mapCacheError { failures.append(mapCacheError) }
         let enabled = servers.filter(\.enabled)
-        if enabled.isEmpty { failures.append("Enable a TAK server in Companion on the phone.") }
+        if enabled.isEmpty, !sitx.isConfigured { failures.append("Enable a TAK server in Companion on the phone.") }
         for server in enabled where serverStates[server.id]?.connected != true {
             failures.append("\(server.host): \(serverStates[server.id]?.detail ?? "Disconnected")")
         }
+        if sitx.isConfigured, !sitx.state.connected { failures.append("Sit(x): \(sitx.state.detail)") }
         let ready = enabled.compactMap { server -> (String, CompanionServerSession)? in
             guard let session = sessions[server.id], session.state.connected else { return nil }
             return (server.host, session)
@@ -591,12 +658,12 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             }
         }
         if !canRelay { failures.append("The phone's background refresh time expired.") }
-        mapCache.prune(enabledServerIDs: Set(enabled.map(\.id)))
+        mapCache.prune(enabledServerIDs: enabledSourceIDs)
         saveMapCache()
         let reply = BridgeWire.Message(kind: .mapSnapshot, id: message.id, ready: connected,
             configured: configured, detail: status, sessionID: bridgeSessionID,
-            enabledServerIDs: enabled.map(\.id), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"),
-            phoneReporting: phoneReportingSummary, phoneLocationEnabled: reporter.isRunning)
+            enabledServerIDs: Array(enabledSourceIDs), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"),
+            phoneReporting: phoneReportingSummary, phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "")
         return try mapCache.filling(reply)
     }
 

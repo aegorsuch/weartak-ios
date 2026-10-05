@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -31,6 +31,9 @@ enum BridgeWire {
         var phoneReporting: String?
         var phoneLocationEnabled: Bool?
         var chatEvents: [CompanionMapEvent]?
+        var sitxConfig: SitxRelayConfig?
+        /// Phone-side Sit(x) relay state; empty when Companion holds no Sit(x) configuration.
+        var sitxStatus: String?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -49,6 +52,9 @@ enum BridgeWire {
                 guard message.kind == .mapSnapshot, events.count <= CompanionMapCache.maximumEvents,
                       events.allSatisfy({ $0.isValid }) else { throw Failure.invalidCoT }
             }
+            if message.kind == .sitxConfig {
+                guard let config = message.sitxConfig, config.isValid else { throw Failure.invalidSitxConfig }
+            }
             if let events = message.chatEvents {
                 guard message.kind == .status, events.count <= CompanionChatBuffer.maximumEvents,
                       events.allSatisfy({ CompanionChatBuffer.isValid($0) }) else { throw Failure.invalidCoT }
@@ -58,14 +64,38 @@ enum BridgeWire {
     }
 
     enum Failure: LocalizedError {
-        case tooLarge, unsupportedVersion, invalidCoT
+        case tooLarge, unsupportedVersion, invalidCoT, invalidSitxConfig
         var errorDescription: String? {
             switch self {
+            case .invalidSitxConfig: return "The Sit(x) relay settings from the watch are invalid."
             case .tooLarge: return "The Companion message exceeds the supported size."
             case .unsupportedVersion: return "Update both WearTAK apps to matching versions."
             case .invalidCoT: return "The Companion message contains invalid CoT map data."
             }
         }
+    }
+}
+
+/// Watch → phone hand-off of Sit(x) streaming. watchOS hardware blocks WebSockets (TN3135), so Companion holds
+/// the Sit(x) connection. A refresh token transfers ownership: the watch deletes its copy after the phone accepts it,
+/// because Sit(x) invalidates the whole token family if a rotated refresh token is reused.
+struct SitxRelayConfig: Codable, Equatable {
+    static let serverID = UUID(uuidString: "5170A7A0-0000-4000-8000-000000005177")!
+    var enabled: Bool
+    var host: String
+    var flowTag: String
+    var groupName: String?
+    var refreshToken: String?
+
+    var isValid: Bool {
+        guard !enabled else {
+            guard let url = URL(string: host), url.scheme == "https", let name = url.host,
+                  name == "sitx.io" || name.hasSuffix(".sitx.io"),
+                  !flowTag.isEmpty, flowTag.count <= 256, (groupName?.count ?? 0) <= 256,
+                  (refreshToken?.count ?? 0) <= 8_192 else { return false }
+            return refreshToken.map { !$0.isEmpty } ?? true
+        }
+        return true
     }
 }
 

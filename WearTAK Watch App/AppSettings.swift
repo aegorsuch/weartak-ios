@@ -5,11 +5,19 @@ import Network
 enum DashboardMetric: String, CaseIterable, Identifiable {
     case exertion = "Exertion"
     case heartRate = "Heart Rate"
+    case latLon = "Lat/Lon"
+    case mgrs = "MGRS"
 
     var id: Self { self }
     var symbol: String {
-        self == .exertion ? "figure.strengthtraining.traditional" : "waveform.path.ecg"
+        switch self {
+        case .exertion: return "figure.strengthtraining.traditional"
+        case .heartRate: return "waveform.path.ecg"
+        case .latLon: return "globe"
+        case .mgrs: return "square.grid.3x3"
+        }
     }
+    var isCoordinate: Bool { self == .latLon || self == .mgrs }
 }
 
 enum MulticastOutputProtocol: String, CaseIterable, Identifiable {

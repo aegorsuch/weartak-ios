@@ -51,6 +51,11 @@ struct EntityRelayPayload: Codable {
     var senderUID: String? = nil
     /// Parser-derived user classification; nil falls back to the CoT type.
     var isUser: Bool? = nil
+    /// CoT `time`/`how`; a newer `time` on a human-entered (`h-`) point means the sender re-sent it.
+    var sentAt: Date? = nil
+    var how: String? = nil
+
+    var isHumanEntered: Bool { how?.hasPrefix("h") == true }
 
     /// A same-uid update without `__group`/contact detail keeps the last known metadata,
     /// so the user's dot color, role badge and Layers counts do not drop out.

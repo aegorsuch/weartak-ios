@@ -77,7 +77,12 @@ struct ContentView: View {
                 environment.startMonitoring()
             }
         }
+        .onChange(of: physiology.readingDate, initial: true) { _, date in
+            model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent, measuredAt: date)
+        }
         .onChange(of: physiology.activeAutomaticAlert) { _, category in
+            model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent,
+                                   measuredAt: physiology.readingDate)
             model.updateAutomaticAlert(category)
         }
         .onChange(of: settings.physiologicalAlertsEnabled) { _, enabled in
@@ -180,8 +185,26 @@ private struct WatchDashboardView: View {
             WKInterfaceDevice.current().isBatteryMonitoringEnabled = true
             await physiology.startViewing()
         }
+        .onAppear { model.setLiveLocationRequested(settings.dashboardMetric.isCoordinate) }
+        .onChange(of: settings.dashboardMetric) { _, metric in
+            model.setLiveLocationRequested(metric.isCoordinate)
+        }
         .onDisappear {
             physiology.stopViewing()
+        }
+    }
+
+    private var metricAccessibilityText: String {
+        switch settings.dashboardMetric {
+        case .exertion:
+            return "Exertion \(physiology.exertionPercent.map { "\($0) percent" } ?? "unavailable")"
+        case .heartRate:
+            return "Heart rate \(physiology.heartRate.map { "\($0) beats per minute" } ?? "unavailable")"
+        case .latLon, .mgrs:
+            let lines = model.lastLocation.flatMap {
+                MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: settings.dashboardMetric == .mgrs)
+            }
+            return "\(settings.dashboardMetric.rawValue) \(lines.map { "\($0.0) \($0.1)" } ?? "unavailable")"
         }
     }
 
@@ -209,33 +232,48 @@ private struct WatchDashboardView: View {
             }
             Spacer(minLength: 0)
             NavigationLink {
-                DashboardMetricPreferencesView(settings: settings, monitor: physiology)
+                DashboardMetricPreferencesView(model: model, settings: settings, monitor: physiology)
             } label: {
-                VStack(spacing: 2) {
-                    Text(settings.dashboardMetric.rawValue)
-                        .font(.system(size: small ? 10 : 12))
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 2) {
-                        Image(systemName: settings.dashboardMetric.symbol)
-                            .font(.system(size: small ? 11 : 13))
-                            .foregroundStyle(accent)
-                        Text(settings.dashboardMetric == .exertion
-                            ? physiology.exertionPercent.map { "\($0)%" } ?? "--%"
-                            : physiology.heartRate.map { "\($0)" } ?? "--")
-                            .font(.system(size: small ? 16 : 18, weight: .semibold))
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                            .layoutPriority(1)
+                Group {
+                    if settings.dashboardMetric.isCoordinate {
+                        let lines = model.lastLocation.flatMap {
+                            MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: settings.dashboardMetric == .mgrs)
+                        }
+                        VStack(spacing: 1) {
+                            Text(lines?.0 ?? settings.dashboardMetric.rawValue)
+                                .font(.system(size: small ? 13 : 15, weight: .semibold))
+                            Text(lines?.1 ?? "--")
+                                .font(.system(size: small ? 13 : 15, weight: .semibold))
+                        }
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    } else {
+                        VStack(spacing: 2) {
+                            Text(settings.dashboardMetric.rawValue)
+                                .font(.system(size: small ? 10 : 12))
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 2) {
+                                Image(systemName: settings.dashboardMetric.symbol)
+                                    .font(.system(size: small ? 11 : 13))
+                                    .foregroundStyle(accent)
+                                Text(settings.dashboardMetric == .exertion
+                                    ? physiology.exertionPercent.map { "\($0)%" } ?? "--%"
+                                    : physiology.heartRate.map { "\($0)" } ?? "--")
+                                    .font(.system(size: small ? 16 : 18, weight: .semibold))
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                    .layoutPriority(1)
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 4)
                 .padding(.vertical, 3)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(physiologyBorderColor, lineWidth: 2))
             }
-            .accessibilityLabel(settings.dashboardMetric == .exertion
-                ? "Select metric. Exertion \(physiology.exertionPercent.map { "\($0) percent" } ?? "unavailable")"
-                : "Select metric. Heart rate \(physiology.heartRate.map { "\($0) beats per minute" } ?? "unavailable")")
+            .accessibilityLabel("Select metric. " + metricAccessibilityText)
             Spacer(minLength: 0)
             VStack(spacing: small ? 2 : 3) {
                 NavigationLink {
@@ -382,6 +420,7 @@ private struct WatchDashboardView: View {
 }
 
 private struct DashboardMetricPreferencesView: View {
+    @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     @ObservedObject var monitor: PhysiologyMonitor
     @Environment(\.dismiss) private var dismiss
@@ -402,18 +441,21 @@ private struct DashboardMetricPreferencesView: View {
                         settings.dashboardMetric = metric
                         dismiss()
                     } label: {
-                        HStack(spacing: 4) {
-                            Label(metric.rawValue, systemImage: metric.symbol)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Spacer()
-                            Text(reading(for: metric))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
+                        HStack(spacing: 6) {
+                            Image(systemName: metric.symbol)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(metric.rawValue)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                Text(reading(for: metric))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                            }
+                            Spacer(minLength: 0)
                             if settings.dashboardMetric == metric {
                                 Image(systemName: "checkmark")
                             }
@@ -433,6 +475,10 @@ private struct DashboardMetricPreferencesView: View {
             return monitor.exertionPercent.map { "\($0)%" } ?? "Unavailable"
         case .heartRate:
             return monitor.heartRate.map { "\($0) BPM" } ?? "Unavailable"
+        case .latLon, .mgrs:
+            return model.lastLocation.flatMap {
+                MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: metric == .mgrs)
+            }.map { "\($0.0) \($0.1)" } ?? "No fix"
         }
     }
 }

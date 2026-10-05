@@ -518,8 +518,13 @@ badge to the dashboard Compass button; opening Compass clears it. Compass lists
 incoming points with affiliation and range. Tapping one offers **RGR** (start
 Bloodhound and send "Roger, bloodhounding to TITLE"), **Remove** (hide the point
 on this watch) or **Cancel**. During that Bloodhound, **nPos** stops navigation,
-removes the point and sends "In Position at TITLE". Removed points stay hidden
-for 24 hours even if re-sent.
+removes the point and sends "In Position at TITLE".
+
+A point the sender deliberately sends again (a newer CoT `time` on a
+human-entered `how="h-…"` point) notifies again, even if it is already listed
+or was removed. Reconnect replays with the same `time` and machine-generated
+track updates stay silent. Sit(x) portal markers (`<takv device="Map Marker"/>`)
+and other points with a `p-p` sender link count as points, not users.
 
 Replies go to the point's `link relation="p-p"` UID, which is the original
 creator. ATAK keeps that link when re-sending another user's point, so replies
@@ -641,7 +646,13 @@ and [multicast entitlement platforms](https://developer.apple.com/documentation/
 
 ### Setup
 
-1. Open Settings > Network Preferences > Sit(x) TAK.
+Sit(x) can be set up on the watch or in WearTAK Companion on the iPhone. Both
+use the same steps and menu. A physical watch streams Sit(x) through Companion
+either way (see below), so setting it up on the phone is often simpler: the
+authorization link opens directly in Safari and the code can be copied.
+
+1. On the watch, open Settings > Network Preferences > Sit(x) TAK. On the
+   phone, open Companion and tap Sit(x) TAK.
 2. Set Address to the organization name. For example, `team` becomes
    `https://team.sitx.io`. An existing `.sitx.io` suffix is not duplicated.
 3. Turn on Sit(x) TAK and approve the device using the code and authorization
@@ -651,7 +662,9 @@ and [multicast entitlement platforms](https://developer.apple.com/documentation/
 5. Wait for Sit(x) State to show Connected. This means the authenticated TAK
    WebSocket has responded, not just that authorization succeeded.
 
-The menu order is Sit(x) TAK toggle, Address, Group, Sit(x) State, Re-auth, Back.
+The menu order is Sit(x) TAK toggle, Address, Group, Sit(x) State, Re-auth, Back
+(Companion uses the standard iOS back button, and the Group list can be pulled
+to refresh).
 The Network Preferences entry shows Sit(x) TAK with the current state below it.
 Off stops Sit(x) delivery while preserving credentials and the selected group.
 Re-auth discards the old credentials and starts a new device authorization.
@@ -677,6 +690,46 @@ Changing the address also invalidates the previous organization's credentials.
 The client stores credentials in Keychain, refreshes them on reconnect, and
 retries transient network failures while the app is active. Transient failures
 do not erase authorization. Connected is shown only after the socket responds.
+HTTP failures show the server's `error_description`/`message`/`detail`/`error`
+text when present, for example `HTTP 406: <reason>`.
+
+### Streaming through WearTAK Companion
+
+watchOS blocks WebSockets on Apple Watch hardware for apps that are not audio or
+VoIP apps ([TN3135](https://developer.apple.com/documentation/technotes/tn3135-low-level-networking-on-watchos)).
+HTTPS still works, so authorization and group listing run on the watch, but
+the live stream fails with `-1009`. The simulator does not enforce this.
+
+When the iPhone is reachable, the watch hands its Sit(x) session to WearTAK
+Companion after a group is selected:
+
+- The watch sends the host, group `flow_tag`, group name, and refresh token.
+  Companion stores the token in its Keychain and opens the Sit(x) WebSocket.
+- Sit(x) rotates refresh tokens, and reusing an old one invalidates the whole
+  token family. So only one device holds the token at a time: the watch
+  deletes its copy once Companion accepts it.
+- Sit(x) then acts like another Companion TAK server. Incoming PLI, points
+  (including 2525 points for Compass/RGR), alerts, and GeoChat reach the watch.
+  Outgoing PLI (watch and phone GPS), alerts and cancellations, points and
+  deletions, and chats go out over Sit(x).
+- Sit(x) State shows `Via iPhone: <phone status>`. Companion's Sit(x) TAK
+  page shows the handed-over address and group.
+- Turning Sit(x) Off on the watch stops the phone stream and returns the
+  refresh token to the watch. Re-auth discards the relayed token. Changing the
+  group updates Companion without re-sending a token.
+
+When Sit(x) is set up in Companion, the phone runs its own device authorization
+and owns the refresh token; the watch holds no Sit(x) credentials. Companion
+reports this through its application context, so the watch relays through
+the phone even when another TAK relay is selected, and its Sit(x) State shows
+`On iPhone: <phone status>`. Turn it Off, change Address, or Re-auth in
+Companion. Setting Sit(x) up on the watch later replaces the phone's
+authorization (the most recent setup wins). Companion runs token requests one at
+a time so a rotated refresh token is never reused.
+
+Without a reachable Companion, a physical watch shows `Live stream needs WearTAK
+Companion; watchOS blocks direct Sit(x) streaming` (menu: Sit(x) Needs iPhone)
+instead of retrying.
 
 ### Delivery and shared reporting
 
@@ -692,6 +745,17 @@ controls. Dynamic Reporting defaults to 3600 seconds stationary, 60 seconds on
 foot, 60 seconds in a vehicle, and 10 seconds while alerting. Constant Reporting
 defaults to 60 seconds. Save Battery on WiFi multiplies the selected interval
 by six on qualifying WiFi connections.
+
+PLI also carries the watch's vitals in the same format as WearTAK for WearOS:
+`<remarks>Exert:47%;HR:88</remarks>` plus
+`<biometrics><device><model>WATCHOS</model><uid/><hr/><exert/></device></biometrics>`.
+Exertion is heart rate as a percentage of age-predicted maximum. Apple Watch
+does not capture skin temperature, so it is omitted. Heart rate and exertion
+are `N/A` when missing or more than five minutes old. Companion's
+phone-GPS PLI carries the same block using vitals the watch shares through
+application context (at most every 30 seconds). Alert events include the
+`<biometrics>` device block with `alertUid`, `alertState`, `alertCategory`,
+`alertPriority="1"` and `alertDescription` attributes.
 
 Manual, physiological, and environmental alert activations and cancellations,
 point updates, and point deletions send independently of the PLI timer. Alert
@@ -716,8 +780,9 @@ readiness. GeoChat sends are transport-accepted, not recipient delivery receipts
 
 watchOS cannot identify connected WiFi SSIDs or list saved networks. All WiFi
 Connections and No WiFi Connections are supported; Some WiFi Connections is
-disabled. The maintainer reports physical-watch verification; repeat device
-and live Sit(x) WebSocket checks for distribution builds.
+disabled. Direct watch Sit(x) streaming works only in the simulator; physical
+watches need the Companion relay above. Repeat device and live Sit(x) checks
+for distribution builds.
 
 ## Protocol checks
 
@@ -733,8 +798,8 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/MulticastTAKTransport.swift' \
   'WearTAK Watch App/SitxClient.swift' \
   Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
-  Shared/TAKChannelModels.swift Shared/TAKChat.swift \
-  Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
+  Shared/TAKChannelModels.swift Shared/TAKChat.swift Shared/SitxShared.swift \
+  Shared/PhoneLocationReporting.swift Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
 ```
 

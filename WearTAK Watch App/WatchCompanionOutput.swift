@@ -35,12 +35,34 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     private var identitySubscription: AnyCancellable?
     private var publishedIdentity: WatchReportingIdentity?
     private var alertActive = false
+    private var biometrics = WatchBiometrics()
+    private var publishedBiometricsAt: Date?
     private var handshakeInFlight = false
     private var pending: [UUID: CheckedContinuation<BridgeWire.Message, Error>] = [:]
     private var timeouts: [UUID: Task<Void, Never>] = [:]
 
+    /// Sit(x) streaming is relayed through Companion, so it uses the phone even when another TAK relay is selected.
+    var sitxRelayRequested = false {
+        didSet {
+            guard oldValue != sitxRelayRequested else { return }
+            publishIdentity()
+            refresh()
+        }
+    }
+    /// Companion's Sit(x) relay state: nil when unknown, empty when the phone holds no Sit(x) configuration.
+    @Published private(set) var sitxRelayStatus: String?
+    /// Sit(x) set up in Companion itself, reported through the phone's application context.
+    private var phoneSitxSetUp = false {
+        didSet {
+            guard oldValue != phoneSitxSetUp else { return }
+            publishIdentity()
+            refresh()
+        }
+    }
+    private var usesCompanion: Bool { settings.relayProvider == .companion || sitxRelayRequested || phoneSitxSetUp }
+
     var isReady: Bool {
-        guard active, settings.relayProvider == .companion, serverReady else { return false }
+        guard active, usesCompanion, serverReady else { return false }
         #if DEBUG
         if isChannelPreview { return true }
         #endif
@@ -81,13 +103,21 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         publishIdentity()
     }
 
+    /// Phone-GPS PLI carries these vitals; context updates are limited to about one per 30 s.
+    func setBiometrics(_ biometrics: WatchBiometrics) {
+        guard self.biometrics != biometrics else { return }
+        self.biometrics = biometrics
+        guard usesCompanion, publishedBiometricsAt.map({ Date().timeIntervalSince($0) >= 25 }) ?? true else { return }
+        publishIdentity(force: true)
+    }
+
     /// Shares this watch's TAK UID, callsign, team, role and reporting settings so Companion can report
     /// phone GPS as this same user. Application context is delivered even when Companion is not running.
     func publishIdentity(force: Bool = false) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
         let identity = WatchReportingIdentity(uid: SitxClient.deviceID(), callSign: settings.callSign,
             team: settings.teamColor.rawValue, role: settings.role,
-            companionSelected: settings.relayProvider == .companion,
+            companionSelected: usesCompanion,
             constantStrategy: settings.reportingStrategy == .constant,
             constantInterval: settings.constantReportingInterval,
             stationaryInterval: settings.stationaryReportingInterval,
@@ -97,8 +127,13 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         if !force, let published = publishedIdentity, published.hasSameSettings(as: identity),
            identity.issuedAt.timeIntervalSince(published.issuedAt) < 3_600 { return }
         do {
-            try WCSession.default.updateApplicationContext([WatchReportingIdentity.contextKey: identity.contextValue()])
+            // Application context replaces the whole dictionary, so identity and vitals are always sent together.
+            try WCSession.default.updateApplicationContext([
+                WatchReportingIdentity.contextKey: identity.contextValue(),
+                WatchBiometrics.contextKey: biometrics.contextValue(),
+            ])
             publishedIdentity = identity
+            publishedBiometricsAt = Date()
             identitySyncError = nil
         } catch {
             identitySyncError = "Unable to share watch identity with Companion: \(error.localizedDescription)"
@@ -109,9 +144,9 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         let reachable = WCSession.isSupported() &&
             WCSession.default.activationState == .activated && WCSession.default.isReachable
         if isPhoneReachable != reachable { isPhoneReachable = reachable }
-        guard active, settings.relayProvider == .companion, WCSession.default.activationState == .activated,
+        guard active, usesCompanion, WCSession.default.activationState == .activated,
               WCSession.default.isReachable else {
-            if active, settings.relayProvider == .companion {
+            if active, usesCompanion {
                 mapRefreshError = "Phone unavailable. Showing cached positions."
             }
             invalidate()
@@ -142,7 +177,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     func refreshMap() async {
-        guard active, settings.relayProvider == .companion, !mapRefreshing else { return }
+        guard active, usesCompanion, !mapRefreshing else { return }
         guard WCSession.default.activationState == .activated, WCSession.default.isReachable else {
             mapRefreshError = "Phone unavailable. Showing cached positions."
             return
@@ -176,6 +211,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         serverReady = message.ready == true
         if let reporting = message.phoneReporting { phoneReportingStatus = reporting }
         phoneLocationEnabled = message.phoneLocationEnabled == true
+        if let sitxStatus = message.sitxStatus { sitxRelayStatus = sitxStatus }
         lastConfirmation = Date()
         status = message.detail ?? (serverReady ? "Connected" : "Not connected")
         onStateChange?()
@@ -194,6 +230,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
 
     private func invalidate() {
         serverReady = false
+        sitxRelayStatus = nil
         phoneLocationEnabled = false
         lastConfirmation = nil
         status = configured ? "Companion not connected" : "Configure on phone"
@@ -212,6 +249,16 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             if reply.kind == .status { apply(reply) }
             throw TAKTransportError.notConfigured
         }
+    }
+
+    /// Hands Sit(x) streaming to Companion (enabled) or takes it back (disabled; the reply may return the token).
+    func sendSitxConfig(_ config: SitxRelayConfig) async throws -> BridgeWire.Message {
+        let reply = try await request(BridgeWire.Message(kind: .sitxConfig, sitxConfig: config), timeoutSeconds: 20)
+        guard reply.kind == .acknowledgement, reply.ready == true else {
+            throw CompanionRefreshFailure.message(reply.detail ?? "Companion did not accept the Sit(x) settings.")
+        }
+        if let status = reply.sitxStatus { sitxRelayStatus = status }
+        return reply
     }
 
     func sendChat(_ xml: String, serverID: UUID) async throws {
@@ -331,8 +378,10 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         let configured = session.receivedApplicationContext["WearTAKCompanion.serverConfigured"] as? Bool ?? false
+        let sitxSetUp = session.receivedApplicationContext["WearTAKCompanion.sitxSetUp"] as? Bool ?? false
         Task { @MainActor [weak self] in
             self?.configured = configured
+            self?.phoneSitxSetUp = sitxSetUp
             self?.publishIdentity(force: true)
             self?.refresh()
         }
@@ -345,9 +394,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
         let configured = context["WearTAKCompanion.serverConfigured"] as? Bool
         let unavailable = context["WearTAKCompanion.serverReady"] as? Bool == false
+        let sitxSetUp = context["WearTAKCompanion.sitxSetUp"] as? Bool ?? false
         Task { @MainActor [weak self] in
             guard let self else { return }
             if let configured { self.configured = configured }
+            self.phoneSitxSetUp = sitxSetUp
             if unavailable && !self.handshakeInFlight && !self.mapRefreshing { self.invalidate() }
             else { self.refresh() }
         }
@@ -364,7 +415,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data, replyHandler: @escaping (Data) -> Void) {
         Task { @MainActor [weak self] in
             guard let self, let message = try? BridgeWire.Message.decode(data) else { replyHandler(Data()); return }
-            if message.kind == .cot, message.xml != nil, self.active, self.settings.relayProvider == .companion {
+            if message.kind == .cot, message.xml != nil, self.active, self.usesCompanion {
                 self.applySession(message)
                 self.onCoT?(message)
             }

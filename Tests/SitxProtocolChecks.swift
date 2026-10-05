@@ -141,6 +141,21 @@ struct SitxProtocolChecks {
         let hostileXML = SitxCoT.event(uid: "incoming-hostile", type: "a-h-G", coordinate: userCoordinate,
             detail: "<contact callsign=\"H.1\"/>", lifetime: 300)
         precondition(SitxCoT.parse(Data(hostileXML.utf8), excluding: "self").first?.isUser == false)
+        let portalMarkerXML = SitxCoT.event(uid: "incoming-portal-marker", type: "a-f-G", coordinate: userCoordinate,
+            detail: "<contact callsign=\"F.10.870308\"/><link type=\"a-f-G-U-C-I\" uid=\"web.sitx.io.SA\" parent_callsign=\"ODIN-SITX\" relation=\"p-p\"/><takv device=\"Map Marker\"/>",
+            lifetime: 300)
+        let portalMarker = SitxCoT.parse(Data(portalMarkerXML.utf8), excluding: "self").first
+        precondition(portalMarker?.isUser == false && portalMarker?.senderUID == "web.sitx.io.SA")
+        let resentXML = "<event version=\"2.0\" uid=\"resent\" type=\"a-f-G\" time=\"2026-10-05T15:51:41.652Z\" start=\"2026-10-05T15:51:41.652Z\" stale=\"2099-10-05T15:51:41Z\" how=\"h-g-i-g-o\"><point lat=\"37.3\" lon=\"-122.0\" hae=\"0\" ce=\"1\" le=\"1\"/><detail/></event>"
+        let resent = SitxCoT.parse(Data(resentXML.utf8), excluding: "self").first
+        precondition(resent?.sentAt == ISO8601DateFormatter().date(from: "2026-10-05T15:51:41Z")!.addingTimeInterval(0.652)
+            && resent?.isHumanEntered == true)
+        let machineXML = resentXML.replacingOccurrences(of: "h-g-i-g-o", with: "m-g").replacingOccurrences(of: ".652Z\" start", with: "Z\" start")
+        let machine = SitxCoT.parse(Data(machineXML.utf8), excluding: "self").first
+        precondition(machine?.isHumanEntered == false && machine?.sentAt == ISO8601DateFormatter().date(from: "2026-10-05T15:51:41Z"))
+        let linkedTAKVXML = SitxCoT.event(uid: "incoming-linked-takv", type: "a-f-G", coordinate: userCoordinate,
+            detail: "<link uid=\"sender\" relation=\"p-p\"/><takv platform=\"WebTAK\"/>", lifetime: 300)
+        precondition(SitxCoT.parse(Data(linkedTAKVXML.utf8), excluding: "self").first?.isUser == false)
         precondition(TeamColor(cotName: " dark_green ") == .darkGreen && TeamColor(cotName: "DarkBlue") == .darkBlue)
         precondition(TeamColor(cotName: "cyan") == .cyan && TeamColor(cotName: "Plaid") == nil && TeamColor(cotName: nil) == nil)
         precondition(SitxCoT.roleBadge("Team Lead") == "TL" && SitxCoT.roleBadge(" team member ") == "TM")
@@ -276,6 +291,10 @@ struct SitxProtocolChecks {
         precondition(settings.dashboardMetric == .exertion)
         settings.dashboardMetric = .heartRate
         precondition(AppSettings(defaults: defaults).dashboardMetric == .heartRate)
+        settings.dashboardMetric = .mgrs
+        precondition(AppSettings(defaults: defaults).dashboardMetric == .mgrs && DashboardMetric.mgrs.isCoordinate)
+        settings.dashboardMetric = .latLon
+        precondition(AppSettings(defaults: defaults).dashboardMetric == .latLon && !DashboardMetric.heartRate.isCoordinate)
         settings.dashboardMetric = .exertion
         precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: true, cellular: false) == .wifi)
         precondition(DashboardNetworkConnectivity.resolve(satisfied: true, wifi: false, cellular: true) == .cellular)
@@ -354,6 +373,29 @@ struct SitxProtocolChecks {
         precondition(SitxClient.normalizedHost("https://team.sitx.io/path") == nil)
         precondition(SitxClient.normalizedHost("https://user:password@team.sitx.io") == nil)
         print("PASS: organization suffix normalization and invalid-address rejection")
+        precondition(SitxClient.serverMessage(from: Data(#"{"error":"device already registered"}"#.utf8)) == "device already registered")
+        precondition(SitxClient.serverMessage(from: Data(#"{"errors":["x"],"message":"Not acceptable"}"#.utf8)) == "Not acceptable")
+        precondition(SitxClient.serverMessage(from: Data("<html>406</html>".utf8)) == nil)
+        precondition(SitxClient.serverMessage(from: Data()) == nil)
+        precondition(!SitxClient.isWatchOSStreamBlocked(URLError(.notConnectedToInternet)))
+        print("PASS: Sit(x) HTTP error body reasons and watchOS stream-block detection")
+        let relay = SitxRelayConfig(enabled: true, host: "https://team.sitx.io", flowTag: "flow-1",
+                                    groupName: "Alpha", refreshToken: "rt")
+        let relayMessage = try BridgeWire.Message.decode(
+            BridgeWire.Message(kind: .sitxConfig, sitxConfig: relay).encoded())
+        precondition(relayMessage.sitxConfig == relay)
+        precondition(SitxRelayConfig(enabled: false, host: "", flowTag: "").isValid)
+        for invalid in [
+            SitxRelayConfig(enabled: true, host: "https://evil.example", flowTag: "flow-1"),
+            SitxRelayConfig(enabled: true, host: "http://team.sitx.io", flowTag: "flow-1"),
+            SitxRelayConfig(enabled: true, host: "https://team.sitx.io", flowTag: ""),
+            SitxRelayConfig(enabled: true, host: "https://team.sitx.io", flowTag: "f", refreshToken: "")
+        ] {
+            let data = try BridgeWire.Message(kind: .sitxConfig, sitxConfig: invalid).encoded()
+            precondition((try? BridgeWire.Message.decode(data)) == nil)
+        }
+        precondition((try? BridgeWire.Message.decode(try BridgeWire.Message(kind: .sitxConfig).encoded())) == nil)
+        print("PASS: Sit(x) Companion relay config wire validation")
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSitxHTTP.self]
         let session = URLSession(configuration: configuration)
@@ -454,6 +496,7 @@ struct SitxProtocolChecks {
         client.additionalOutput = output
         try await client.connect()
         precondition(client.hasReadyOutput)
+        client.biometrics = WatchBiometrics(heartRate: 88, exertion: 47, measuredAt: Date())
         try await client.sendPLI(coordinate: marker.coordinate)
         try await client.sendEmergencyAlert(state: .alert, type: "Multicast alert")
         try await client.sendEmergencyAlert(state: .cancel, type: "Multicast alert")
@@ -469,6 +512,10 @@ struct SitxProtocolChecks {
         precondition(pli.attributes["__group"]?.first?["role"]?.isEmpty == false)
         precondition(pli.attributes["takv"]?.first?["platform"] == "WearTAK")
         precondition(pli.attributes["uid"]?.first?["Droid"] == settings.callSign)
+        precondition(output.messages[0].contains("<remarks>Exert:47%;HR:88</remarks>"), output.messages[0])
+        precondition(output.messages[0].contains("<biometrics><device><model>WATCHOS</model><uid>\(SitxClient.deviceID())</uid><hr>88</hr><exert>47</exert></device></biometrics>"))
+        precondition(output.messages[1].contains("alertPriority=\"1\"") && output.messages[1].contains("alertCategory=\"Multicast alert\""))
+        precondition(output.messages[1].contains("<hr>88</hr>") && output.messages[1].contains("<exert>47</exert>"))
         let multicastAlert = try fields(output.messages[1])
         let multicastCancel = try fields(output.messages[2])
         precondition(multicastAlert.attributes["event"]?.first?["uid"] == multicastCancel.attributes["event"]?.first?["uid"])

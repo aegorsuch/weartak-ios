@@ -95,6 +95,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     private var hasContactEndpoint = false
     private var hasDeviceUID = false
     private var expired = false
+    private var sentAt: Date?
+    private var how: String?
 
     init(excludedUID: String, now: Date) {
         self.excludedUID = excludedUID
@@ -123,6 +125,13 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                 stale = attributes["stale"].flatMap { formatter.date(from: $0) }
             }
             expired = stale.map { $0 <= now } ?? true
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            sentAt = attributes["time"].flatMap { formatter.date(from: $0) }
+            if sentAt == nil {
+                formatter.formatOptions = [.withInternetDateTime]
+                sentAt = attributes["time"].flatMap { formatter.date(from: $0) }
+            }
+            how = attributes["how"]
         } else if elementName == "contact" {
             callSign = attributes["callsign"]?.trimmingCharacters(in: .whitespacesAndNewlines)
             hasContactEndpoint = !(attributes["endpoint"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
@@ -131,7 +140,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             team = attributes["name"]?.trimmingCharacters(in: .whitespacesAndNewlines)
             role = attributes["role"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         } else if elementName == "takv" {
-            hasTAKVersion = true
+            // Sit(x) web-portal markers carry `<takv device="Map Marker"/>`; that is not a user.
+            hasTAKVersion = attributes["device"]?.caseInsensitiveCompare("Map Marker") != .orderedSame
         } else if elementName == "uid", !(attributes["Droid"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             hasDeviceUID = true
         } else if elementName == "link", attributes["relation"] == "p-p" {
@@ -149,11 +159,11 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
         guard elementName == "event" else { return }
         if let eventUID, eventUID != excludedUID, !eventUID.isEmpty,
            let eventType, eventType.hasPrefix("a-"), let point, !expired {
-            let isUser = SitxCoT.isUser(type: eventType, hasGroup: hasGroup, hasTAKVersion: hasTAKVersion,
+            let isUser = SitxCoT.isUser(type: eventType, hasGroup: hasGroup, hasTAKVersion: hasTAKVersion && senderUID == nil,
                                         hasContactEndpoint: hasContactEndpoint, hasDeviceUID: hasDeviceUID)
             entities.append(EntityRelayPayload(uid: eventUID, lat: point.latitude, lon: point.longitude, type: eventType,
                                                callSign: callSign, team: team, role: role, senderUID: senderUID,
-                                               isUser: isUser))
+                                               isUser: isUser, sentAt: sentAt, how: how))
         }
         eventUID = nil
         point = nil

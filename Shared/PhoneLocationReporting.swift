@@ -100,6 +100,48 @@ struct WatchReportingIdentity: Codable, Equatable {
     }
 }
 
+/// Latest watch vitals, shared with Companion so phone-GPS PLI carries the same biometrics as the watch's own PLI.
+/// Wire format matches WearOS WearTAK: readable `<remarks>` plus a structured `<biometrics>` block.
+struct WatchBiometrics: Codable, Equatable {
+    nonisolated static let contextKey = "WearTAKWatch.biometrics"
+    static let maximumAge: TimeInterval = 300
+    static let deviceModel = "WATCHOS"
+
+    var heartRate: Int?
+    var exertion: Int?
+    var measuredAt: Date?
+
+    /// Readings older than five minutes (or from the future) are reported as N/A.
+    func fresh(now: Date = Date()) -> Self {
+        guard let measuredAt, now.timeIntervalSince(measuredAt) <= Self.maximumAge,
+              measuredAt.timeIntervalSince(now) <= WatchReportingIdentity.maximumClockSkew else { return Self() }
+        return Self(heartRate: heartRate.flatMap { (1...300).contains($0) ? $0 : nil },
+                    exertion: exertion.flatMap { (0...250).contains($0) ? $0 : nil }, measuredAt: measuredAt)
+    }
+
+    var remarks: String {
+        "Exert:\(exertion.map(String.init) ?? "N/A")%;HR:\(heartRate.map(String.init) ?? "N/A")"
+    }
+
+    /// `<biometrics>` device element; `alertAttributes` are already-escaped attributes for alert events.
+    func biometricsElement(uid: String, alertAttributes: String = "") -> String {
+        "<biometrics\(alertAttributes)><device><model>\(Self.deviceModel)</model><uid>\(PhonePLI.escape(uid))</uid>" +
+            "<hr>\(heartRate.map(String.init) ?? "N/A")</hr>" +
+            "<exert>\(exertion.map(String.init) ?? "N/A")</exert></device></biometrics>"
+    }
+
+    func pliDetail(uid: String) -> String {
+        "<remarks>\(remarks)</remarks>" + biometricsElement(uid: uid)
+    }
+
+    func contextValue() throws -> Data { try JSONEncoder().encode(self) }
+
+    static func decode(contextValue: Any?) -> Self? {
+        guard let data = contextValue as? Data, data.count <= 1_024 else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: data)
+    }
+}
+
 struct PhoneLocationFix: Equatable {
     var latitude: Double
     var longitude: Double
@@ -220,7 +262,8 @@ enum PhonePLI {
     static let type = "a-f-G-U-C"
 
     static func event(identity: WatchReportingIdentity, fix: PhoneLocationFix, interval: TimeInterval,
-                      appVersion: String, osVersion: String, now: Date = Date()) -> String {
+                      appVersion: String, osVersion: String, biometrics: WatchBiometrics? = nil,
+                      now: Date = Date()) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let time = formatter.string(from: now)
@@ -238,6 +281,7 @@ enum PhonePLI {
         if fix.speed >= 0, fix.course >= 0 {
             detail += "<track course=\"\(number(fix.course))\" speed=\"\(number(fix.speed))\"/>"
         }
+        if let biometrics { detail += biometrics.fresh(now: now).pliDetail(uid: identity.uid) }
         return "<event version=\"2.0\" uid=\"\(escape(identity.uid))\" type=\"\(type)\" time=\"\(time)\" start=\"\(start)\" stale=\"\(stale)\" how=\"m-g\">" +
             "<point lat=\"\(number(fix.latitude, digits: 7))\" lon=\"\(number(fix.longitude, digits: 7))\" hae=\"\(hae)\" ce=\"\(number(fix.horizontalAccuracy))\" le=\"\(le)\"/>" +
             "<detail>\(detail)</detail></event>"

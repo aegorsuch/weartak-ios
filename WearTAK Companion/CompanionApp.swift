@@ -85,6 +85,15 @@ struct CompanionSetupView: View {
                         Label("Add Server", systemImage: "plus")
                     }
                 }
+                Section {
+                    NavigationLink {
+                        CompanionSitxView(sitx: bridge.sitx)
+                    } label: {
+                        CompanionSitxRow(sitx: bridge.sitx)
+                    }
+                } footer: {
+                    Text("Set up here or on the watch. Companion holds the Sit(x) connection because watchOS blocks direct streaming on Apple Watch.")
+                }
             }
             .navigationTitle("WearTAK Companion")
             .sheet(item: $editor) { route in
@@ -350,5 +359,129 @@ private struct CompanionServerEditor: View {
             saved = true
             dismiss()
         } catch { certificateStatus = error.localizedDescription }
+    }
+}
+
+private struct CompanionSitxRow: View {
+    @ObservedObject var sitx: CompanionSitxSession
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Sit(x) TAK")
+            Text(sitx.state.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Same menu as the watch: Sit(x) TAK toggle, Address, Group, Sit(x) State, Re-auth.
+private struct CompanionSitxView: View {
+    @ObservedObject var sitx: CompanionSitxSession
+    @State private var showAuthorization = false
+
+    var body: some View {
+        List {
+            Toggle("Sit(x) TAK", isOn: Binding(get: { sitx.enabled }, set: { sitx.setEnabled($0) }))
+            NavigationLink {
+                CompanionSitxAddressView(sitx: sitx)
+            } label: {
+                LabeledContent("Address", value: sitx.host.isEmpty ? "Not set" : SitxAPI.displayHost(sitx.host))
+            }
+            NavigationLink {
+                List(sitx.groups) { group in
+                    Button {
+                        sitx.selectGroup(group)
+                    } label: {
+                        HStack {
+                            Text(group.name).foregroundStyle(.primary)
+                            Spacer()
+                            if sitx.selectedFlowTag == group.id { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+                .navigationTitle("Group")
+                .refreshable { sitx.refreshGroups() }
+            } label: {
+                LabeledContent("Group", value: sitx.selectedGroupName ?? "Not selected")
+            }
+            .disabled(sitx.groups.isEmpty || !sitx.enabled)
+            LabeledContent("Sit(x) State") {
+                Text(sitx.state.detail).multilineTextAlignment(.trailing)
+            }
+            Button {
+                sitx.reauthorize()
+            } label: {
+                Label("Re-auth", systemImage: "arrow.clockwise")
+            }
+            .disabled(!sitx.enabled || sitx.host.isEmpty)
+        }
+        .navigationTitle("Sit(x) TAK")
+        .onAppear {
+            showAuthorization = !sitx.authorizationCode.isEmpty
+            if sitx.enabled, sitx.hasAuthorization, sitx.groups.count <= 1 { sitx.refreshGroups() }
+        }
+        .onChange(of: sitx.authorizationCode) { _, code in showAuthorization = !code.isEmpty }
+        .sheet(isPresented: $showAuthorization) {
+            NavigationStack {
+                List {
+                    LabeledContent("Auth Code") {
+                        Text(sitx.authorizationCode).font(.title3.monospaced()).textSelection(.enabled)
+                    }
+                    Button {
+                        UIPasteboard.general.string = sitx.authorizationCode
+                    } label: {
+                        Label("Copy Code", systemImage: "doc.on.doc")
+                    }
+                    if let url = URL(string: sitx.verificationURL), !sitx.verificationURL.isEmpty {
+                        Link(destination: url) {
+                            Label("Authorize", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                    Text(sitx.state.detail).foregroundStyle(.secondary)
+                }
+                .navigationTitle("Authorization")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Back") { showAuthorization = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+}
+
+private struct CompanionSitxAddressView: View {
+    @ObservedObject var sitx: CompanionSitxSession
+    @Environment(\.dismiss) private var dismiss
+    @State private var address: String
+
+    init(sitx: CompanionSitxSession) {
+        self.sitx = sitx
+        _address = State(initialValue: SitxAPI.organization(sitx.host))
+    }
+
+    var body: some View {
+        List {
+            TextField("Organization", text: $address)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit(saveAddress)
+            Text(SitxAPI.normalizedHost(address).map(SitxAPI.displayHost) ?? ".sitx.io")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button(action: saveAddress) {
+                Label("Save", systemImage: "checkmark")
+            }
+            .disabled(SitxAPI.normalizedHost(address) == nil)
+        }
+        .navigationTitle("Address")
+    }
+
+    private func saveAddress() {
+        guard let host = SitxAPI.normalizedHost(address) else { return }
+        sitx.setAddress(host)
+        dismiss()
     }
 }

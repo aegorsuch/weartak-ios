@@ -191,7 +191,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var bloodhoundMapItemID: String?
     @Published private(set) var unseenIncomingPointIDs: Set<String> = []
     private var dismissedPointIDs: [String: Date] = [:]
+    private var liveLocationRequested = false
     private static let dismissedPointsKey = "WearTAK.dismissedIncomingPoints"
+    /// Latest CoT `time` seen per point, so a sender's re-send notifies again but reconnect replays do not.
+    private var pointSendTimes: [String: Date] = [:]
+    private static let pointSendTimesKey = "WearTAK.incomingPointSendTimes"
     private var pendingMapItemReplies: [PendingMapItemReply] = []
     private static let mapItemReplyLifetime: TimeInterval = 24 * 60 * 60
     @Published private var chatInbox = TAKChatInbox<ContactConversation>()
@@ -232,7 +236,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var connectionTask: Task<Void, Never>?
     private var reportingTimer: Timer?
     private var callSignSubscription: AnyCancellable?
+    private var sitxRelaySubscriptions: Set<AnyCancellable> = []
     private var isSendingPLI = false
+    #if DEBUG && targetEnvironment(simulator)
+    private var simulatedBiometricsTimer: Timer?
+    #endif
     private var isAppActive = true
     private var lastFixRequestAt: Date?
     private var incomingEntityTask: Task<Void, Never>?
@@ -281,7 +289,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             guard let self, !self.sitxClient.hasReadyOutput else { return }
             self.connectionTask?.cancel()
             self.connectionState = .disconnected
-            self.locationManager.stopUpdatingLocation()
+            self.stopLocationUpdatesIfIdle()
             self.incomingEntityTask?.cancel()
         }
         multicastClient.onStateChange = { [weak self] in
@@ -290,7 +298,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 self.connect()
             } else if !self.sitxClient.hasReadyOutput {
                 self.connectionState = .disconnected
-                self.locationManager.stopUpdatingLocation()
+                self.stopLocationUpdatesIfIdle()
             }
         }
         multicastClient.onEntity = { [weak self] entity in
@@ -298,6 +306,19 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         multicastClient.onChat = { [weak self] chat in self?.recordChat(chat, route: .multicast) }
         sitxClient.onChat = { [weak self] chat in self?.recordChat(chat, route: .sitx) }
+        let companion = companionClient
+        sitxClient.relayHandler = { config in try await companion.sendSitxConfig(config) }
+        sitxClient.onRelayChange = { [weak self] in
+            guard let self else { return }
+            self.companionClient.sitxRelayRequested = self.sitxClient.isRelayedViaPhone
+        }
+        companionClient.sitxRelayRequested = sitxClient.isRelayedViaPhone
+        companionClient.$sitxRelayStatus.removeDuplicates().sink { [weak self] status in
+            Task { @MainActor [weak self] in self?.sitxClient.phoneRelayStatus = status }
+        }.store(in: &sitxRelaySubscriptions)
+        companionClient.$isPhoneReachable.removeDuplicates().sink { [weak self] reachable in
+            Task { @MainActor [weak self] in self?.sitxClient.canReachPhone = reachable }
+        }.store(in: &sitxRelaySubscriptions)
         companionClient.onStateChange = { [weak self] in
             guard let self else { return }
             self.companionServerConfigured = self.companionClient.configured
@@ -305,7 +326,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             if self.sitxClient.hasReadyOutput { self.connect() }
             else {
                 self.connectionState = .disconnected
-                self.locationManager.stopUpdatingLocation()
+                self.stopLocationUpdatesIfIdle()
             }
         }
         companionClient.onCoT = { [weak self] message in
@@ -374,6 +395,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
             dismissedPointIDs = stored.mapValues { Date(timeIntervalSince1970: $0) }
                 .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         }
+        if let stored = UserDefaults.standard.dictionary(forKey: Self.pointSendTimesKey) as? [String: Double] {
+            let now = Date()
+            pointSendTimes = stored.mapValues { Date(timeIntervalSince1970: $0) }
+                .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
+        }
         if let data = UserDefaults.standard.data(forKey: Self.companionCacheKey) {
             do {
                 companionMapCache = try JSONDecoder().decode(CompanionMapCache.self, from: data)
@@ -427,8 +453,29 @@ final class WatchSessionModel: NSObject, ObservableObject {
         companionClient.setActive(active)
         multicastClient.setAppActive(active)
         sitxClient.setAppActive(active)
-        if active { sitxClient.resumeAuthorization() }
-        else { locationManager.stopUpdatingLocation() }
+        if active {
+            sitxClient.resumeAuthorization()
+            if liveLocationRequested { startLiveLocation() }
+        } else { locationManager.stopUpdatingLocation() }
+    }
+
+    /// The dashboard coordinate readout needs continuous fixes even when the phone handles PLI.
+    func setLiveLocationRequested(_ requested: Bool) {
+        guard liveLocationRequested != requested else { return }
+        liveLocationRequested = requested
+        if requested { startLiveLocation() } else { stopLocationUpdatesIfIdle() }
+    }
+
+    private func startLiveLocation() {
+        updateLocationAvailability()
+        guard isAppActive, watchLocationEnabled else { return }
+        locationManager.startUpdatingLocation()
+    }
+
+    private func stopLocationUpdatesIfIdle() {
+        if liveLocationRequested, isAppActive { return }
+        if connectionState == .connected, transport.pliReportingRoute == .standaloneSitx { return }
+        locationManager.stopUpdatingLocation()
     }
 
     func requestLocation() {
@@ -805,8 +852,16 @@ final class WatchSessionModel: NSObject, ObservableObject {
                        notifyNewPoint: Bool = false) {
         if let sourceServerID, sourceGeneration < sourceGenerations[sourceServerID, default: 0] { return }
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
-              dismissedPointIDs[payload.uid] == nil,
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
+        let previousSend = pointSendTimes[payload.uid] ?? incomingEntities.first(where: { $0.id == payload.uid })?.lastSeen
+        let isNewerSend = payload.sentAt.map { sent in previousSend.map { sent > $0 } ?? true } ?? false
+        let isResend = notifyNewPoint && payload.isHumanEntered && isNewerSend
+        if let dismissedAt = dismissedPointIDs[payload.uid] {
+            // A removed point stays hidden unless its sender deliberately sends it again.
+            guard isResend, let sent = payload.sentAt, sent > dismissedAt else { return }
+            dismissedPointIDs.removeValue(forKey: payload.uid)
+            UserDefaults.standard.set(dismissedPointIDs.mapValues(\.timeIntervalSince1970), forKey: Self.dismissedPointsKey)
+        }
         if let sourceServerID { refreshSource(sourceServerID, generation: sourceGeneration) }
         if let existing = incomingEntities.first(where: { $0.id == payload.uid }),
            existing.lastSeen > now { return }
@@ -823,16 +878,23 @@ final class WatchSessionModel: NSObject, ObservableObject {
             sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt,
             isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type), sourceTransport: sourceTransport
         )
+        let isNew: Bool
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
             incomingEntities[index] = entity
+            isNew = false
         } else {
             incomingEntities.append(entity)
+            isNew = true
+        }
+        if !entity.isUser {
             // Only live traffic notifies; cache restores and snapshots repopulate silently.
-            if notifyNewPoint, !entity.isUser, expiresAt.map({ $0 > Date() }) ?? true {
+            let shouldNotify = isNew ? (payload.sentAt == nil || isNewerSend) : isResend
+            if notifyNewPoint, shouldNotify, expiresAt.map({ $0 > Date() }) ?? true {
                 unseenIncomingPointIDs.insert(entity.id)
                 WKInterfaceDevice.current().play(.notification)
-                chatLogger.notice("Incoming map point \(entity.type, privacy: .public) recorded; notification requested")
+                chatLogger.notice("Incoming map point \(entity.type, privacy: .public) \(isNew ? "recorded" : "re-sent", privacy: .public); notification requested")
             }
+            if isNewerSend, let sent = payload.sentAt { recordPointSend(payload.uid, at: sent) }
         }
         if entity.isUser, !pendingMapItemReplies.isEmpty { flushMapItemReplies(to: entity) }
         pruneIncomingEntities(now: now)
@@ -840,6 +902,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
             incomingEntities.sort { $0.lastSeen > $1.lastSeen }
             incomingEntities.removeLast(incomingEntities.count - 50)
         }
+    }
+
+    private func recordPointSend(_ uid: String, at sent: Date) {
+        let now = Date()
+        pointSendTimes[uid] = sent
+        pointSendTimes = pointSendTimes.filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
+        if pointSendTimes.count > 200 {
+            for (key, _) in pointSendTimes.sorted(by: { $0.value < $1.value }).prefix(pointSendTimes.count - 200) {
+                pointSendTimes.removeValue(forKey: key)
+            }
+        }
+        UserDefaults.standard.set(pointSendTimes.mapValues(\.timeIntervalSince1970), forKey: Self.pointSendTimesKey)
     }
 
     func pruneIncomingEntities(now: Date = Date()) {
@@ -980,7 +1054,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             return
         }
         startHeadingUpdates()
-        if connectionState == .connected, transport.pliReportingRoute == .standaloneSitx {
+        if liveLocationRequested || (connectionState == .connected && transport.pliReportingRoute == .standaloneSitx) {
             manager.startUpdatingLocation()
         } else {
             manager.requestLocation()
@@ -999,6 +1073,9 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     private func sendPLIIfDue(for location: CLLocation) {
           guard isAppActive, !isSendingPLI, location.horizontalAccuracy >= 0,
               abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
+        #if DEBUG && targetEnvironment(simulator)
+        stepSimulatedBiometrics()
+        #endif
         guard transport.pliReportingRoute == .standaloneSitx else {
             Task {
                 try? await transport.sendPLI(coordinate: location.coordinate)
@@ -1032,6 +1109,47 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             }
         }
     }
+
+    /// Latest heart rate/exertion for outbound PLI and alert biometrics on every route.
+    func updateBiometrics(heartRate: Int?, exertion: Int?, measuredAt: Date?) {
+        var biometrics = WatchBiometrics(heartRate: heartRate, exertion: exertion, measuredAt: measuredAt)
+        #if DEBUG && targetEnvironment(simulator)
+        if heartRate == nil {
+            biometrics = Self.simulatedBiometrics()
+            startSimulatedBiometrics()
+        }
+        #endif
+        sitxClient.biometrics = biometrics
+        companionClient.setBiometrics(biometrics)
+    }
+
+    #if DEBUG && targetEnvironment(simulator)
+    /// Simulator has no heart-rate sensor; fake vitals let outbound CoT biometrics be tested in other TAK tools.
+    /// Heart rate drifts a few BPM per step (random walk within 65–110) so each PLI shows a slightly different value.
+    private static var simulatedHeartRate = 80
+
+    private static func simulatedBiometrics(now: Date = Date()) -> WatchBiometrics {
+        simulatedHeartRate = min(110, max(65, simulatedHeartRate + Int.random(in: -3...3)))
+        // Same formula as PhysiologyMonitor for a 35-year-old: 208 - 0.7 * 35 = 183.5 max.
+        let exertion = Int((Double(simulatedHeartRate) / 183.5 * 100).rounded())
+        return WatchBiometrics(heartRate: simulatedHeartRate, exertion: exertion, measuredAt: now)
+    }
+
+    /// Steps the fake vitals; called on a timer (feeds Companion's phone-GPS PLI) and before each watch PLI.
+    private func stepSimulatedBiometrics() {
+        guard simulatedBiometricsTimer != nil else { return }
+        let biometrics = Self.simulatedBiometrics()
+        sitxClient.biometrics = biometrics
+        companionClient.setBiometrics(biometrics)
+    }
+
+    private func startSimulatedBiometrics() {
+        guard simulatedBiometricsTimer == nil else { return }
+        simulatedBiometricsTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.stepSimulatedBiometrics() }
+        }
+    }
+    #endif
 
     private func publishAlertReportingState() {
         companionClient.setAlertActive(
