@@ -206,7 +206,13 @@ struct SitxProtocolChecks {
         let droidOnly = """
             <event version="2.0" uid="ANDROID-droid-only" type="a-f-G" how="m-g" time="2026-10-04T01:48:40Z" start="2026-10-04T01:48:40Z" stale="2026-10-04T01:55:10Z"><point lat="38.8" lon="-77.0" hae="0" ce="9" le="9"/><detail><uid Droid="LOKI"/></detail></event>
             """
+        let watchUID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
         precondition(SitxCoT.parse(Data(droidOnly.utf8), excluding: "self", now: atakNow).first?.isUser == true)
+        let sharedMapItem = """
+            <event version="2.0" uid="point-1" type="a-h-G" how="m-g" time="2026-10-04T01:48:40Z" start="2026-10-04T01:48:40Z" stale="2026-10-04T01:55:10Z"><point lat="38.8" lon="-77.0" hae="0" ce="9" le="9"/><detail><contact callsign="OBJ-1"/><link uid="\(watchUID)" type="a-f-G-U-C" relation="p-p"/></detail></event>
+            """
+        let parsedMapItem = SitxCoT.parse(Data(sharedMapItem.utf8), excluding: "self", now: atakNow).first
+        precondition(parsedMapItem?.callSign == "OBJ-1" && parsedMapItem?.senderUID == watchUID && parsedMapItem?.isUser == false)
         let bareUpdate = EntityRelayPayload(uid: "ANDROID-0f1e2d3c4b5a6978", lat: 38.9, lon: -77.0, type: "a-f-G", isUser: false)
             .inheritingMetadata(callSign: "ODIN-ATAK", team: "Dark Green", role: "K9", isUser: true)
         precondition(bareUpdate.isUser == true && bareUpdate.team == "Dark Green" && bareUpdate.role == "K9" && bareUpdate.callSign == "ODIN-ATAK")
@@ -217,7 +223,6 @@ struct SitxProtocolChecks {
             .inheritingMetadata(callSign: nil, team: nil, role: nil, isUser: false)
         precondition(neverUser.isUser == false)
         print("PASS: raw ATAK PLI (Dark Green/K9) classifies as user with team/role counts, toggles and metadata carry-over")
-        let watchUID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
         let ownDetail = SitxCoT.pliDetail(uid: watchUID, callSign: " THOR <&> ", team: "Dark Green", role: "K9",
                                           appVersion: "1.2", osVersion: "watchOS 11.0")
         let ownPLI = SitxCoT.event(uid: watchUID, type: SitxCoT.pliType, coordinate: userCoordinate, detail: ownDetail, lifetime: 300)
@@ -308,6 +313,9 @@ struct SitxProtocolChecks {
         precondition(DashboardLocationStatus.resolve(watchEnabled: true, phoneEnabled: false) == .watch)
         precondition(DashboardLocationStatus.resolve(watchEnabled: false, phoneEnabled: true) == .phone)
         precondition(DashboardLocationStatus.resolve(watchEnabled: true, phoneEnabled: true) == .phone)
+        precondition(DashboardLocationStatus.watch.symbol == "mappin")
+        precondition(DashboardLocationStatus.phone.symbol == "mappin")
+        precondition(DashboardLocationStatus.disabled.symbol == "mappin.slash")
         print("PASS: dashboard metric persistence and network/TAK indicator states")
         precondition(settings.multicastEnabled)
         precondition(settings.multicastAddress == "239.2.3.1" && settings.multicastPort == 6969)
@@ -407,8 +415,14 @@ struct SitxProtocolChecks {
 
         let marker = WatchMarker(id: UUID(), kind: .neutral, latitude: 38.1, longitude: -77.1,
                                  title: "Point <&>", remark: "Watch's \"remark\"")
+        let callsignBeforeDrop = settings.callSign
         try? await client.sendMarker(marker)
         let sentMarkerXML = client.pendingEvents[marker.id.uuidString]!
+        let markerFields = try fields(sentMarkerXML)
+        precondition(settings.callSign == callsignBeforeDrop)
+        precondition(markerFields.attributes["event"]?.first?["uid"] != SitxClient.deviceID())
+        precondition(markerFields.attributes["contact"]?.first?["callsign"] == marker.displayTitle)
+        precondition(markerFields.attributes["link"]?.first?["uid"] == SitxClient.deviceID())
         let parsed = SitxCoT.parse(Data(sentMarkerXML.utf8), excluding: "self")
         precondition(parsed.count == 1 && parsed[0].uid == marker.id.uuidString && parsed[0].type == "a-n-G")
         precondition(SitxCoT.parse(Data(sentMarkerXML.utf8), excluding: marker.id.uuidString).isEmpty)

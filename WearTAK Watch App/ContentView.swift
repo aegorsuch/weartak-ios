@@ -246,7 +246,7 @@ private struct WatchDashboardView: View {
                     let battery = WKInterfaceDevice.current().batteryLevel
                     Image(systemName: battery < 0 ? "battery.0percent" : battery < 0.25 ? "battery.25percent" : battery < 0.5 ? "battery.50percent" : battery < 0.75 ? "battery.75percent" : "battery.100percent")
                         .font(.system(size: small ? 11 : 14))
-                        .foregroundStyle(battery >= 0 && battery < 0.25 ? .red : .white)
+                        .foregroundStyle(battery < 0 ? .white : battery < 0.25 ? .red : battery <= 0.75 ? .yellow : .green)
                         .accessibilityLabel(battery < 0 ? "Battery unavailable" : "Battery \(Int(battery * 100)) percent")
                 }
             }
@@ -1418,42 +1418,84 @@ private struct IncomingUserMarker: View {
 
 private struct BloodhoundView: View {
     @ObservedObject var model: WatchSessionModel
+    @State private var responseError: String?
 
     var body: some View {
-        VStack(spacing: 8) {
+        Group {
             if let target = model.bloodhoundTarget {
-                if let location = model.lastLocation,
-                   let reading = model.bloodhoundCompassReading(from: location) {
-                    Image(systemName: "location.north.fill")
-                        .font(.largeTitle)
-                        .rotationEffect(.degrees(reading.relativeBearingDegrees))
-                        .animation(.linear(duration: 0.2), value: reading.relativeBearingDegrees)
-                    Text(target.displayTitle)
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                    Text("Range: \(Int(reading.rangeMeters)) m")
-                        .font(.caption2)
-                    if !reading.isCompassRelative {
-                        Text("Compass unavailable")
+                VStack(spacing: 8) {
+                    if let location = model.lastLocation,
+                       let reading = model.bloodhoundCompassReading(from: location) {
+                        Image(systemName: "location.north.fill")
+                            .font(.largeTitle)
+                            .rotationEffect(.degrees(reading.relativeBearingDegrees))
+                            .animation(.linear(duration: 0.2), value: reading.relativeBearingDegrees)
+                        Text(target.displayTitle)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                        Text("Range: \(Int(reading.rangeMeters)) m")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                        if !reading.isCompassRelative {
+                            Text("Compass unavailable")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                    } else {
+                        Text("Location unavailable")
+                            .foregroundStyle(.secondary)
                     }
-                } else {
-                    Text("Location unavailable")
-                        .foregroundStyle(.secondary)
+                    Button("nPos") {
+                        Task {
+                            do { try await model.markInPosition() }
+                            catch { responseError = error.localizedDescription }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             } else {
-                Image(systemName: "location.north.fill")
-                    .font(.system(size: 54))
-                    .rotationEffect(.degrees(model.headingDegrees.map { (360 - $0).truncatingRemainder(dividingBy: 360) } ?? 0))
-                    .foregroundStyle(model.headingDegrees == nil ? .gray : .red)
-                Text("Compass")
-                Text(model.headingDegrees == nil ? "Compass unavailable" : "North")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                List {
+                    Section {
+                        VStack(spacing: 6) {
+                            Image(systemName: "location.north.fill")
+                                .font(.system(size: 42))
+                                .rotationEffect(.degrees(model.headingDegrees.map { (360 - $0).truncatingRemainder(dividingBy: 360) } ?? 0))
+                                .foregroundStyle(model.headingDegrees == nil ? .gray : .red)
+                            Text("Compass")
+                            Text(model.headingDegrees == nil ? "Compass unavailable" : "North")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    if !model.incomingMapPoints.isEmpty {
+                        Section("Incoming Points") {
+                            ForEach(model.incomingMapPoints) { item in
+                                HStack {
+                                    Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
+                                        .lineLimit(2)
+                                    Spacer(minLength: 4)
+                                    Button("RGR") {
+                                        Task {
+                                            do { try await model.startBloodhound(toMapItem: item.id) }
+                                            catch { responseError = error.localizedDescription }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         .navigationTitle(model.bloodhoundTarget == nil ? "Compass" : "Navigation")
+        .alert("Bloodhound response", isPresented: Binding(
+            get: { responseError != nil },
+            set: { if !$0 { responseError = nil } }
+        )) {
+            Button("OK", role: .cancel) { responseError = nil }
+        } message: {
+            Text(responseError ?? "")
+        }
     }
 }
 

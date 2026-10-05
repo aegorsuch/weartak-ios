@@ -89,6 +89,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     private var callSign: String?
     private var team: String?
     private var role: String?
+    private var senderUID: String?
     private var hasGroup = false
     private var hasTAKVersion = false
     private var hasContactEndpoint = false
@@ -109,6 +110,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             callSign = nil
             team = nil
             role = nil
+            senderUID = nil
             hasGroup = false
             hasTAKVersion = false
             hasContactEndpoint = false
@@ -132,6 +134,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             hasTAKVersion = true
         } else if elementName == "uid", !(attributes["Droid"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             hasDeviceUID = true
+        } else if elementName == "link", attributes["relation"] == "p-p" {
+            senderUID = attributes["uid"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         } else if elementName == "point",
                   let latitude = attributes["lat"].flatMap(Double.init),
                   let longitude = attributes["lon"].flatMap(Double.init),
@@ -148,7 +152,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             let isUser = SitxCoT.isUser(type: eventType, hasGroup: hasGroup, hasTAKVersion: hasTAKVersion,
                                         hasContactEndpoint: hasContactEndpoint, hasDeviceUID: hasDeviceUID)
             entities.append(EntityRelayPayload(uid: eventUID, lat: point.latitude, lon: point.longitude, type: eventType,
-                                               callSign: callSign, team: team, role: role, isUser: isUser))
+                                               callSign: callSign, team: team, role: role, senderUID: senderUID,
+                                               isUser: isUser))
         }
         eventUID = nil
         point = nil

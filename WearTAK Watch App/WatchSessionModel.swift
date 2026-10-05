@@ -67,6 +67,7 @@ struct IncomingMapEntity: Identifiable {
     let callSign: String?
     let team: String?
     let role: String?
+    let senderUID: String?
     let sourceServerID: UUID?
     let sourceGeneration: Int
     let expiresAt: Date?
@@ -179,6 +180,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
     @Published private(set) var bloodhoundTargetID: UUID?
     @Published private(set) var bloodhoundContactID: String?
+    @Published private(set) var bloodhoundMapItemID: String?
     @Published private var chatInbox = TAKChatInbox<ContactConversation>()
 
     var contactMessages: [ContactConversation: [TAKChatMessage]] { chatInbox.messages }
@@ -186,6 +188,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     var unreadChatCount: Int { chatInbox.unreadCount }
 
     var chatConversations: [ContactConversation] { chatInbox.conversations }
+    var incomingMapPoints: [IncomingMapEntity] { incomingEntities.filter { !$0.isUser } }
 
     func chatTitle(for conversation: ContactConversation) -> String {
         if let sender = contactMessages[conversation]?.last(where: { $0.senderUID == conversation.uid }) {
@@ -215,6 +218,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private let settings: AppSettings
     private var connectionTask: Task<Void, Never>?
     private var reportingTimer: Timer?
+    private var callSignSubscription: AnyCancellable?
     private var isSendingPLI = false
     private var isAppActive = true
     private var lastFixRequestAt: Date?
@@ -246,6 +250,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
         self.transport = transport ?? client
         self.settings = settings
         super.init()
+        callSignSubscription = settings.$callSign.removeDuplicates().dropFirst().sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.lastPLISentAt = nil
+                guard self.isAppActive, self.connectionState == .connected else { return }
+                if let location = self.lastLocation {
+                    self.sendPLIIfDue(for: location)
+                } else {
+                    self.requestLocation()
+                }
+            }
+        }
         selectedMarkerKind = MarkerKind(rawValue: UserDefaults.standard.string(forKey: "WearTAK.lastMarkerKind") ?? "") ?? .unknown
         sitxClient.onReady = { [weak self] in self?.connect() }
         sitxClient.onDisconnected = { [weak self] in
@@ -328,7 +344,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 guard entity.sourceServerID != nil else { return entity }
                 return IncomingMapEntity(id: entity.id, latitude: entity.latitude, longitude: entity.longitude,
                     type: entity.type, lastSeen: entity.lastSeen, callSign: entity.callSign,
-                    team: entity.team, role: entity.role, sourceServerID: entity.sourceServerID,
+                    team: entity.team, role: entity.role, senderUID: entity.senderUID,
+                    sourceServerID: entity.sourceServerID,
                     sourceGeneration: 0, expiresAt: entity.expiresAt, isUser: entity.isUser)
             }
             self.saveCompanionMapCache()
@@ -527,6 +544,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         markers.remove(at: index)
         if bloodhoundTargetID == id {
             bloodhoundTargetID = nil
+            bloodhoundMapItemID = nil
         }
         saveMarkers()
         Task {
@@ -538,6 +556,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let ids = markers.map(\.id)
         markers.removeAll()
         bloodhoundTargetID = nil
+        bloodhoundMapItemID = nil
         saveMarkers()
         Task {
             for id in ids {
@@ -548,6 +567,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func toggleBloodhound(id: UUID) {
         bloodhoundContactID = nil
+        bloodhoundMapItemID = nil
         bloodhoundTargetID = (bloodhoundTargetID == id) ? nil : id
         bloodhoundProximityNotified = false
     }
@@ -555,18 +575,73 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func toggleContactBloodhound(uid: String) {
         guard incomingEntities.contains(where: { $0.id == uid && $0.isUser }) else { return }
         bloodhoundTargetID = nil
+        bloodhoundMapItemID = nil
         bloodhoundContactID = bloodhoundContactID == uid ? nil : uid
         bloodhoundProximityNotified = false
         requestLocation()
     }
 
     var bloodhoundTarget: BloodhoundDestination? {
+        if let id = bloodhoundMapItemID, let item = incomingEntities.first(where: { $0.id == id && !$0.isUser }) {
+            return BloodhoundDestination(latitude: item.latitude, longitude: item.longitude,
+                displayTitle: item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
+        }
         if let uid = bloodhoundContactID, let contact = incomingEntities.first(where: { $0.id == uid && $0.isUser }) {
             return BloodhoundDestination(latitude: contact.latitude, longitude: contact.longitude,
                 displayTitle: contact.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? contact.id)
         }
         guard let id = bloodhoundTargetID, let marker = markers.first(where: { $0.id == id }) else { return nil }
         return BloodhoundDestination(latitude: marker.latitude, longitude: marker.longitude, displayTitle: marker.displayTitle)
+    }
+
+    func startBloodhound(toMapItem id: String) async throws {
+        guard let item = incomingMapPoints.first(where: { $0.id == id }) else {
+            throw ContactChatFailure.message("This map item is no longer available.")
+        }
+        bloodhoundTargetID = nil
+        bloodhoundContactID = nil
+        bloodhoundMapItemID = id
+        bloodhoundProximityNotified = false
+        requestLocation()
+        let sender = try mapItemSender(for: item)
+        try await sendContactChat(uid: sender.id, route: sender.route,
+            text: "Roger, bloodhouding to \(mapItemTitle(item))")
+    }
+
+    func markInPosition() async throws {
+        let item = bloodhoundMapItemID.flatMap { id in incomingMapPoints.first { $0.id == id } }
+        bloodhoundTargetID = nil
+        bloodhoundContactID = nil
+        bloodhoundMapItemID = nil
+        bloodhoundProximityNotified = false
+        guard let item else { return }
+        let sender = try mapItemSender(for: item)
+        try await sendContactChat(uid: sender.id, route: sender.route,
+            text: "In Position at \(mapItemTitle(item))")
+    }
+
+    func mapItemResponseUnavailableReason(_ item: IncomingMapEntity) -> String? {
+        guard let senderUID = item.senderUID, senderUID != SitxClient.deviceID(),
+              let sender = incomingEntities.first(where: { $0.id == senderUID && $0.isUser }) else {
+            return "Sender unavailable."
+        }
+        return chatUnavailableReason(for: sender)
+    }
+
+    private func mapItemSender(for item: IncomingMapEntity) throws -> (id: String, route: ContactChatRoute) {
+        if let reason = mapItemResponseUnavailableReason(item) {
+            throw ContactChatFailure.message(reason)
+        }
+        guard let senderUID = item.senderUID,
+              let sender = incomingEntities.first(where: { $0.id == senderUID && $0.isUser }),
+              let route = sender.chatRoute else {
+            throw ContactChatFailure.message("The map item's sender is unavailable.")
+        }
+        return (sender.id, route)
+    }
+
+    private func mapItemTitle(_ item: IncomingMapEntity) -> String {
+        item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id
     }
 
     func chatUnavailableReason(for contact: IncomingMapEntity) -> String? {
@@ -666,12 +741,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
            existing.lastSeen > now { return }
         let previous = incomingEntities.first(where: { $0.id == payload.uid })
         let metadata = previous.map {
-            payload.inheritingMetadata(callSign: $0.callSign, team: $0.team, role: $0.role, isUser: $0.isUser)
+            payload.inheritingMetadata(callSign: $0.callSign, team: $0.team, role: $0.role,
+                                       senderUID: $0.senderUID, isUser: $0.isUser)
         } ?? payload
         let entity = IncomingMapEntity(
             id: payload.uid, latitude: payload.lat, longitude: payload.lon,
             type: payload.type, lastSeen: now,
             callSign: metadata.callSign, team: metadata.team, role: metadata.role,
+            senderUID: metadata.senderUID,
             sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt,
             isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type), sourceTransport: sourceTransport
         )
@@ -694,6 +771,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
         companionMapCache.prune(now: now)
         if let uid = bloodhoundContactID, !incomingEntities.contains(where: { $0.id == uid }) {
             bloodhoundContactID = nil
+            bloodhoundProximityNotified = false
+        }
+        if let id = bloodhoundMapItemID, !incomingEntities.contains(where: { $0.id == id && !$0.isUser }) {
+            bloodhoundMapItemID = nil
             bloodhoundProximityNotified = false
         }
     }

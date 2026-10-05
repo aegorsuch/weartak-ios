@@ -119,6 +119,12 @@ struct PhoneLocationReportingChecks {
         precondition(xml.contains("<uid Droid=\"ODIN &lt;1&gt;\"/>"))
         precondition(xml.contains("platform=\"WearTAK Companion\"") && xml.contains("geopointsrc=\"GPS\""))
         precondition(xml.contains("<track course=\"270.0\" speed=\"1.2\"/>"))
+        var renamedIdentity = identity
+        renamedIdentity.callSign = "THOR"
+        let renamedPLI = PhonePLI.event(identity: renamedIdentity, fix: fix, interval: 30,
+                                        appVersion: "5.8.0", osVersion: "iOS 18.0", now: now)
+        precondition(PhonePLI.header(renamedPLI)! == (uid, "a-f-G-U-C"))
+        precondition(renamedPLI.contains("<contact callsign=\"THOR\" endpoint=\"*:-1:stcp\"/>"))
         var noAltitude = fix; noAltitude.verticalAccuracy = -1; noAltitude.speed = -1
         let flat = PhonePLI.event(identity: identity, fix: noAltitude, interval: 30, appVersion: "1", osVersion: "iOS", now: now)
         precondition(flat.contains("hae=\"9999999\"") && flat.contains("le=\"9999999\"") && !flat.contains("<track"))

@@ -21,17 +21,18 @@ The TAK Forge repository is canonical. GitHub is a secondary repository.
 
 ## Download and install
 
-WearTAK is currently an early-development Apple Watch app. There is no
-published TestFlight/App Store installation link in this repository yet.
+WearTAK is currently an early-development Apple Watch app. Join the beta through
+[TestFlight](https://testflight.apple.com/join/UmM8AkNk).
 GitHub source archives and simulator builds cannot be installed directly on a
 physical Apple Watch. Do not treat this build's alerts as a safety service.
 
 ### Beta users: TestFlight
 
 TestFlight is the recommended distribution route for users without Xcode.
-When a signed beta is available, its invitation/public link will be included
-in the [GitHub release notes](https://github.com/aegorsuch/weartak-ios/releases).
-The link is not available until the Apple distribution steps below are done.
+Open the [WearTAK beta invitation](https://testflight.apple.com/join/UmM8AkNk)
+on your paired iPhone. Build availability and tester capacity are managed in
+TestFlight. The public invitation link normally stays the same across new
+builds; it can stop working if the maintainer disables or replaces it.
 
 1. Check that your Apple Watch can run watchOS 26.2 or newer, the project's
   current minimum. Keep its paired iPhone on a compatible iOS version.
@@ -119,7 +120,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `6`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `7`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -149,7 +150,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `6`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `7`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.

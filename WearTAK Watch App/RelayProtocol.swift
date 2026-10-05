@@ -48,19 +48,22 @@ struct EntityRelayPayload: Codable {
     var callSign: String? = nil
     var team: String? = nil
     var role: String? = nil
+    var senderUID: String? = nil
     /// Parser-derived user classification; nil falls back to the CoT type.
     var isUser: Bool? = nil
 
     /// A same-uid update without `__group`/contact detail keeps the last known metadata,
     /// so the user's dot color, role badge and Layers counts do not drop out.
     func inheritingMetadata(callSign previousCallSign: String?, team previousTeam: String?,
-                            role previousRole: String?, isUser previousIsUser: Bool) -> Self {
+                            role previousRole: String?, senderUID previousSenderUID: String? = nil,
+                            isUser previousIsUser: Bool) -> Self {
         var merged = self
         if callSign?.isEmpty ?? true { merged.callSign = previousCallSign }
         if (team?.isEmpty ?? true) && (role?.isEmpty ?? true) {
             merged.team = previousTeam
             merged.role = previousRole
         }
+        if senderUID?.isEmpty ?? true { merged.senderUID = previousSenderUID }
         if previousIsUser { merged.isUser = true }
         return merged
     }

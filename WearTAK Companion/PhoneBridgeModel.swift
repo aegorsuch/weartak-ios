@@ -315,7 +315,14 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                                  osVersion: "iOS \(UIDevice.current.systemVersion)")
         phoneSendInFlight = true
         Task {
-            defer { self.phoneSendInFlight = false }
+            defer {
+                self.phoneSendInFlight = false
+                if case .success(let current) = self.watchIdentity,
+                   !current.hasSameSettings(as: identity),
+                   let fix = self.latestPhoneFix {
+                    self.reportPhoneFix(fix)
+                }
+            }
             var failures: [String] = []
             var delivered: [UUID: Date] = [:]
             for (id, session) in ready {
@@ -364,16 +371,19 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private func setWatchIdentity(_ identity: Result<WatchReportingIdentity, WatchReportingIdentity.Failure>) {
+        var settingsChanged = false
         if case .success(let new) = identity, case .success(let old) = watchIdentity, new.hasSameSettings(as: old) {
             watchIdentity = identity
         } else {
             watchIdentity = identity
-            // A different user or changed settings is reported on the next valid fix, and never suppresses the watch until then.
+            settingsChanged = true
             lastPhoneReportAt = nil
             phoneReportsByServer = [:]
-            latestPhoneFix = nil
         }
         publishState()
+        if settingsChanged, let fix = latestPhoneFix {
+            reportPhoneFix(fix)
+        }
     }
 
     /// Drops the watch's own PLI only while the phone recently reported that same user. Alerts and points pass through.
