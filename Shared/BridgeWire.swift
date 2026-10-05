@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, missions, missionUpdate }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -34,6 +34,14 @@ enum BridgeWire {
         var sitxConfig: SitxRelayConfig?
         /// Phone-side Sit(x) relay state; empty when Companion holds no Sit(x) configuration.
         var sitxStatus: String?
+        /// Data Sync: servers with their missions; a server's subscribed missions include their map items.
+        var missionServers: [TAKMissionServer]?
+        var missionName: String?
+        var missionSubscribe: Bool?
+        /// Data Sync: remove this item UID from `missionName` (requires a mission write role).
+        var missionRemoveUID: String?
+        /// Reload subscribed missions on every server that has them, without a server selection.
+        var missionSync: Bool?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -52,6 +60,12 @@ enum BridgeWire {
                 guard message.kind == .mapSnapshot, events.count <= CompanionMapCache.maximumEvents,
                       events.allSatisfy({ $0.isValid }) else { throw Failure.invalidCoT }
             }
+            if message.kind == .missionUpdate {
+                let removeUID = message.missionRemoveUID
+                guard message.serverID != nil, (message.missionSubscribe != nil) != (removeUID != nil),
+                      removeUID.map({ !$0.isEmpty && $0.count <= 256 }) ?? true,
+                      let name = message.missionName, TAKMissionAPI.isValidName(name) else { throw Failure.invalidMission }
+            }
             if message.kind == .sitxConfig {
                 guard let config = message.sitxConfig, config.isValid else { throw Failure.invalidSitxConfig }
             }
@@ -64,9 +78,10 @@ enum BridgeWire {
     }
 
     enum Failure: LocalizedError {
-        case tooLarge, unsupportedVersion, invalidCoT, invalidSitxConfig
+        case tooLarge, unsupportedVersion, invalidCoT, invalidSitxConfig, invalidMission
         var errorDescription: String? {
             switch self {
+            case .invalidMission: return "The Data Sync mission request from the watch is invalid."
             case .invalidSitxConfig: return "The Sit(x) relay settings from the watch are invalid."
             case .tooLarge: return "The Companion message exceeds the supported size."
             case .unsupportedVersion: return "Update both WearTAK apps to matching versions."

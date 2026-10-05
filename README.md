@@ -607,6 +607,55 @@ standalone Sit(x), iTAK and TAK Aware do not currently expose this channel menu'
 server operations. Protocol checks and combined builds cover local behavior;
 paired-device channel and CoT interoperability still require live verification.
 
+### Data Sync missions
+
+Open Settings → Tool Preferences → Plugins → DataSync, choose a server, then
+toggle its feeds (missions) to subscribe or unsubscribe. Map Channels stay on
+the map's top-right button. Subscribed mission items appear on the map and keep
+updating from the live stream. Incoming points, including mission items, use
+2525D affiliation frames from their CoT type: friendly or assumed friend is a
+cyan rectangle; hostile, suspect, joker or faker is a red diamond; neutral is a
+green square; unknown or pending is a yellow quatrefoil. Types that aren't
+2525D symbols (for example `b-m-p-*` spot markers) remain yellow pins. Each server row shows how many missions are
+subscribed or its current state; Refresh reloads the list.
+
+Companion performs the requests on the watch's behalf. TAK Server uses the
+client certificate on HTTPS port `8443` (`GET /Marti/api/missions`,
+`PUT`/`DELETE /Marti/api/missions/<name>/subscription?uid=<watch UID>`,
+`GET /Marti/api/missions/<name>/cot`). Sit(x) uses the same mission API under
+`/api/v1` with the Sit(x) token. Subscriptions use the watch UID, so the server
+delivers mission traffic over the watch identity's existing stream.
+
+Mission items stay on the map while the mission is subscribed, regardless of
+CoT stale time (like ATAK). Without this, older mission events would disappear
+right away under the 5-minute live-contact rule. Items are refreshed quietly
+at most once every 60 seconds after a map refresh. That refresh adds new items,
+removes deleted ones and drops missions that were unsubscribed or deleted. The
+watch shows up to 40 missions per server, 100 items per mission and 200 items
+in total. Items are trimmed to fit the 60 KB phone-to-watch message, and the
+mission row notes when items were omitted. Password-protected missions are
+listed but can't be subscribed.
+
+Tap a DataSync item on the map to open the same Point Details as a dropped
+marker: title, type, time, a Mission field naming its DataSync mission, remark, bearing, distance and coordinates.
+It also offers Bloodhound to Marker, Change Title, Add/Change Remark, Change
+Marker, Move to Current Location and Delete Marker. Companion reads the watch's
+mission role (`GET .../missions/<name>/subscription?uid=<watch UID>`). Edits
+are allowed with `MISSION_WRITE` and disabled for read-only roles. Every edit
+and delete asks for confirmation first, because it changes the mission for
+everyone subscribed. A confirmed edit is
+sent to the mission's server as CoT with the item's UID and
+`<marti><dest mission="<name>"/></marti>`, so the server updates the mission
+and its subscribers. Edits keep the title, type, position and remark; other
+CoT detail on the original item (custom icons, colors, links) isn't preserved.
+Delete Marker removes the item from the mission for every subscriber
+(`DELETE .../missions/<name>/contents?uid=`). Other received points open the
+same screen with Bloodhound and Delete Marker, which hides them on this watch only.
+Mission items also show "Mission: <name>" in the Compass incoming points list. Mission invitations and change notifications
+aren't handled yet. Subscribe and mission items were verified live on TAK
+Server; Sit(x) listing works, but its subscribe and items requests haven't been
+verified because the test account has no missions.
+
 ## TAK SA Multicast
 
 Open Settings > Network Preferences > TAK SA Multicast. The entry appears
@@ -686,12 +735,24 @@ Changing the address also invalidates the previous organization's credentials.
 - Connect to the returned `end_point` using its `access_token` as the Bearer
   header on the WebSocket handshake. Require a secure `wss` endpoint. Send and
   receive CoT XML through this socket.
+- After connecting, GET `/api/v1/messages?tak_group_tag=<flow_tag>` returns
+  GeoChat and other CoT that Store and Forward held while the device was
+  offline. Unacknowledged, unexpired messages for the group (up to 50, oldest
+  first) are delivered like live CoT, then acknowledged with PATCH
+  `/api/v1/messages/<resource_uid>`. Duplicate chats are dropped by the inbox.
+- Token responses carry `sequestered_status`. Any value other than
+  `not_sequestered` means the device is authenticated but muted, so the client
+  does not stream and shows the reason instead (device limit, activation
+  required, administrator approval, or organization connection limit),
+  retrying every 60 seconds.
 
 The client stores credentials in Keychain, refreshes them on reconnect, and
 retries transient network failures while the app is active. Transient failures
 do not erase authorization. Connected is shown only after the socket responds.
 HTTP failures show the server's `error_description`/`message`/`detail`/`error`
-text when present, for example `HTTP 406: <reason>`.
+text when present, for example `HTTP 406: <reason>`. OAuth error codes
+(`access_denied`, `expired_token`, `invalid_grant`, `invalid_client`,
+`invalid_scope`, `invalid_request`) are shown in plain language.
 
 ### Streaming through WearTAK Companion
 
@@ -798,7 +859,7 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/MulticastTAKTransport.swift' \
   'WearTAK Watch App/SitxClient.swift' \
   Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
-  Shared/TAKChannelModels.swift Shared/TAKChat.swift Shared/SitxShared.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Shared/SitxShared.swift \
   Shared/PhoneLocationReporting.swift Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
 ```
@@ -810,7 +871,7 @@ payload preservation, endpoint parsing and multi-server record persistence:
 xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/CompanionEndpoint.swift \
   Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
-  Shared/TAKChannelModels.swift Shared/TAKChannels.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
   Tests/BridgeProtocolChecks.swift -o /tmp/weartak-bridge-checks
 /tmp/weartak-bridge-checks
 ```
@@ -821,9 +882,22 @@ sources, reset bridge generations, and enforce 50-contact/60 KB bounds:
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
-  Shared/TAKChannelModels.swift Tests/CompanionMapChecks.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Tests/CompanionMapChecks.swift \
   -o /tmp/weartak-map-checks
 /tmp/weartak-map-checks
+```
+
+Data Sync checks cover mission list filtering and bounds, single-segment
+mission name encoding, mission CoT parsing (wrapped or bare events, nested
+points, dedupe, limits, DTD rejection), mission bridge validation and the
+200-item message budget:
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift \
+  Tests/DataSyncChecks.swift -o /tmp/weartak-datasync-checks
+/tmp/weartak-datasync-checks
 ```
 
 Stream TLS-name checks cover validation, persistence, older settings without an
@@ -843,7 +917,7 @@ state, duplicate suppression, source isolation, quick messages and inbox evictio
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
-  Shared/TAKChannelModels.swift Shared/TAKChat.swift Tests/TAKChatChecks.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Tests/TAKChatChecks.swift \
   -o /tmp/weartak-chat-checks
 /tmp/weartak-chat-checks
 ```
@@ -855,7 +929,7 @@ start/stop gating:
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
-  Shared/TAKChannelModels.swift Shared/PhoneLocationReporting.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/PhoneLocationReporting.swift \
   Tests/PhoneLocationReportingChecks.swift -o /tmp/weartak-phone-checks
 /tmp/weartak-phone-checks
 ```

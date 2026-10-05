@@ -778,6 +778,7 @@ private struct TacticalMapView: View {
     @State private var hasCentered = false
     @State private var pointDraft: MapPointDraft?
     @State private var contactSelection: MapContactSelection?
+    @State private var incomingSelection: MapContactSelection?
     @State private var showLayersMenu = false
     @State private var showChannelsMenu = false
     @State private var longPressStart: CGPoint?
@@ -841,6 +842,8 @@ private struct TacticalMapView: View {
                     }
                 case .contact(let uid):
                     contactSelection = MapContactSelection(id: uid)
+                case .incoming(let id):
+                    incomingSelection = MapContactSelection(id: id)
                 }
                 selectedMapPoint = nil
             }
@@ -940,6 +943,11 @@ private struct TacticalMapView: View {
                 MapContactDetailView(model: model, uid: selection.id)
             }
         }
+        .sheet(item: $incomingSelection) { selection in
+            NavigationStack {
+                IncomingPointDetailView(model: model, id: selection.id)
+            }
+        }
         .sheet(isPresented: $showLayersMenu) {
             NavigationStack {
                 MapLayersMenuView(model: model, settings: settings)
@@ -1013,9 +1021,15 @@ private struct TacticalMapView: View {
                     .annotationTitles(.hidden)
                     .tag(MapPointSelection.contact(entity.id))
                 }
+            } else if let kind = entity.symbolKind {
+                Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
+                    MapPointSymbol(kind: kind)
+                }
+                .tag(MapPointSelection.incoming(entity.id))
             } else {
                 Marker(incomingMapTitle(entity), systemImage: "mappin", coordinate: entity.coordinate)
-                    .tint(incomingMapColor(entity))
+                    .tint(.yellow)
+                    .tag(MapPointSelection.incoming(entity.id))
             }
         }
     }
@@ -1058,10 +1072,6 @@ private struct TacticalMapView: View {
 
     private func incomingMapTitle(_ entity: IncomingMapEntity) -> String {
         entity.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? entity.id
-    }
-
-    private func incomingMapColor(_ entity: IncomingMapEntity) -> Color {
-        entity.kind == .hostile ? .red : entity.kind == .friendly ? .blue : .yellow
     }
 
     private func mapControl(_ systemName: String, label: String) -> some View {
@@ -1153,6 +1163,129 @@ private struct MapLayersMenuView: View {
             }
         }
         .navigationTitle("Layers Menu")
+    }
+}
+
+struct DataSyncMenuView: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var client: WatchCompanionOutput
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            if settings.relayProvider != .companion || !client.isReady {
+                Text("Connect to a TAK Server to use Data Sync.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(client.missionServers) { server in
+                    NavigationLink {
+                        DataSyncServerView(client: client, serverID: server.id)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verbatim: server.name)
+                                .lineLimit(3)
+                            Text(summary(server))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if client.missionServers.isEmpty && !client.missionsLoading && client.missionError == nil {
+                    Text("Connect to a TAK Server to use Data Sync.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if client.missionsLoading {
+                ProgressView("Loading servers")
+            }
+            if let error = client.missionError {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
+            Button {
+                Task { await client.refreshMissions() }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(!client.isReady || client.missionsLoading)
+        }
+        .navigationTitle("DataSync")
+        .task { await client.refreshMissions() }
+    }
+
+    private func summary(_ server: TAKMissionServer) -> String {
+        let subscribed = model.storedMissions.filter { $0.serverID == server.id }.count
+        return subscribed > 0 ? "\(subscribed) subscribed" : server.state
+    }
+}
+
+private struct DataSyncServerView: View {
+    @ObservedObject var client: WatchCompanionOutput
+    let serverID: UUID
+
+    private var server: TAKMissionServer? {
+        client.missionServers.first { $0.id == serverID }
+    }
+
+    var body: some View {
+        List {
+            if let server {
+                Section {
+                    ForEach(server.missions) { mission in
+                        Toggle(isOn: Binding(
+                            get: { self.server?.missions.first { $0.id == mission.id }?.subscribed ?? false },
+                            set: { subscribed in
+                                Task { await client.setMission(serverID: serverID, name: mission.name, subscribed: subscribed) }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(verbatim: mission.name)
+                                    .lineLimit(2)
+                                Text(detail(mission))
+                                    .font(.caption2)
+                                    .foregroundStyle(mission.error == nil ? Color.secondary : Color.orange)
+                                    .lineLimit(3)
+                            }
+                        }
+                        .disabled(!client.isReady || client.missionsLoading || !server.isLoaded ||
+                                  (mission.passwordProtected && !mission.subscribed))
+                    }
+                    if server.missions.isEmpty && !client.missionsLoading {
+                        Text(server.error ?? server.state)
+                            .font(.caption)
+                            .foregroundStyle(server.error == nil ? Color.secondary : Color.orange)
+                    }
+                } header: {
+                    Text(verbatim: server.name)
+                        .textCase(nil)
+                }
+            } else if !client.missionsLoading {
+                Text("Server unavailable").foregroundStyle(.secondary)
+            }
+            if client.missionsLoading {
+                ProgressView("Updating missions")
+            }
+            if let error = client.missionError, server?.error != error {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
+            Button {
+                Task { await client.refreshMissions(serverID: serverID) }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(!client.isReady || client.missionsLoading)
+        }
+        .navigationTitle("Missions")
+        .task { await client.refreshMissions(serverID: serverID) }
+    }
+
+    private func detail(_ mission: TAKMission) -> String {
+        if let error = mission.error { return error }
+        if mission.passwordProtected && !mission.subscribed { return "Password protected" }
+        if mission.subscribed, let items = mission.items {
+            return items.count == 1 ? "Subscribed · 1 map item" : "Subscribed · \(items.count) map items"
+        }
+        if let count = mission.itemCount { return count == 1 ? "1 item" : "\(count) items" }
+        return mission.description ?? "Not subscribed"
     }
 }
 
@@ -1263,6 +1396,7 @@ private enum MapPointSelection: Hashable {
     case selfMarker
     case marker(UUID)
     case contact(String)
+    case incoming(String)
 }
 
 private struct MapContactSelection: Identifiable {
@@ -1536,9 +1670,10 @@ private struct BloodhoundView: View {
         case "u": affiliation = "Unknown"
         default: affiliation = "Point"
         }
-        guard let location = model.lastLocation else { return affiliation }
+        let mission = item.missionName.map { "\nMission: \($0)" } ?? ""
+        guard let location = model.lastLocation else { return affiliation + mission }
         let meters = Int(location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)))
-        return "\(affiliation) · \(meters) m"
+        return "\(affiliation) · \(meters) m" + mission
     }
 
     var body: some View {
@@ -1954,6 +2089,232 @@ private struct PointDetailView: View {
         if let title { marker.title = title }
         if let remark { marker.remark = remark }
         model.updateMarker(id: marker.id, kind: marker.kind, title: marker.title ?? "", remark: marker.remark ?? "")
+    }
+}
+
+/// Point Details for received points. Data Sync items get the same edit actions as dropped markers when the
+/// mission role allows; other received points can be bloodhounded or removed from this watch.
+private struct IncomingPointDetailView: View {
+    @ObservedObject var model: WatchSessionModel
+    let id: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmDelete = false
+    @State private var working = false
+    @State private var error: String?
+    @State private var pendingEdit: PendingMissionEdit?
+
+    /// A mission item change waiting for the user to confirm it goes to everyone subscribed.
+    private struct PendingMissionEdit {
+        let summary: String
+        let action: () async throws -> Void
+    }
+
+    private var item: IncomingMapEntity? { model.incomingMapPoints.first { $0.id == id } }
+    private var mission: WatchSessionModel.MissionItemDetail? { model.missionItemDetail(id: id) }
+    private var canEdit: Bool { mission != nil && mission?.canEdit != false && !working }
+
+    var body: some View {
+        List {
+            if let item {
+                Section {
+                    Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Section {
+                    HStack {
+                        Text(item.symbolKind?.rawValue ?? "Point")
+                        Spacer(minLength: 4)
+                        Text(MapCoordinateFormatter.droppedTime(item.lastSeen))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let missionName = item.missionName {
+                    Section {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label("Mission", systemImage: "arrow.triangle.2.circlepath")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(missionName)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                if let remark = mission?.item.remark, !remark.isEmpty {
+                    Section {
+                        Text("Remark: \(remark)")
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if model.bloodhoundMapItemID == id {
+                    Section {
+                        Label("Bloodhounding", systemImage: "location.north.fill")
+                    }
+                }
+                Section {
+                    HStack(alignment: .top, spacing: 6) {
+                        VStack(spacing: 4) {
+                            Text("From You")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if let location = model.lastLocation {
+                                let reading = model.mapPointReading(to: item.coordinate, from: location)
+                                Image(systemName: "location.north.fill")
+                                    .font(.title3)
+                                    .rotationEffect(.degrees(reading.relativeBearingDegrees))
+                                Text("\(Int(reading.bearingDegrees.rounded()))° \(MapCoordinateFormatter.cardinalDirection(reading.bearingDegrees))")
+                                    .font(.caption2.monospacedDigit())
+                                    .multilineTextAlignment(.center)
+                            } else {
+                                Image(systemName: "location.slash")
+                                    .font(.title3)
+                                Text("Unavailable")
+                                    .font(.caption2)
+                            }
+                        }
+                        .frame(width: 58)
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            if let location = model.lastLocation {
+                                Text(String(format: "%.2f km", location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)) / 1000))
+                                    .font(.caption.bold())
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                            } else {
+                                Text("Distance unavailable")
+                                    .font(.caption.bold())
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                            }
+                            Text(String(format: "%.5f", item.latitude))
+                            Text(String(format: "%.5f", item.longitude))
+                            Text(MapCoordinateFormatter.mgrs(item.coordinate) ?? "Unavailable")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.55)
+                        }
+                        .font(.caption2.monospacedDigit())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                Section {
+                    Button(model.bloodhoundMapItemID == id ? "Stop Bloodhound" : "Bloodhound to Marker") {
+                        run { try await model.toggleMapItemBloodhound(id: id) }
+                    }
+
+                    if let mission {
+                        NavigationLink("Change Title") {
+                            PointTextEditorView(title: "Change Title", value: item.callSign ?? "") { value in
+                                confirm("Change title to \"\(value)\"") { try await model.editMissionItem(id: id, title: value) }
+                            }
+                        }
+                        .disabled(!canEdit)
+
+                        let hasRemark = mission.item.remark?.isEmpty == false
+                        NavigationLink(hasRemark ? "Change Remark" : "Add Remark") {
+                            PointTextEditorView(title: hasRemark ? "Change Remark" : "Add Remark",
+                                                value: mission.item.remark ?? "") { value in
+                                confirm(value.isEmpty ? "Clear the remark" : "Set remark to \"\(value)\"") {
+                                    try await model.editMissionItem(id: id, remark: value)
+                                }
+                            }
+                        }
+                        .disabled(!canEdit)
+
+                        NavigationLink("Change Marker") {
+                            PointMarkerTypeView(selection: item.symbolKind ?? .unknown) { kind in
+                                confirm("Change marker to \(kind.rawValue)") { try await model.editMissionItem(id: id, kind: kind) }
+                            }
+                        }
+                        .disabled(!canEdit)
+
+                        Button("Move to Current Location") {
+                            guard let location = model.lastLocation else { return }
+                            let coordinate = location.coordinate
+                            confirm("Move to your current location") {
+                                try await model.editMissionItem(id: id, coordinate: coordinate)
+                            }
+                        }
+                        .disabled(!canEdit || model.lastLocation == nil)
+                    }
+
+                    Button("Delete Marker", role: .destructive) {
+                        confirmDelete = true
+                    }
+                    .disabled(mission?.canEdit == false || working)
+
+                    if mission?.canEdit == false {
+                        Text("Your mission role is read-only.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button {
+                        dismiss()
+                    } label: {
+                        Label("Back", systemImage: "arrow.left")
+                    }
+                }
+            } else {
+                Text("Point unavailable or removed.").foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("Point Details")
+        .onAppear { model.requestLocation() }
+        .confirmationDialog(mission == nil ? "Delete point?" : "Delete from mission?", isPresented: $confirmDelete) {
+            Button("Delete Marker", role: .destructive) {
+                if mission == nil {
+                    model.removeIncomingPoint(id)
+                    dismiss()
+                } else {
+                    run(dismissOnSuccess: true) { try await model.deleteMissionItem(id: id) }
+                }
+            }
+        } message: {
+            Text(mission.map { "Removes it from \($0.mission) for everyone subscribed." }
+                 ?? "Removes it from this watch.")
+        }
+        .confirmationDialog("Update mission?", isPresented: Binding(
+            get: { pendingEdit != nil },
+            set: { if !$0 { pendingEdit = nil } }
+        ), titleVisibility: .visible, presenting: pendingEdit) { edit in
+            Button("Update") {
+                pendingEdit = nil
+                run(edit.action)
+            }
+            Button("Cancel", role: .cancel) { pendingEdit = nil }
+        } message: { edit in
+            Text("\(edit.summary). This changes it in \(mission?.mission ?? "the mission") for everyone subscribed.")
+        }
+        .alert("Point Details", isPresented: Binding(
+            get: { error != nil },
+            set: { if !$0 { error = nil } }
+        )) {
+            Button("OK", role: .cancel) { error = nil }
+        } message: {
+            Text(error ?? "")
+        }
+    }
+
+    private func confirm(_ summary: String, _ action: @escaping () async throws -> Void) {
+        pendingEdit = PendingMissionEdit(summary: summary, action: action)
+    }
+
+    private func run(dismissOnSuccess: Bool = false, _ action: @escaping () async throws -> Void) {
+        working = true
+        Task {
+            defer { working = false }
+            do {
+                try await action()
+                if dismissOnSuccess { dismiss() }
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
     }
 }
 

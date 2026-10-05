@@ -188,6 +188,10 @@ final class CompanionSitxSession: ObservableObject {
                     authorizationCode = ""
                     verificationURL = ""
                     await loadGroups(host: host)
+                    if let reason = SitxAPI.sequesteredReason(token["sequestered_status"]), !state.connected {
+                        logger.warning("Sit(x) device sequestered after authorization: \(reason, privacy: .public)")
+                        setStatus(reason)
+                    }
                     return
                 } catch SitxHTTPError.authorizationPending {
                     continue
@@ -197,6 +201,10 @@ final class CompanionSitxSession: ObservableObject {
             }
         } catch is CancellationError {
             return
+        } catch SitxHTTPError.expired {
+            authorizationCode = ""
+            verificationURL = ""
+            setStatus(Status.expired)
         } catch {
             authorizationCode = ""
             verificationURL = ""
@@ -365,6 +373,11 @@ final class CompanionSitxSession: ObservableObject {
                 state.connected = true
                 setStatus("Connected" + (config.groupName.map { " (\($0))" } ?? ""))
                 receive(task)
+                await fetchStoredMessages(config, generation: generation)
+            } catch SitxHTTPError.sequestered(let reason) {
+                guard generation == self.generation else { return }
+                logger.warning("Sit(x) device sequestered: \(reason, privacy: .public)")
+                fail(reason, retryAfter: 60)
             } catch SitxHTTPError.unauthorized {
                 guard generation == self.generation else { return }
                 forgetAuthorization(detail: Status.reauth)
@@ -372,6 +385,71 @@ final class CompanionSitxSession: ObservableObject {
                 guard generation == self.generation else { return }
                 fail("Sit(x) connection failed: \(Self.errorSummary(error, context: "TAK group"))")
             }
+        }
+    }
+
+    /// Delivers GeoChat and other CoT that Sit(x) Store and Forward held while this device was offline, then
+    /// acknowledges each so it is not delivered again. Failures are logged; live streaming is unaffected.
+    /// Data Sync (Mission API) request on Sit(x); `path` is relative to `/api/v1` and already percent-encoded.
+    func missionRequest(path: String, method: String = "GET", query: [URLQueryItem] = []) async throws -> Data {
+        guard let config, state.connected, var components = URLComponents(string: config.host) else {
+            throw CompanionFailure.message("Sit(x) is not connected.")
+        }
+        components.percentEncodedPath = "/api/v1" + path
+        if !query.isEmpty { components.queryItems = query }
+        guard let url = components.url else { throw CompanionFailure.message("Invalid Sit(x) Data Sync URL.") }
+        do {
+            return try await withToken { [session] refresh -> Data in
+                var request = URLRequest(url: url, timeoutInterval: 20)
+                request.httpMethod = method
+                request.setValue("Bearer \(refresh)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                let (data, response) = try await session.data(for: request)
+                try Self.check(response, data: data)
+                guard data.count <= 4_194_304 else { throw CompanionFailure.message("Sit(x) Data Sync response is too large.") }
+                return data
+            }
+        } catch let error as CompanionFailure {
+            throw error
+        } catch {
+            throw CompanionFailure.message("Sit(x) Data Sync: \(Self.errorSummary(error, context: "Data Sync"))")
+        }
+    }
+
+    private func fetchStoredMessages(_ config: Config, generation: Int) async {
+        guard let listURL = SitxStoredMessage.listURL(host: config.host, flowTag: config.flowTag) else { return }
+        do {
+            let data = try await withToken { [session] refresh -> Data in
+                var request = URLRequest(url: listURL, timeoutInterval: 15)
+                request.setValue("Bearer \(refresh)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                let (data, response) = try await session.data(for: request)
+                try Self.check(response, data: data)
+                return data
+            }
+            let messages = SitxStoredMessage.parse(data, flowTag: config.flowTag)
+            guard generation == self.generation else { return }
+            guard !messages.isEmpty else {
+                logger.info("Sit(x) Store and Forward: no pending messages")
+                return
+            }
+            logger.notice("Sit(x) delivering \(messages.count) stored message(s)")
+            for message in messages {
+                guard generation == self.generation else { return }
+                onCoT?(message.payload)
+                guard let ackURL = SitxStoredMessage.acknowledgeURL(host: config.host, id: message.id) else { continue }
+                _ = try? await withToken { [session] refresh -> Data in
+                    var request = URLRequest(url: ackURL, timeoutInterval: 15)
+                    request.httpMethod = "PATCH"
+                    request.setValue("Bearer \(refresh)", forHTTPHeaderField: "Authorization")
+                    request.setValue("application/json", forHTTPHeaderField: "Accept")
+                    let (data, response) = try await session.data(for: request)
+                    try Self.check(response, data: data)
+                    return data
+                }
+            }
+        } catch {
+            logger.error("Sit(x) stored messages unavailable: \(Self.errorSummary(error, context: "Store and Forward"), privacy: .public)")
         }
     }
 
@@ -405,6 +483,7 @@ final class CompanionSitxSession: ObservableObject {
         try check(response, data: data)
         let body = (try JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         if let rotated = body["refresh_token"] as? String, !rotated.isEmpty { try saveToken(rotated) }
+        if let reason = SitxAPI.sequesteredReason(body["sequestered_status"]) { throw SitxHTTPError.sequestered(reason) }
         guard let endpoint = body["end_point"] as? String, let socketURL = URL(string: endpoint), socketURL.scheme == "wss",
               let access = body["access_token"] as? String else {
             throw SitxHTTPError.invalidResponse
@@ -417,13 +496,16 @@ final class CompanionSitxSession: ObservableObject {
     // MARK: - HTTP helpers
 
     private enum SitxHTTPError: LocalizedError {
-        case authorizationPending, slowDown, unauthorized, invalidResponse
+        case authorizationPending, slowDown, expired, unauthorized, invalidResponse
         case status(Int, String?)
+        case sequestered(String)
 
         var errorDescription: String? {
             switch self {
             case .authorizationPending: return "authorization pending"
             case .slowDown: return "polling too fast"
+            case .expired: return Status.expired
+            case .sequestered(let reason): return reason
             case .unauthorized: return "authorization rejected"
             case .invalidResponse: return "invalid server response"
             case .status(let code, let message): return message.map { "HTTP \(code): \($0)" } ?? "HTTP \(code)"
@@ -457,6 +539,7 @@ final class CompanionSitxSession: ObservableObject {
             switch ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["error"] as? String {
             case "authorization_pending": throw SitxHTTPError.authorizationPending
             case "slow_down": throw SitxHTTPError.slowDown
+            case "expired_token": throw SitxHTTPError.expired
             default: break
             }
         }
@@ -551,11 +634,11 @@ final class CompanionSitxSession: ObservableObject {
         publish()
     }
 
-    private func fail(_ message: String) {
+    private func fail(_ message: String, retryAfter: Double = 10) {
         disconnect(detail: message)
         guard active, config != nil else { return }
         retryTask = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            do { try await Task.sleep(for: .seconds(retryAfter)) } catch { return }
             self?.retryTask = nil
             self?.connect()
         }

@@ -528,7 +528,8 @@ final class AppSettings: ObservableObject {
         teamColor = TeamColor(rawValue: defaults.string(forKey: Keys.teamColor) ?? "White") ?? .white
         roleGroup = defaults.string(forKey: Keys.roleGroup).flatMap(UserRoleGroup.init(rawValue:))
         role = defaults.string(forKey: Keys.role) ?? ""
-        chatEnabled = defaults.object(forKey: Keys.chatEnabled) as? Bool ?? true
+        chatEnabled = true
+        defaults.removeObject(forKey: Keys.chatEnabled)
         let storedRelayProvider = defaults.string(forKey: Keys.relayProvider)
         if storedRelayProvider == "TAK Aware Relay" {
             relayProvider = .takAwareRelay

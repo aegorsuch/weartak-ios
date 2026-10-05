@@ -73,6 +73,8 @@ struct IncomingMapEntity: Identifiable {
     let expiresAt: Date?
     let isUser: Bool
     var sourceTransport: ContactChatRoute? = nil
+    /// Data Sync mission holding this item; mission items stay on the map while subscribed.
+    var missionName: String? = nil
 
     var chatRoute: ContactChatRoute? {
         if let sourceServerID { return .companion(sourceServerID) }
@@ -86,11 +88,8 @@ struct IncomingMapEntity: Identifiable {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
-    var kind: MarkerKind {
-        if type.contains("a-h-") { return .hostile }
-        if type.contains("a-f-") { return .friendly }
-        return .unknown
-    }
+    /// 2525D affiliation from a CoT atom type (`a-<affiliation>-...`); nil for non-symbol types such as `b-m-p-*`.
+    var symbolKind: MarkerKind? { MarkerKind(cotType: type) }
 }
 
 enum MarkerKind: String, CaseIterable, Identifiable, Codable {
@@ -100,6 +99,20 @@ enum MarkerKind: String, CaseIterable, Identifiable, Codable {
     case hostile = "Hostile"
 
     var id: String { rawValue }
+
+    /// Maps CoT atom affiliations: assumed friend → friendly; suspect, joker, faker → hostile;
+    /// pending and other → unknown.
+    init?(cotType: String) {
+        let parts = cotType.split(separator: "-", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts[0] == "a" else { return nil }
+        switch parts[1] {
+        case "f", "a": self = .friendly
+        case "h", "s", "j", "k": self = .hostile
+        case "n": self = .neutral
+        case "u", "p", "o": self = .unknown
+        default: return nil
+        }
+    }
 }
 
 struct BloodhoundDestination {
@@ -172,6 +185,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private let chatLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "GeoChat")
     private static let markerStorageKey = "WearTAK.droppedPoints"
     private static let companionCacheKey = "WearTAK.cachedCompanionMap"
+    private static let missionItemsKey = "WearTAK.dataSyncMissionItems"
+    static let missionSubscriptionsFlagKey = "WearTAK.dataSyncHasSubscriptions"
+    private static let maximumLiveEntities = 50
     private var companionMapCache = CompanionMapCache()
     @Published private(set) var mapCacheError: String?
 
@@ -383,7 +399,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     type: entity.type, lastSeen: entity.lastSeen, callSign: entity.callSign,
                     team: entity.team, role: entity.role, senderUID: entity.senderUID,
                     sourceServerID: entity.sourceServerID,
-                    sourceGeneration: 0, expiresAt: entity.expiresAt, isUser: entity.isUser)
+                    sourceGeneration: 0, expiresAt: entity.expiresAt, isUser: entity.isUser,
+                    missionName: entity.missionName)
             }
             self.saveCompanionMapCache()
         }
@@ -400,6 +417,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
             pointSendTimes = stored.mapValues { Date(timeIntervalSince1970: $0) }
                 .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         }
+        if let data = UserDefaults.standard.data(forKey: Self.missionItemsKey),
+           let stored = try? JSONDecoder().decode([StoredMission].self, from: data) {
+            storedMissions = stored
+            for serverID in Set(stored.map(\.serverID)) { installMissionItems(serverID: serverID) }
+        }
+        companionClient.onMissions = { [weak self] server in self?.applyMissions(server) }
         if let data = UserDefaults.standard.data(forKey: Self.companionCacheKey) {
             do {
                 companionMapCache = try JSONDecoder().decode(CompanionMapCache.self, from: data)
@@ -692,6 +715,28 @@ final class WatchSessionModel: NSObject, ObservableObject {
         try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
     }
 
+    /// Bloodhound from the map point menu. Points sent directly by a user reply "Roger" like RGR;
+    /// Data Sync items have no sender, so they start silently.
+    func toggleMapItemBloodhound(id: String) async throws {
+        if bloodhoundMapItemID == id {
+            bloodhoundMapItemID = nil
+            bloodhoundProximityNotified = false
+            return
+        }
+        guard let item = incomingMapPoints.first(where: { $0.id == id }) else {
+            throw ContactChatFailure.message("This map item is no longer available.")
+        }
+        if item.missionName == nil, let sender = item.senderUID, !sender.isEmpty, sender != SitxClient.deviceID() {
+            try await startBloodhound(toMapItem: id)
+            return
+        }
+        bloodhoundTargetID = nil
+        bloodhoundContactID = nil
+        bloodhoundMapItemID = id
+        bloodhoundProximityNotified = false
+        requestLocation()
+    }
+
     func markInPosition() async throws {
         let item = bloodhoundMapItemID.flatMap { id in incomingMapPoints.first { $0.id == id } }
         bloodhoundTargetID = nil
@@ -876,7 +921,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
             callSign: metadata.callSign, team: metadata.team, role: metadata.role,
             senderUID: metadata.senderUID,
             sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt,
-            isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type), sourceTransport: sourceTransport
+            isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type), sourceTransport: sourceTransport,
+            missionName: previous?.missionName
         )
         let isNew: Bool
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
@@ -898,10 +944,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         if entity.isUser, !pendingMapItemReplies.isEmpty { flushMapItemReplies(to: entity) }
         pruneIncomingEntities(now: now)
-        if incomingEntities.count > 50 {
-            incomingEntities.sort { $0.lastSeen > $1.lastSeen }
-            incomingEntities.removeLast(incomingEntities.count - 50)
-        }
+        capLiveEntities()
+    }
+
+    private func capLiveEntities() {
+        let live = incomingEntities.filter { $0.missionName == nil }
+        guard live.count > Self.maximumLiveEntities else { return }
+        let dropped = Set(live.sorted { $0.lastSeen > $1.lastSeen }.dropFirst(Self.maximumLiveEntities).map(\.id))
+        incomingEntities.removeAll { dropped.contains($0.id) }
     }
 
     private func recordPointSend(_ uid: String, at sent: Date) {
@@ -918,7 +968,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func pruneIncomingEntities(now: Date = Date()) {
         incomingEntities.removeAll {
-            now.timeIntervalSince($0.lastSeen) > 300 || ($0.expiresAt.map { $0 <= now } ?? false)
+            $0.missionName == nil &&
+                (now.timeIntervalSince($0.lastSeen) > 300 || ($0.expiresAt.map { $0 <= now } ?? false))
         }
         companionMapCache.prune(now: now)
         if !unseenIncomingPointIDs.isEmpty {
@@ -935,10 +986,152 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
     }
 
+    // MARK: Data Sync
+
+    struct StoredMission: Codable, Equatable {
+        let serverID: UUID
+        let name: String
+        var items: [TAKMissionItem]
+        var canEdit: Bool?
+    }
+
+    struct MissionItemDetail {
+        let serverID: UUID
+        let mission: String
+        let item: TAKMissionItem
+        /// False when the watch's mission role is read-only; nil when the role is unknown.
+        let canEdit: Bool?
+    }
+
+    func missionItemDetail(id: String) -> MissionItemDetail? {
+        guard let entity = incomingEntities.first(where: { $0.id == id }), let name = entity.missionName,
+              let serverID = entity.sourceServerID,
+              let mission = storedMissions.first(where: { $0.serverID == serverID && $0.name == name }),
+              let item = mission.items.first(where: { $0.uid == id }) else { return nil }
+        return MissionItemDetail(serverID: serverID, mission: name, item: item, canEdit: mission.canEdit)
+    }
+
+    /// Sends an edited Data Sync item to its mission, then shows the change right away. The next sync
+    /// restores the server's copy if the server rejected the update.
+    func editMissionItem(id: String, title: String? = nil, remark: String? = nil, kind: MarkerKind? = nil,
+                         coordinate: CLLocationCoordinate2D? = nil) async throws {
+        guard let detail = missionItemDetail(id: id) else {
+            throw ContactChatFailure.message("This DataSync item is no longer available.")
+        }
+        guard detail.canEdit != false else {
+            throw ContactChatFailure.message("Your mission role doesn't allow edits.")
+        }
+        var item = detail.item
+        if let title { item.callsign = title.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let remark { item.remark = remark.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let kind {
+            let affiliation: String
+            switch kind {
+            case .friendly: affiliation = "f"
+            case .hostile: affiliation = "h"
+            case .neutral: affiliation = "n"
+            case .unknown: affiliation = "u"
+            }
+            item.type = TAKMissionAPI.type(item.type, affiliation: affiliation)
+        }
+        if let coordinate {
+            guard CLLocationCoordinate2DIsValid(coordinate) else { return }
+            item.lat = coordinate.latitude
+            item.lon = coordinate.longitude
+        }
+        try await companionClient.send(TAKMissionAPI.itemEvent(item, mission: detail.mission), serverID: detail.serverID)
+        guard let m = storedMissions.firstIndex(where: { $0.serverID == detail.serverID && $0.name == detail.mission }),
+              let i = storedMissions[m].items.firstIndex(where: { $0.uid == id }) else { return }
+        storedMissions[m].items[i] = item
+        UserDefaults.standard.set(try? JSONEncoder().encode(storedMissions), forKey: Self.missionItemsKey)
+        if let e = incomingEntities.firstIndex(where: { $0.id == id }) {
+            let old = incomingEntities[e]
+            incomingEntities[e] = IncomingMapEntity(
+                id: id, latitude: item.lat, longitude: item.lon, type: item.type, lastSeen: Date(),
+                callSign: item.callsign, team: old.team, role: old.role, senderUID: old.senderUID,
+                sourceServerID: old.sourceServerID, sourceGeneration: old.sourceGeneration, expiresAt: nil,
+                isUser: old.isUser, sourceTransport: old.sourceTransport, missionName: old.missionName)
+        }
+    }
+
+    /// Removes a Data Sync item from its mission on the server (for every subscriber) and from this watch.
+    func deleteMissionItem(id: String) async throws {
+        guard let detail = missionItemDetail(id: id) else {
+            throw ContactChatFailure.message("This DataSync item is no longer available.")
+        }
+        guard detail.canEdit != false else {
+            throw ContactChatFailure.message("Your mission role doesn't allow deleting items.")
+        }
+        if let error = await companionClient.removeMissionItem(serverID: detail.serverID, mission: detail.mission, uid: id) {
+            throw ContactChatFailure.message(error)
+        }
+        if let m = storedMissions.firstIndex(where: { $0.serverID == detail.serverID && $0.name == detail.mission }) {
+            storedMissions[m].items.removeAll { $0.uid == id }
+            UserDefaults.standard.set(try? JSONEncoder().encode(storedMissions), forKey: Self.missionItemsKey)
+        }
+        incomingEntities.removeAll { $0.id == id && !$0.isUser }
+        unseenIncomingPointIDs.remove(id)
+        if bloodhoundMapItemID == id {
+            bloodhoundMapItemID = nil
+            bloodhoundProximityNotified = false
+        }
+    }
+
+    @Published private(set) var storedMissions: [StoredMission] = []
+
+    /// Replaces a server's mission items with its loaded subscriptions. A mission whose items failed to load keeps
+    /// its previous items; unsubscribed or deleted missions leave the map.
+    func applyMissions(_ server: TAKMissionServer) {
+        guard server.isLoaded else { return }
+        let previous = storedMissions.filter { $0.serverID == server.id }
+        var updated = storedMissions.filter { $0.serverID != server.id }
+        for mission in server.missions where mission.subscribed {
+            let kept = previous.first { $0.name == mission.name }
+            if let items = mission.items {
+                updated.append(StoredMission(serverID: server.id, name: mission.name, items: items,
+                                             canEdit: mission.canEdit ?? kept?.canEdit))
+            } else if var kept {
+                if let canEdit = mission.canEdit { kept.canEdit = canEdit }
+                updated.append(kept)
+            }
+        }
+        storedMissions = updated
+        UserDefaults.standard.set(try? JSONEncoder().encode(updated), forKey: Self.missionItemsKey)
+        UserDefaults.standard.set(server.missions.contains { $0.subscribed } || updated.contains { $0.serverID != server.id },
+                                  forKey: Self.missionSubscriptionsFlagKey)
+        installMissionItems(serverID: server.id)
+    }
+
+    private func installMissionItems(serverID: UUID) {
+        var desired: [String: (item: TAKMissionItem, mission: String)] = [:]
+        for mission in storedMissions where mission.serverID == serverID {
+            for item in mission.items where desired[item.uid] == nil { desired[item.uid] = (item, mission.name) }
+        }
+        incomingEntities.removeAll { $0.sourceServerID == serverID && $0.missionName != nil && desired[$0.id] == nil }
+        let now = Date()
+        let ownUID = SitxClient.deviceID()
+        let generation = sourceGenerations[serverID, default: 0]
+        for (uid, entry) in desired {
+            guard uid != ownUID, dismissedPointIDs[uid] == nil,
+                  !markers.contains(where: { $0.id.uuidString == uid }) else { continue }
+            let existing = incomingEntities.firstIndex { $0.id == uid }
+            let old = existing.map { incomingEntities[$0] }
+            let item = entry.item
+            let entity = IncomingMapEntity(
+                id: uid, latitude: item.lat, longitude: item.lon, type: item.type,
+                lastSeen: old?.lastSeen ?? now, callSign: item.callsign ?? old?.callSign,
+                team: old?.team, role: old?.role, senderUID: old?.senderUID,
+                sourceServerID: serverID, sourceGeneration: max(generation, old?.sourceGeneration ?? 0),
+                expiresAt: nil, isUser: old?.isUser ?? SitxCoT.isUser(type: item.type),
+                sourceTransport: old?.sourceTransport, missionName: entry.mission)
+            if let existing { incomingEntities[existing] = entity } else { incomingEntities.append(entity) }
+        }
+    }
+
     private func refreshSource(_ id: UUID, generation: Int) {
         guard generation > sourceGenerations[id, default: 0] else { return }
         sourceGenerations[id] = generation
-        incomingEntities.removeAll { $0.sourceServerID == id && $0.sourceGeneration < generation }
+        incomingEntities.removeAll { $0.sourceServerID == id && $0.sourceGeneration < generation && $0.missionName == nil }
         companionMapCache.remove(sourceID: id, beforeGeneration: generation)
         saveCompanionMapCache()
     }

@@ -8,6 +8,7 @@ import UIKit
 final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private let chatLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "GeoChat")
     private let reportingLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "PhoneReporting")
+    private let missionLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "DataSync")
     private var lastReportingDiagnostic: String?
     @Published private(set) var servers: [CompanionServer] = []
     @Published private(set) var serverStates: [UUID: ServerState] = [:]
@@ -580,6 +581,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                     replyHandler((try? reply.encoded()) ?? Data())
                     return
                 }
+                if message.kind == .missions || message.kind == .missionUpdate {
+                    replyHandler(try await self.missionReply(to: message).encoded())
+                    return
+                }
                     guard message.kind == .cot, let xml = message.xml, self.canRelay, self.connected,
                         self.watchWritesInFlight < 16 else {
                     replyHandler(try self.snapshot(id: message.id).encoded())
@@ -698,6 +703,127 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     }
 }
 
+// MARK: - Data Sync
+
+extension PhoneBridgeModel {
+    private typealias MissionRequest = (_ path: String, _ method: String, _ query: [URLQueryItem]) async throws -> Data
+
+    private static func missionSubscriptionsKey(_ id: UUID) -> String { "WearTAK.missions.subscribed.\(id.uuidString)" }
+
+    private func subscribedMissions(_ id: UUID) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: Self.missionSubscriptionsKey(id)) ?? [])
+    }
+
+    private func setSubscribedMissions(_ names: Set<String>, for id: UUID) {
+        UserDefaults.standard.set(names.sorted(), forKey: Self.missionSubscriptionsKey(id))
+    }
+
+    private func missionRequester(for id: UUID) -> MissionRequest? {
+        if id == SitxRelayConfig.serverID {
+            guard sitx.isConfigured else { return nil }
+            let sitx = self.sitx
+            return { path, method, query in try await sitx.missionRequest(path: path, method: method, query: query) }
+        }
+        guard servers.contains(where: { $0.id == id && $0.enabled }), let session = sessions[id] else { return nil }
+        return { path, method, query in try await session.missionRequest(path: path, method: method, query: query) }
+    }
+
+    /// Lists a server's Data Sync missions, applies a watch subscribe/unsubscribe, and loads the map items of
+    /// subscribed missions. Subscriptions use the watch UID, the identity this phone streams to the server.
+    fileprivate func missionReply(to message: BridgeWire.Message) async -> BridgeWire.Message {
+        var snapshots = servers.filter(\.enabled).map { record in
+            TAKMissionServer(id: record.id, name: "\(record.host):\(record.port)",
+                             state: serverStates[record.id]?.connected == true ? TAKMissionServer.selectState : "Server not connected")
+        }
+        if sitx.isConfigured {
+            snapshots.append(TAKMissionServer(id: SitxRelayConfig.serverID,
+                name: "Sit(x) " + (sitx.selectedGroupName ?? sitx.host),
+                state: sitx.state.connected ? TAKMissionServer.selectState : "Server not connected"))
+        }
+        var targets: [UUID] = []
+        if let id = message.serverID { targets = [id] }
+        else if message.missionSync == true { targets = snapshots.map(\.id).filter { !subscribedMissions($0).isEmpty } }
+        var budget = TAKMissionAPI.maximumItemsTotal
+        var removalError: String?
+        for id in targets {
+            guard let index = snapshots.firstIndex(where: { $0.id == id }) else { continue }
+            do {
+                guard canRelay, let request = missionRequester(for: id) else {
+                    throw CompanionFailure.message("This server is no longer enabled.")
+                }
+                var names = subscribedMissions(id)
+                if message.kind == .missionUpdate, id == message.serverID,
+                   let name = message.missionName, let subscribe = message.missionSubscribe {
+                    guard let uid = message.clientUID, !uid.isEmpty,
+                          let path = TAKMissionAPI.path(name, "/subscription") else { throw TAKMissionAPI.Failure.invalidName }
+                    _ = try await request(path, subscribe ? "PUT" : "DELETE", [URLQueryItem(name: "uid", value: uid)])
+                    if subscribe { names.insert(name) } else { names.remove(name) }
+                    setSubscribedMissions(names, for: id)
+                    missionLogger.notice("Data Sync \(subscribe ? "subscribed to" : "unsubscribed from", privacy: .public) mission on \(snapshots[index].name, privacy: .public)")
+                }
+                if message.kind == .missionUpdate, id == message.serverID,
+                   let name = message.missionName, let removeUID = message.missionRemoveUID {
+                    guard let uid = message.clientUID, !uid.isEmpty,
+                          let path = TAKMissionAPI.path(name, "/contents") else { throw TAKMissionAPI.Failure.invalidName }
+                    do {
+                        _ = try await request(path, "DELETE", [URLQueryItem(name: "uid", value: removeUID),
+                                                                URLQueryItem(name: "creatorUid", value: uid)])
+                        missionLogger.notice("Data Sync removed an item from a mission on \(snapshots[index].name, privacy: .public)")
+                    } catch {
+                        missionLogger.error("Data Sync item removal failed: \(error.localizedDescription, privacy: .public)")
+                        removalError = TAKMissionAPI.removalMessage(error.localizedDescription)
+                    }
+                }
+                var missions = try TAKMissionAPI.parseList(await request("/missions", "GET", []))
+                let listed = Set(missions.map(\.name))
+                if !names.isSubset(of: listed) {
+                    names.formIntersection(listed)
+                    setSubscribedMissions(names, for: id)
+                }
+                for i in missions.indices where names.contains(missions[i].name) {
+                    missions[i].subscribed = true
+                    if let uid = message.clientUID, !uid.isEmpty, let path = TAKMissionAPI.path(missions[i].name, "/subscription") {
+                        missions[i].canEdit = (try? await request(path, "GET", [URLQueryItem(name: "uid", value: uid)]))
+                            .flatMap(TAKMissionAPI.parseCanEdit)
+                    }
+                    guard budget > 0, let path = TAKMissionAPI.path(missions[i].name, "/cot") else {
+                        missions[i].error = "Watch item limit reached."
+                        continue
+                    }
+                    do {
+                        let items = TAKMissionAPI.parseItems(try await request(path, "GET", []),
+                                                             limit: min(budget, TAKMissionAPI.maximumItemsPerMission))
+                        missions[i].items = items
+                        budget -= items.count
+                    } catch { missions[i].error = error.localizedDescription }
+                }
+                snapshots[index].missions = missions
+                snapshots[index].state = missions.isEmpty ? TAKMissionServer.emptyState : TAKMissionServer.readyState
+                let roles = missions.filter(\.subscribed).map { $0.canEdit.map { $0 ? "edit" : "read-only" } ?? "role unknown" }
+                missionLogger.notice("Data Sync \(snapshots[index].name, privacy: .public): \(missions.count) mission(s), \(names.count) subscribed \(roles, privacy: .public)")
+            } catch {
+                snapshots[index].state = "Data Sync request failed"
+                snapshots[index].error = error.localizedDescription
+                missionLogger.error("Data Sync \(snapshots[index].name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        var reply = BridgeWire.Message(kind: .missions, id: message.id, sessionID: bridgeSessionID)
+        reply.missionServers = snapshots
+        reply.missionSync = message.missionSync
+        reply.detail = removalError
+        while (try? reply.encoded()) == nil {
+            guard var servers = reply.missionServers,
+                  let s = servers.indices.last(where: { servers[$0].missions.contains { !($0.items ?? []).isEmpty } }),
+                  let m = servers[s].missions.indices.last(where: { !(servers[s].missions[$0].items ?? []).isEmpty }),
+                  let count = servers[s].missions[m].items?.count else { break }
+            servers[s].missions[m].items?.removeLast(max(1, count / 4))
+            servers[s].missions[m].error = "Some items were omitted to fit the watch message size."
+            reply.missionServers = servers
+        }
+        return reply
+    }
+}
+
 @MainActor
 private final class CompanionServerSession {
     var onState: ((PhoneBridgeModel.ServerState) -> Void)?
@@ -799,6 +925,18 @@ private final class CompanionServerSession {
                                       trustedCA: ca, requestTimeout: 3)
         defer { client.cancel() }
         _ = try await client.load(checkSupport: false, sendLatestSA: true)
+    }
+
+    func missionRequest(path: String, method: String = "GET", query: [URLQueryItem] = []) async throws -> Data {
+        guard active, state.connected, let record, record.enabled,
+              let stored = try CertificateStore.read(endpoint: record.endpoint.key) else {
+            throw CompanionFailure.message("TAK server is not connected.")
+        }
+        let ca = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(record.endpoint.key)")
+        let client = TAKChannelClient(host: record.host, identity: try CertificateStore.resolve(stored),
+                                      trustedCA: ca, requestTimeout: 20)
+        defer { client.cancel() }
+        return try await client.missionRequest(path: path, method: method, query: query)
     }
 
     func updateChannel(bit: Int, active: Bool, clientUID: String) async throws -> TAKChannelGroups {

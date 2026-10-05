@@ -283,13 +283,7 @@ final class SitxClient: ObservableObject, TAKTransport {
                         case .data(let bytes): data = bytes
                         @unknown default: continue
                         }
-                        if let chat = TAKChatMessage.parse(String(decoding: data, as: UTF8.self), ownUID: Self.deviceID()) {
-                            self.onChat?(chat)
-                            continue
-                        }
-                        for entity in SitxCoT.parse(data, excluding: Self.deviceID()) {
-                            self.entityContinuation?.yield(entity)
-                        }
+                        self.handleIncoming(data)
                     }
                 } catch {
                     guard let self, self.socket === task else { return }
@@ -299,6 +293,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             for (key, xml) in pendingEvents {
                 try await sendEvent(xml, key: key)
             }
+            Task { [weak self] in await self?.fetchStoredMessages(generation: generation) }
         } catch {
             if generation == connectionGeneration {
                 if streamRequested, Self.isWatchOSStreamBlocked(error) {
@@ -314,6 +309,47 @@ final class SitxClient: ObservableObject, TAKTransport {
         }
     }
 
+    private func handleIncoming(_ data: Data) {
+        if let chat = TAKChatMessage.parse(String(decoding: data, as: UTF8.self), ownUID: Self.deviceID()) {
+            onChat?(chat)
+            return
+        }
+        for entity in SitxCoT.parse(data, excluding: Self.deviceID()) {
+            entityContinuation?.yield(entity)
+        }
+    }
+
+    /// Delivers GeoChat and other CoT that Sit(x) Store and Forward held while offline, then acknowledges each.
+    /// Best effort: failures leave the messages on the server for the next connection.
+    private func fetchStoredMessages(generation: Int) async {
+        guard let host = Self.normalizedHost(settings.sitxApiHost), tokenHost == host, !selectedGroupID.isEmpty,
+              let listURL = SitxStoredMessage.listURL(host: host, flowTag: selectedGroupID) else { return }
+        let flowTag = selectedGroupID
+        do {
+            let data = try await storedMessagesRequest(listURL, method: "GET")
+            for message in SitxStoredMessage.parse(data, flowTag: flowTag) {
+                guard generation == connectionGeneration, socket != nil else { return }
+                handleIncoming(Data(message.payload.utf8))
+                if let ackURL = SitxStoredMessage.acknowledgeURL(host: host, id: message.id) {
+                    _ = try? await storedMessagesRequest(ackURL, method: "PATCH")
+                }
+            }
+        } catch {}
+    }
+
+    private func storedMessagesRequest(_ url: URL, method: String) async throws -> Data {
+        guard let refreshToken else { throw SitxError.invalidResponse }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.httpMethod = method
+        request.setValue("Bearer \(refreshToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw SitxError.invalidResponse
+        }
+        return data
+    }
+
     private func disconnect() {
         connectionGeneration += 1
         reconnectTask?.cancel()
@@ -327,14 +363,15 @@ final class SitxClient: ObservableObject, TAKTransport {
     private func connectionFailed(_ error: Error) {
         disconnect()
         status = Self.errorSummary(error, context: "TAK connection")
-        scheduleReconnect()
+        // A sequestered device stays muted until resolved in the portal, so poll it less often.
+        if case .sequestered? = error as? SitxError { scheduleReconnect(after: 60) } else { scheduleReconnect() }
     }
 
-    private func scheduleReconnect() {
+    private func scheduleReconnect(after delay: Double = 10) {
         guard settings.sitxEnabled, isAppActive, !isPhoneReachable, refreshToken != nil else { return }
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
             guard let self else { return }
             self.resumeAuthorization()
         }
@@ -448,13 +485,14 @@ final class SitxClient: ObservableObject, TAKTransport {
         ]
         request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
         let response = try await send(request)
-        guard let endpoint = response["end_point"] as? String,
-              let url = URL(string: endpoint), url.scheme == "wss",
-              let token = response["access_token"] as? String else { throw SitxError.invalidResponse }
         if let rotated = response["refresh_token"] as? String {
             self.refreshToken = rotated
             try saveToken(rotated, account: "refresh")
         }
+        if let reason = SitxAPI.sequesteredReason(response["sequestered_status"]) { throw SitxError.sequestered(reason) }
+        guard let endpoint = response["end_point"] as? String,
+              let url = URL(string: endpoint), url.scheme == "wss",
+              let token = response["access_token"] as? String else { throw SitxError.invalidResponse }
         var socketRequest = URLRequest(url: url)
         socketRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         return socketRequest
@@ -621,6 +659,9 @@ final class SitxClient: ObservableObject, TAKTransport {
                 verificationURL = ""
                 self.deviceCode = nil
                 await verifyAccount(host: host)
+                if let reason = SitxAPI.sequesteredReason(response["sequestered_status"]), status != State.connected {
+                    status = reason
+                }
                 return
             } catch is CancellationError {
                 return
@@ -628,6 +669,10 @@ final class SitxClient: ObservableObject, TAKTransport {
                 continue
             } catch let error as SitxError where error == .slowDown {
                 pollInterval += 5
+            } catch let error as SitxError where error == .authorizationExpired {
+                status = State.expired
+                self.deviceCode = nil
+                return
             } catch {
                 status = Self.errorSummary(error, context: "Sit(x) token exchange")
                 return
@@ -647,6 +692,9 @@ final class SitxClient: ObservableObject, TAKTransport {
             try saveToken(host, account: "host")
             tokenHost = host
             await verifyAccount(host: host)
+            if let reason = SitxAPI.sequesteredReason(response["sequestered_status"]), status != State.connected {
+                status = reason
+            }
         } catch {
             if let code = (error as? SitxError)?.statusCode, code == 401 || code == 403 {
                 clearTokens()
@@ -687,6 +735,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     private static func errorSummary(_ error: Error, context: String) -> String {
+        if case .sequestered(let reason)? = error as? SitxError { return reason }
         if let sitxError = error as? SitxError {
             return "\(context) failed: \(sitxError.localizedDescription)"
         }
@@ -829,6 +878,7 @@ private enum SitxError: Error, Equatable {
     case invalidResponse
     case httpStatus(Int)
     case httpFailure(Int, String)
+    case sequestered(String)
     case keychain(OSStatus)
 
     var statusCode: Int? {
@@ -847,6 +897,7 @@ private enum SitxError: Error, Equatable {
         case .invalidResponse: return "Invalid Sit(x) response"
         case .httpStatus(let code): return "Sit(x) HTTP \(code)"
         case .httpFailure(let code, let message): return "Sit(x) HTTP \(code): \(message)"
+        case .sequestered(let reason): return reason
         case .keychain(let status): return "Secure token storage failed (\(status))"
         }
     }

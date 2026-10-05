@@ -377,6 +377,32 @@ struct SitxProtocolChecks {
         precondition(SitxClient.serverMessage(from: Data(#"{"errors":["x"],"message":"Not acceptable"}"#.utf8)) == "Not acceptable")
         precondition(SitxClient.serverMessage(from: Data("<html>406</html>".utf8)) == nil)
         precondition(SitxClient.serverMessage(from: Data()) == nil)
+        precondition(SitxClient.serverMessage(from: Data(#"{"error":"access_denied","error_description":""}"#.utf8)) == "authorization was denied")
+        precondition(SitxClient.serverMessage(from: Data(#"{"error":"invalid_grant"}"#.utf8))?.contains("Re-auth") == true)
+        precondition(SitxAPI.sequesteredReason("not_sequestered") == nil && SitxAPI.sequesteredReason(nil) == nil)
+        precondition(SitxAPI.sequesteredReason(NSNull()) == nil)
+        precondition(SitxAPI.sequesteredReason("admin_approval_required_sequestered")?.contains("administrator approval") == true)
+        precondition(SitxAPI.sequesteredReason("over_plan_user_devices_sequestered")?.contains("device limit") == true)
+        precondition(SitxAPI.sequesteredReason("new_reason")?.contains("new_reason") == true)
+        let storedNow = ISO8601DateFormatter().date(from: "2026-10-05T12:00:00Z")!
+        let stored = Data("""
+        [{"resource_uid":"b-2","tak_group_tag":"grp","issued_at":"2026-10-05T11:59:00.000-05:00","stale_at":null,"ack_at":null,
+          "payload":"<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?><event uid=\\"two\\"/>"},
+         {"resource_uid":"a-1","tak_group_tag":"grp","issued_at":"2026-10-05T11:00:00Z","stale_at":"2026-10-06T00:00:00Z","ack_at":null,
+          "payload":"<event uid=\\"one\\"/>"},
+         {"resource_uid":"acked","tak_group_tag":"grp","issued_at":"2026-10-05T11:00:00Z","ack_at":"2026-10-05T11:01:00Z","payload":"<event/>"},
+         {"resource_uid":"stale","tak_group_tag":"grp","issued_at":"2026-10-05T11:00:00Z","stale_at":"2026-10-05T11:30:00Z","ack_at":null,"payload":"<event/>"},
+         {"resource_uid":"other","tak_group_tag":"other","issued_at":"2026-10-05T11:00:00Z","ack_at":null,"payload":"<event/>"},
+         {"resource_uid":"../x","tak_group_tag":"grp","ack_at":null,"payload":"<event/>"},
+         {"resource_uid":"html","tak_group_tag":"grp","ack_at":null,"payload":"<html/>"}]
+        """.utf8)
+        let storedMessages = SitxStoredMessage.parse(stored, flowTag: "grp", now: storedNow)
+        precondition(storedMessages.map(\.id) == ["a-1", "b-2"], "\(storedMessages)")
+        precondition(storedMessages[1].payload == "<event uid=\"two\"/>", storedMessages[1].payload)
+        precondition(SitxStoredMessage.parse(Data("{}".utf8), flowTag: "grp").isEmpty)
+        precondition(SitxStoredMessage.listURL(host: "https://team.sitx.io", flowTag: "tak-group-1")?.absoluteString
+                     == "https://team.sitx.io/api/v1/messages?tak_group_tag=tak-group-1")
+        print("PASS: sequestered status reasons, OAuth error text and Store and Forward message filtering")
         precondition(!SitxClient.isWatchOSStreamBlocked(URLError(.notConnectedToInternet)))
         print("PASS: Sit(x) HTTP error body reasons and watchOS stream-block detection")
         let relay = SitxRelayConfig(enabled: true, host: "https://team.sitx.io", flowTag: "flow-1",

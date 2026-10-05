@@ -11,6 +11,9 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     @Published private(set) var channelServers: [TAKChannelServer] = []
     @Published private(set) var channelsLoading = false
     @Published private(set) var channelError: String?
+    @Published private(set) var missionServers: [TAKMissionServer] = []
+    @Published private(set) var missionsLoading = false
+    @Published private(set) var missionError: String?
     @Published private(set) var mapRefreshing = false
     @Published private(set) var mapRefreshError: String?
     @Published private(set) var mapLastChecked: Date?
@@ -22,6 +25,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     var onSourceRefresh: ((UUID, Int) -> Void)?
     var onBridgeRestart: (() -> Void)?
     var onMapSnapshot: (([CompanionMapEvent], [UUID]) -> Void)?
+    /// A server's mission list loaded; its subscribed missions carry their current map items.
+    var onMissions: ((TAKMissionServer) -> Void)?
+    private var missionRequestInFlight = false
+    private var lastMissionRemovalError: String?
+    private var lastMissionSync: Date?
     private var sessionID: UUID?
 
     private let settings: AppSettings
@@ -195,6 +203,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             apply(reply)
             onMapSnapshot?(events, enabled)
             mapLastChecked = Date()
+            Task { await self.syncMissions() }
             mapRefreshError = reply.refreshError
             if reply.snapshotTruncated == true {
                 mapRefreshError = [mapRefreshError, "Map snapshot was size-limited; some contacts were omitted."]
@@ -225,6 +234,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         guard let incoming = message.sessionID, incoming != sessionID else { return }
         sessionID = incoming
         channelServers = []
+        missionServers = []
         onBridgeRestart?()
     }
 
@@ -291,6 +301,83 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         #endif
         await channelRequest(BridgeWire.Message(kind: .channelUpdate, serverID: serverID,
             channelBitPosition: bitPosition, channelActive: active, clientUID: SitxClient.deviceID()))
+    }
+
+    func refreshMissions(serverID: UUID? = nil) async {
+        await missionRequest(BridgeWire.Message(kind: .missions, serverID: serverID, clientUID: SitxClient.deviceID()))
+    }
+
+    func setMission(serverID: UUID, name: String, subscribed: Bool) async {
+        await missionRequest(BridgeWire.Message(kind: .missionUpdate, serverID: serverID, clientUID: SitxClient.deviceID(),
+                                                missionName: name, missionSubscribe: subscribed))
+    }
+
+    /// Removes an item from a mission on the server; returns an error to show, or nil on success.
+    func removeMissionItem(serverID: UUID, mission: String, uid: String) async -> String? {
+        var message = BridgeWire.Message(kind: .missionUpdate, serverID: serverID, clientUID: SitxClient.deviceID(),
+                                         missionName: mission)
+        message.missionRemoveUID = uid
+        return await missionRequest(message, quiet: true) ?? lastMissionRemovalError
+    }
+
+    /// Sends CoT to one server only (for example a Data Sync item update to its mission's server).
+    func send(_ xml: String, serverID: UUID) async throws {
+        guard isReady else { throw CompanionRefreshFailure.message("Companion is not connected to TAK.") }
+        let reply = try await request(BridgeWire.Message(kind: .cot, xml: xml, serverID: serverID))
+        guard reply.kind == .acknowledgement, reply.ready == true else {
+            throw CompanionRefreshFailure.message(reply.detail ?? "The mission's TAK server did not accept the update.")
+        }
+    }
+
+    /// Quietly reloads subscribed missions (adds, moves and removals) at most once a minute.
+    func syncMissions(hasSubscriptions: Bool = UserDefaults.standard.bool(forKey: WatchSessionModel.missionSubscriptionsFlagKey)) async {
+        guard hasSubscriptions, lastMissionSync.map({ Date().timeIntervalSince($0) >= 60 }) ?? true else { return }
+        await missionRequest(BridgeWire.Message(kind: .missions, clientUID: SitxClient.deviceID(), missionSync: true), quiet: true)
+    }
+
+    /// Returns an error description when the request could not run or failed; nil on success.
+    @discardableResult
+    private func missionRequest(_ message: BridgeWire.Message, quiet: Bool = false) async -> String? {
+        lastMissionRemovalError = nil
+        guard !missionRequestInFlight else { return "Data Sync is busy. Try again." }
+        guard isReady else {
+            let error = "Connect WearTAK Companion to a TAK server to use Data Sync."
+            if !quiet { missionError = error }
+            return error
+        }
+        missionRequestInFlight = true
+        if !quiet {
+            missionsLoading = true
+            missionError = nil
+        }
+        defer {
+            missionRequestInFlight = false
+            missionsLoading = false
+        }
+        do {
+            let reply = try await request(message, timeoutSeconds: 65)
+            guard reply.kind == .missions, let servers = reply.missionServers else {
+                throw CompanionRefreshFailure.message(reply.detail ?? "Update both WearTAK apps to use Data Sync.")
+            }
+            applySession(reply)
+            lastMissionSync = Date()
+            let previous = Dictionary(uniqueKeysWithValues: missionServers.map { ($0.id, $0) })
+            missionServers = servers.map { server in
+                if server.state == TAKMissionServer.selectState, let cached = previous[server.id], cached.isLoaded { return cached }
+                return server
+            }
+            for server in servers where server.isLoaded { onMissions?(server) }
+            if !quiet, let id = message.serverID { missionError = servers.first { $0.id == id }?.error }
+            if message.missionRemoveUID != nil {
+                lastMissionRemovalError = reply.detail
+                    ?? message.serverID.flatMap { id in servers.first { $0.id == id }?.error }
+            }
+            return nil
+        } catch {
+            let text = "Data Sync request failed: \(error.localizedDescription)"
+            if !quiet { missionError = text }
+            return text
+        }
     }
 
     #if DEBUG

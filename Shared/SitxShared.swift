@@ -42,10 +42,44 @@ enum SitxAPI {
         return components.string
     }
 
+    /// Explains a `sequestered_status` from a token response; nil when the device may take part in SA.
+    /// A sequestered device is authenticated but muted until the reason is resolved in the Sit(x) portal.
+    static func sequesteredReason(_ status: Any?) -> String? {
+        guard let status = status as? String, !status.isEmpty, status != "not_sequestered" else { return nil }
+        switch status {
+        case "over_plan_user_devices_sequestered":
+            return "Sit(x) device limit reached for this account; remove an old device in the Sit(x) portal"
+        case "activation_required_sequestered":
+            return "Sit(x) device needs activation; open Sequestered Devices in the Sit(x) portal"
+        case "over_plan_concurrent_connections_sequestered":
+            return "Sit(x) organization is at its active-device limit; retrying"
+        case "admin_approval_required_sequestered":
+            return "Sit(x) device awaiting administrator approval"
+        default:
+            return "Sit(x) device sequestered (\(status))"
+        }
+    }
+
+    /// Plain-language text for OAuth / device-flow error codes (RFC 6749 and RFC 8628).
+    static func oauthErrorMessage(_ code: String) -> String? {
+        switch code {
+        case "access_denied": return "authorization was denied"
+        case "expired_token": return "code expired; retry"
+        case "invalid_grant": return "authorization is no longer valid; select Re-auth"
+        case "invalid_client", "unauthorized_client": return "this app is not authorized for this Sit(x) organization"
+        case "invalid_scope": return "requested access is not permitted"
+        case "invalid_request", "unsupported_grant_type": return "Sit(x) rejected the request format"
+        default: return nil
+        }
+    }
+
     /// Extracts a short, human-readable reason from a Sit(x) error body.
     static func serverMessage(from data: Data) -> String? {
         var text: String?
-        if let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+        if let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+           let code = body["error"] as? String, let friendly = oauthErrorMessage(code) {
+            text = friendly
+        } else if let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
             for key in ["error_description", "message", "detail", "error"] {
                 if let value = body[key] as? String, !value.isEmpty { text = value; break }
                 if let values = body[key] as? [String], let first = values.first { text = first; break }
@@ -81,5 +115,50 @@ enum SitxAPI {
         var organization = displayHost(host)
         if organization.hasSuffix(".sitx.io") { organization.removeLast(".sitx.io".count) }
         return organization
+    }
+}
+
+/// A GeoChat or other CoT held by Sit(x) Store and Forward while this device was offline (`GET /api/v1/messages`).
+struct SitxStoredMessage: Equatable {
+    let id: String
+    let payload: String
+
+    /// At most 50 unacknowledged, unexpired messages for the group, oldest first. IDs are restricted to safe
+    /// path characters because they are used in the acknowledgement URL.
+    static func parse(_ data: Data, flowTag: String, now: Date = Date()) -> [Self] {
+        guard let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return [] }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        func date(_ value: Any?) -> Date? {
+            guard let text = value as? String else { return nil }
+            return formatter.date(from: text) ?? plain.date(from: text)
+        }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+        let messages = list.compactMap { item -> (Date, Self)? in
+            guard let id = item["resource_uid"] as? String, !id.isEmpty, id.count <= 128,
+                  id.unicodeScalars.allSatisfy(allowed.contains),
+                  let payload = item["payload"] as? String, !payload.isEmpty, payload.utf8.count <= 64_000,
+                  item["ack_at"] == nil || item["ack_at"] is NSNull else { return nil }
+            if let group = item["tak_group_tag"] as? String, group != flowTag { return nil }
+            if let stale = date(item["stale_at"]), stale <= now { return nil }
+            var event = payload.trimmingCharacters(in: .whitespacesAndNewlines)
+            if event.hasPrefix("<?xml"), let end = event.range(of: "?>") {
+                event = String(event[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            guard event.hasPrefix("<event") else { return nil }
+            return (date(item["issued_at"]) ?? .distantPast, Self(id: id, payload: event))
+        }
+        return messages.sorted { $0.0 < $1.0 }.suffix(50).map(\.1)
+    }
+
+    static func listURL(host: String, flowTag: String) -> URL? {
+        var components = URLComponents(string: host + "/api/v1/messages")
+        components?.queryItems = [URLQueryItem(name: "tak_group_tag", value: flowTag)]
+        return components?.url
+    }
+
+    static func acknowledgeURL(host: String, id: String) -> URL? {
+        URL(string: host + "/api/v1/messages/" + id)
     }
 }

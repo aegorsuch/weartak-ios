@@ -29,7 +29,7 @@ struct SettingsView: View {
                 AlertingPreferencesView(settings: settings)
             }
             NavigationLink("Tool Preferences") {
-                ToolPreferencesView(settings: settings)
+                ToolPreferencesView(model: model, settings: settings)
             }
             Text("Version \(versionLabel)")
                 .foregroundStyle(.secondary)
@@ -987,23 +987,35 @@ private struct AtmosphericPressureAlertsView: View {
 }
 
 private struct ToolPreferencesView: View {
+    @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
 
     var body: some View {
         List {
-            Toggle(isOn: $settings.chatEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Chat")
-                    Text(settings.chatEnabled ? "On" : "Off")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            NavigationLink("Navigation") {
+            NavigationLink("Bloodhound") {
                 BloodhoundPreferencesView(settings: settings)
+            }
+            NavigationLink("Plugins") {
+                PluginsView(model: model, settings: settings)
             }
         }
         .navigationTitle("Tool Preferences")
+    }
+}
+
+private struct PluginsView: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            NavigationLink {
+                DataSyncMenuView(model: model, client: model.companionClient, settings: settings)
+            } label: {
+                Label("DataSync", systemImage: "arrow.triangle.2.circlepath")
+            }
+        }
+        .navigationTitle("Plugins")
     }
 }
 
@@ -1037,6 +1049,6 @@ private struct BloodhoundPreferencesView: View {
                 LabeledContent("Bloodhound Proximity Intensity", value: settings.bloodhoundProximityIntensity)
             }
         }
-        .navigationTitle("Navigation")
+        .navigationTitle("Bloodhound")
     }
 }

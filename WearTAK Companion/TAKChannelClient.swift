@@ -36,12 +36,20 @@ final class TAKChannelClient {
         return desired
     }
 
-    private func execute(path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil) async throws -> Data {
+    /// Data Sync (Mission API) request; `path` is relative to `/Marti/api` and already percent-encoded.
+    func missionRequest(path: String, method: String = "GET", query: [URLQueryItem] = []) async throws -> Data {
+        try await execute(path: "/Marti/api" + path, method: method, query: query, label: "Data Sync API",
+                          maximumBytes: 4_194_304, encodedPath: true)
+    }
+
+    private func execute(path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil,
+                         label: String = "Channels API", maximumBytes: Int = 1_048_576,
+                         encodedPath: Bool = false) async throws -> Data {
         var components = URLComponents()
         components.scheme = "https"
         components.host = host
         components.port = 8443
-        components.path = path
+        if encodedPath { components.percentEncodedPath = path } else { components.path = path }
         if !query.isEmpty { components.queryItems = query }
         guard let url = components.url else { throw CompanionFailure.message("Invalid channel server URL.") }
         var request = URLRequest(url: url)
@@ -51,21 +59,21 @@ final class TAKChannelClient {
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         let data: Data
         let response: URLResponse
-        let endpoint = "Channels API https://\(host):8443\(path)"
+        let endpoint = "\(label) https://\(host):8443\(path)"
         trustDelegate.diagnostics.reset()
         do {
             (data, response) = try await session.data(for: request)
         } catch {
             throw CompanionFailure.message(trustDelegate.diagnostics.message(endpoint: endpoint, error: error))
         }
-        guard data.count <= 1_048_576, let http = response as? HTTPURLResponse else {
+        guard data.count <= maximumBytes, let http = response as? HTTPURLResponse else {
             throw TAKChannelGroups.ChannelError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
             throw CompanionFailure.message("\(endpoint): HTTP \(http.statusCode).")
         }
         Logger(subsystem: "com.aegorsuch.weartak", category: "ChannelsTLS")
-            .notice("Channels API response: HTTP \(http.statusCode)")
+            .notice("\(label, privacy: .public) response: HTTP \(http.statusCode)")
         return data
     }
 }
