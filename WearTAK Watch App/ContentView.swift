@@ -43,7 +43,7 @@ struct ContentView: View {
         .sheet(isPresented: $showPointTypePicker) {
             NavigationStack {
                 PointTypePickerView(model: model) { kind in
-                    showToast("\(kind.rawValue) point dropped")
+                    showToast(model.offlineNotice ?? "\(kind.rawValue) point dropped")
                 }
             }
         }
@@ -79,6 +79,17 @@ struct ContentView: View {
         }
         .onChange(of: physiology.readingDate, initial: true) { _, date in
             model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent, measuredAt: date)
+        }
+        .onChange(of: model.offlineNotice) { _, notice in
+            if let notice { showToast(notice) }
+        }
+        .alert("Stored events", isPresented: Binding(
+            get: { model.offlineExpiryNotice != nil },
+            set: { if !$0 { model.offlineExpiryNotice = nil } }
+        )) {
+            Button("OK", role: .cancel) { model.offlineExpiryNotice = nil }
+        } message: {
+            Text(model.offlineExpiryNotice ?? "")
         }
         .onChange(of: physiology.activeAutomaticAlert) { _, category in
             model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent,
@@ -169,6 +180,11 @@ private struct WatchDashboardView: View {
                         .frame(height: rowHeight * 0.20)
                     navigationRow(small: small)
                         .frame(height: rowHeight * 0.24)
+                    if model.queuedEventCount > 0 {
+                        Text("\(model.queuedEventCount) stored for forwarding")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
                 }
                 .padding(.horizontal, 4)
                 .padding(.top, 4)
@@ -1466,7 +1482,7 @@ private struct ContactChatView: View {
             Button(sending ? "Sending..." : "Send", action: sendMessage)
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-            if sent { Text("Accepted by transport; recipient delivery is not confirmed.").font(.caption) }
+            if sent { Text(model.offlineNotice ?? "Chat stored for forwarding.").font(.caption) }
             Section("Quick Messages") {
                 ForEach(TAKChatMessage.quickMessages, id: \.self) { message in
                     Button(message) {

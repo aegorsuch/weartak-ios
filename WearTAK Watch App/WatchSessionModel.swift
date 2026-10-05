@@ -128,21 +128,13 @@ struct ContactConversation: Hashable, Identifiable {
     var id: Self { self }
 }
 
-enum ContactChatRoute: Hashable {
+enum ContactChatRoute: Hashable, Codable {
     case companion(UUID), multicast, sitx
 }
 
 private enum ContactChatFailure: LocalizedError {
     case message(String)
     var errorDescription: String? { switch self { case .message(let text): return text } }
-}
-
-private struct PendingMapItemReply {
-    let recipientUID: String
-    let recipientCallSign: String
-    let text: String
-    let messageID: String
-    let createdAt: Date
 }
 
 enum PLIReportingRoute {
@@ -183,6 +175,29 @@ struct UnconfiguredTAKTransport: TAKTransport {
 @MainActor
 final class WatchSessionModel: NSObject, ObservableObject {
     private let chatLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "GeoChat")
+    private var offlineOutbox: OfflineOutbox?
+    private var forwardingOffline = false
+    private var lastOfflineAttempt: Date?
+    @Published var offlineNotice: String?
+    @Published var offlineExpiryNotice: String?
+    @Published private(set) var queuedEventCount = 0
+    static let markerStoredMessage = "Marker details stored and will be sent when connected and/or location is updated"
+
+    private struct OfflineOperation: Codable {
+        enum Kind: String, Codable { case marker, delete, alert, chat }
+        let kind: Kind
+        let scope: String
+        var marker: WatchMarker?
+        var markerID: UUID?
+        var markerKind: MarkerKind?
+        var title: String?
+        var remark: String?
+        var alertState: EmergencyState?
+        var alertType: String?
+        var xml: String?
+        var route: ContactChatRoute?
+        var recipientUID: String?
+    }
     private static let markerStorageKey = "WearTAK.droppedPoints"
     private static let companionCacheKey = "WearTAK.cachedCompanionMap"
     private static let missionItemsKey = "WearTAK.dataSyncMissionItems"
@@ -212,8 +227,6 @@ final class WatchSessionModel: NSObject, ObservableObject {
     /// Latest CoT `time` seen per point, so a sender's re-send notifies again but reconnect replays do not.
     private var pointSendTimes: [String: Date] = [:]
     private static let pointSendTimesKey = "WearTAK.incomingPointSendTimes"
-    private var pendingMapItemReplies: [PendingMapItemReply] = []
-    private static let mapItemReplyLifetime: TimeInterval = 24 * 60 * 60
     @Published private var chatInbox = TAKChatInbox<ContactConversation>()
 
     var contactMessages: [ContactConversation: [TAKChatMessage]] { chatInbox.messages }
@@ -261,10 +274,6 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var lastFixRequestAt: Date?
     private var incomingEntityTask: Task<Void, Never>?
     private var incomingPruneTimer: Timer?
-    private var automaticAlertTask: Task<Void, Never>?
-    private var deliveredAutomaticAlert: AutomaticAlertCategory?
-    private var environmentalAlertTasks: [EnvironmentalAlertCategory: Task<Void, Never>] = [:]
-    private var deliveredEnvironmentalAlerts: Set<EnvironmentalAlertCategory> = []
     private var bloodhoundProximityNotified = false
     private var isUpdatingHeading = false
     private var lastPLISentAt: Date?
@@ -287,6 +296,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
         self.transport = transport ?? client
         self.settings = settings
         super.init()
+        do {
+            offlineOutbox = try OfflineOutbox()
+            expireOfflineEvents()
+        } catch { reportOfflineError(error) }
         callSignSubscription = settings.$callSign.removeDuplicates().dropFirst().sink { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -300,6 +313,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
         }
         selectedMarkerKind = MarkerKind(rawValue: UserDefaults.standard.string(forKey: "WearTAK.lastMarkerKind") ?? "") ?? .unknown
+        if let savedAlert = UserDefaults.standard.string(forKey: "WearTAK.manualAlertType") {
+            activeAlertType = ManualAlertType(rawValue: savedAlert)
+        }
         sitxClient.onReady = { [weak self] in self?.connect() }
         sitxClient.onDisconnected = { [weak self] in
             guard let self, !self.sitxClient.hasReadyOutput else { return }
@@ -453,6 +469,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         reportingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
+                self?.forwardOfflineEvents()
                 guard let self, self.isAppActive, self.connectionState == .connected,
                       self.transport.pliReportingRoute == .standaloneSitx else { return }
                 if let location = self.lastLocation, abs(location.timestamp.timeIntervalSinceNow) < 120 {
@@ -468,6 +485,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func setAppActive(_ active: Bool) {
         isAppActive = active
         if active {
+            forwardOfflineEvents()
             pruneIncomingEntities()
             startHeadingUpdates()
         } else {
@@ -570,8 +588,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func dropMarker() -> Bool {
-        guard let coordinate = lastLocation?.coordinate else { return false }
-        return addMarker(at: coordinate, kind: selectedMarkerKind, title: defaultPointTitle(), remark: "")
+        return storeMarker(at: usableMarkerCoordinate, kind: selectedMarkerKind, title: defaultPointTitle(), remark: "")
     }
 
     func defaultPointTitle(at date: Date = Date()) -> String {
@@ -587,9 +604,32 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @discardableResult
     func addMarker(at coordinate: CLLocationCoordinate2D, kind: MarkerKind, title: String, remark: String) -> Bool {
         guard CLLocationCoordinate2DIsValid(coordinate) else { return false }
+        return storeMarker(at: coordinate, kind: kind, title: title, remark: remark)
+    }
+
+    var usableMarkerCoordinate: CLLocationCoordinate2D? {
+        guard let location = lastLocation, location.horizontalAccuracy >= 0,
+              abs(location.timestamp.timeIntervalSinceNow) < 120 else { return nil }
+        return location.coordinate
+    }
+
+    @discardableResult
+    func storeMarker(at coordinate: CLLocationCoordinate2D?, kind: MarkerKind, title: String, remark: String) -> Bool {
+        if let coordinate, !CLLocationCoordinate2DIsValid(coordinate) {
+            offlineNotice = "Invalid marker coordinates."
+            return false
+        }
         selectedMarkerKind = kind
+        let id = UUID()
+        guard let coordinate else {
+            let operation = OfflineOperation(kind: .marker, scope: offlineScope, markerID: id,
+                                             markerKind: kind, title: title, remark: remark)
+            guard storeOffline(operation, key: "marker-\(id)", notice: Self.markerStoredMessage) else { return false }
+            requestLocation()
+            return true
+        }
         let marker = WatchMarker(
-            id: UUID(),
+            id: id,
             kind: kind,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
@@ -597,62 +637,66 @@ final class WatchSessionModel: NSObject, ObservableObject {
             title: title,
             remark: remark
         )
+        guard storeOffline(OfflineOperation(kind: .marker, scope: offlineScope, marker: marker,
+                                            xml: sitxClient.markerXML(marker)),
+                           key: "marker-\(marker.id)", notice: Self.markerStoredMessage) else { return false }
         markers.insert(marker, at: 0)
         saveMarkers()
-        Task {
-            try? await transport.sendMarker(marker)
-        }
         return true
     }
 
     func updateMarker(id: UUID, kind: MarkerKind, title: String, remark: String) {
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        var marker = markers[index]
+        marker.kind = kind
+        marker.title = title
+        marker.remark = remark
+        guard storeOffline(OfflineOperation(kind: .marker, scope: offlineScope, marker: marker,
+                                            xml: sitxClient.markerXML(marker)),
+                           key: "marker-\(id)", notice: Self.markerStoredMessage) else { return }
         if markers[index].kind != kind { selectedMarkerKind = kind }
-        markers[index].kind = kind
-        markers[index].title = title
-        markers[index].remark = remark
-        let marker = markers[index]
+        markers[index] = marker
         saveMarkers()
-        Task {
-            try? await transport.sendMarker(marker)
-        }
     }
 
     func moveMarker(id: UUID, to coordinate: CLLocationCoordinate2D) {
         guard CLLocationCoordinate2DIsValid(coordinate),
               let index = markers.firstIndex(where: { $0.id == id }) else { return }
-        markers[index].latitude = coordinate.latitude
-        markers[index].longitude = coordinate.longitude
-        let marker = markers[index]
+        var marker = markers[index]
+        marker.latitude = coordinate.latitude
+        marker.longitude = coordinate.longitude
+        guard storeOffline(OfflineOperation(kind: .marker, scope: offlineScope, marker: marker,
+                                            xml: sitxClient.markerXML(marker)),
+                           key: "marker-\(id)", notice: Self.markerStoredMessage) else { return }
+        markers[index] = marker
         saveMarkers()
-        Task {
-            try? await transport.sendMarker(marker)
-        }
     }
 
     func deleteMarker(id: UUID) {
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        guard storeOffline(OfflineOperation(kind: .delete, scope: offlineScope,
+                                            xml: sitxClient.deleteMarkerXML(uid: id.uuidString)),
+                           key: "marker-\(id)", notice: "Marker deletion stored and will be sent when connected") else { return }
         markers.remove(at: index)
         if bloodhoundTargetID == id {
             bloodhoundTargetID = nil
             bloodhoundMapItemID = nil
         }
         saveMarkers()
-        Task {
-            try? await transport.deleteMarker(uid: id.uuidString)
-        }
     }
 
     func clearAllPoints() {
         let ids = markers.map(\.id)
-        markers.removeAll()
-        bloodhoundTargetID = nil
-        bloodhoundMapItemID = nil
-        saveMarkers()
-        Task {
-            for id in ids {
-                try? await transport.deleteMarker(uid: id.uuidString)
-            }
+        for id in ids { deleteMarker(id: id) }
+        guard let offlineOutbox else { return }
+        for entry in offlineOutbox.entries {
+            do {
+                let operation = try JSONDecoder().decode(OfflineOperation.self, from: entry.payload)
+                guard operation.kind == .marker, operation.marker == nil, let id = operation.markerID else { continue }
+                _ = storeOffline(OfflineOperation(kind: .delete, scope: operation.scope,
+                                                   xml: sitxClient.deleteMarkerXML(uid: id.uuidString)),
+                                  key: entry.key, notice: "Marker deletion stored and will be sent when connected")
+            } catch { reportOfflineError(error) }
         }
     }
 
@@ -707,12 +751,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let item = incomingMapPoints.first(where: { $0.id == id }) else {
             throw ContactChatFailure.message("This map item is no longer available.")
         }
+        try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
         bloodhoundTargetID = nil
         bloodhoundContactID = nil
         bloodhoundMapItemID = id
         bloodhoundProximityNotified = false
         requestLocation()
-        try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
     }
 
     /// Bloodhound from the map point menu. Points sent directly by a user reply "Roger" like RGR;
@@ -739,66 +783,35 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func markInPosition() async throws {
         let item = bloodhoundMapItemID.flatMap { id in incomingMapPoints.first { $0.id == id } }
+        if let item {
+            try await sendMapItemReply(item, text: "In Position at \(mapItemTitle(item))")
+        }
         bloodhoundTargetID = nil
         bloodhoundContactID = nil
         bloodhoundMapItemID = nil
         bloodhoundProximityNotified = false
         guard let item else { return }
         removeIncomingPoint(item.id)
-        try await sendMapItemReply(item, text: "In Position at \(mapItemTitle(item))")
     }
 
-    /// Sends now on the best known route. If the sender isn't currently visible, the reply is also queued and
-    /// resent with the same message ID once their PLI arrives, so receivers de-duplicate it.
+    /// Retains the original recipient and GeoChat message ID until its route accepts the message.
     private func sendMapItemReply(_ item: IncomingMapEntity, text: String) async throws {
         guard settings.chatEnabled else { throw ContactChatFailure.message("Enable Chat in settings.") }
         guard let senderUID = item.senderUID, !senderUID.isEmpty, senderUID != SitxClient.deviceID() else {
             throw ContactChatFailure.message("This point has no sender to reply to.")
         }
         let sender = incomingEntities.first { $0.id == senderUID && $0.isUser && $0.chatRoute != nil }
-        let reply = PendingMapItemReply(recipientUID: senderUID, recipientCallSign: sender?.callSign ?? senderUID,
-                                        text: text, messageID: UUID().uuidString, createdAt: Date())
-        if let sender, let route = sender.chatRoute, chatUnavailableReason(for: sender) == nil {
-            try await deliverMapItemReply(reply, route: route)
-            return
-        }
-        pendingMapItemReplies.append(reply)
-        chatLogger.notice("Map item reply queued until sender PLI is seen")
-        guard let route = item.chatRoute else { return }
-        do { try await deliverMapItemReply(reply, route: route) }
-        catch { chatLogger.error("Map item reply best-effort send failed: \(error.localizedDescription, privacy: .public)") }
-    }
-
-    private func deliverMapItemReply(_ reply: PendingMapItemReply, route: ContactChatRoute) async throws {
         let ownUID = SitxClient.deviceID()
         let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
             senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
-            recipientUID: reply.recipientUID, recipientCallSign: reply.recipientCallSign,
-            text: reply.text, messageID: reply.messageID)
-        switch route {
-        case .companion(let serverID): try await companionClient.sendChat(xml, serverID: serverID)
-        case .multicast: try await multicastClient.send(xml)
-        case .sitx: try await sitxClient.sendContactChat(xml)
+            recipientUID: senderUID, recipientCallSign: sender?.callSign ?? senderUID, text: text)
+        let route = sender?.chatRoute ?? item.chatRoute
+        guard storeOffline(OfflineOperation(kind: .chat, scope: offlineScope, xml: xml,
+                                            route: route, recipientUID: senderUID),
+                           key: "chat-\(UUID())", notice: "Chat stored and will be sent when connected") else {
+            throw ContactChatFailure.message(offlineNotice ?? "Unable to store reply.")
         }
-        chatLogger.notice("Map item reply accepted by transport")
-        if let message = TAKChatMessage.parse(xml, ownUID: ownUID) { recordChat(message, route: route) }
-    }
-
-    private func flushMapItemReplies(to sender: IncomingMapEntity) {
-        pendingMapItemReplies.removeAll { Date().timeIntervalSince($0.createdAt) > Self.mapItemReplyLifetime }
-        guard sender.isUser, let route = sender.chatRoute, chatUnavailableReason(for: sender) == nil else { return }
-        let due = pendingMapItemReplies.filter { $0.recipientUID == sender.id }
-        guard !due.isEmpty else { return }
-        pendingMapItemReplies.removeAll { $0.recipientUID == sender.id }
-        Task {
-            for reply in due {
-                do { try await deliverMapItemReply(reply, route: route) }
-                catch {
-                    pendingMapItemReplies.append(reply)
-                    chatLogger.error("Queued map item reply failed: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        }
+        if let route, let message = TAKChatMessage.parse(xml, ownUID: ownUID) { recordChat(message, route: route) }
     }
 
     private func mapItemTitle(_ item: IncomingMapEntity) -> String {
@@ -808,15 +821,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func chatUnavailableReason(for contact: IncomingMapEntity) -> String? {
         if !settings.chatEnabled { return "Enable Chat in settings." }
         if !contact.isUser { return "Chat is available for user contacts only." }
-        guard let route = contact.chatRoute else { return "The contact's chat transport is unknown." }
-        switch route {
-        case .companion:
-            if !companionClient.isReady { return "Connect Companion to the contact's TAK server to send chat." }
-        case .multicast:
-            if !multicastClient.isReady { return "Connect local TAK multicast to send chat." }
-        case .sitx:
-            if !sitxClient.isSitxConnected { return "Connect to this contact's Sit(x) source to send chat." }
-        }
+        guard contact.chatRoute != nil else { return "The contact's chat transport is unknown." }
         return nil
     }
 
@@ -832,14 +837,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
             senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
             recipientUID: uid, recipientCallSign: contact?.callSign ?? chatTitle(for: conversation), text: text)
-        switch route {
-        case .companion(let serverID): try await companionClient.sendChat(xml, serverID: serverID)
-        case .multicast: try await multicastClient.send(xml)
-        case .sitx: try await sitxClient.sendContactChat(xml)
-        }
-        chatLogger.notice("Outgoing GeoChat accepted by transport")
         guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
             throw ContactChatFailure.message("Unable to record the outgoing chat message.")
+        }
+        guard storeOffline(OfflineOperation(kind: .chat, scope: offlineScope, xml: xml,
+                                            route: route, recipientUID: uid),
+                           key: "chat-\(message.id)", notice: "Chat stored and will be sent when connected") else {
+            throw ContactChatFailure.message(offlineNotice ?? "Unable to store chat.")
         }
         recordChat(message, route: route)
     }
@@ -942,7 +946,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
             if isNewerSend, let sent = payload.sentAt { recordPointSend(payload.uid, at: sent) }
         }
-        if entity.isUser, !pendingMapItemReplies.isEmpty { flushMapItemReplies(to: entity) }
+        if entity.isUser { lastOfflineAttempt = nil; forwardOfflineEvents() }
         pruneIncomingEntities(now: now)
         capLiveEntities()
     }
@@ -1151,20 +1155,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func startEmergencyAlert(type: ManualAlertType) {
         guard activeAlertType == nil else { return }
+        guard storeAlert(state: .alert, type: type.rawValue) else { return }
         activeAlertType = type
+        UserDefaults.standard.set(type.rawValue, forKey: "WearTAK.manualAlertType")
         publishAlertReportingState()
-        Task {
-            try? await transport.sendEmergencyAlert(state: .alert, type: type.rawValue)
-        }
     }
 
     func cancelEmergencyAlert() {
         guard let type = activeAlertType else { return }
+        guard storeAlert(state: .cancel, type: type.rawValue) else { return }
         activeAlertType = nil
+        UserDefaults.standard.removeObject(forKey: "WearTAK.manualAlertType")
         publishAlertReportingState()
-        Task {
-            try? await transport.sendEmergencyAlert(state: .cancel, type: type.rawValue)
-        }
     }
 
     func updateAutomaticAlert(_ category: AutomaticAlertCategory?) {
@@ -1177,28 +1179,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
             WKInterfaceDevice.current().play(.notification)
         }
 
-        let pending = automaticAlertTask
-        automaticAlertTask = Task {
-            await pending?.value
-            if let previousCategory, previousCategory != category {
-                do {
-                    try await transport.sendEmergencyAlert(state: .cancel, type: previousCategory.rawValue)
-                    self.deliveredAutomaticAlert = nil
-                } catch {
-                    automaticAlertDeliveryFailed = true
-                }
-            }
-            if let category, category == activeAutomaticAlert, deliveredAutomaticAlert == nil {
-                do {
-                    try await transport.sendEmergencyAlert(state: .alert, type: category.rawValue)
-                    deliveredAutomaticAlert = category
-                    automaticAlertDeliveryFailed = false
-                } catch {
-                    automaticAlertDeliveryFailed = true
-                }
-            } else if category == nil {
-                automaticAlertDeliveryFailed = false
-            }
+        if let previousCategory, previousCategory != category {
+            automaticAlertDeliveryFailed = !storeAlert(state: .cancel, type: previousCategory.rawValue)
+        }
+        if let category {
+            automaticAlertDeliveryFailed = !storeAlert(state: .alert, type: category.rawValue) || !sitxClient.hasReadyOutput
         }
     }
 
@@ -1218,20 +1203,128 @@ final class WatchSessionModel: NSObject, ObservableObject {
             automaticAlertDeliveryFailed = true
         }
 
-        let pending = environmentalAlertTasks[category]
-        environmentalAlertTasks[category] = Task {
-            await pending?.value
-            do {
-                if active {
-                    try await transport.sendEmergencyAlert(state: .alert, type: category.rawValue)
-                    deliveredEnvironmentalAlerts.insert(category)
-                    automaticAlertDeliveryFailed = false
-                } else {
-                    try await transport.sendEmergencyAlert(state: .cancel, type: category.rawValue)
-                    deliveredEnvironmentalAlerts.remove(category)
+        automaticAlertDeliveryFailed = !storeAlert(state: active ? .alert : .cancel, type: category.rawValue)
+            || (active && !sitxClient.hasReadyOutput)
+    }
+
+    private var offlineScope: String {
+        "\(settings.relayProvider)|\(settings.sitxEnabled)|\(settings.sitxApiHost)|\(sitxClient.selectedGroupID)|\(settings.multicastEnabled)|\(settings.multicastAddress)|\(settings.multicastPort)"
+    }
+
+    private func reportOfflineError(_ error: Error) {
+        offlineNotice = error.localizedDescription
+        chatLogger.error("Offline forwarding: \(error.localizedDescription, privacy: .public)")
+    }
+
+    private func expireOfflineEvents() {
+        guard let offlineOutbox else { return }
+        do {
+            if try offlineOutbox.expire() > 0 {
+                offlineExpiryNotice = "Unsent events expired after 24 hours."
+                chatLogger.warning("Unsent offline events expired after 24 hours")
+            }
+            queuedEventCount = offlineOutbox.entries.count
+        } catch { reportOfflineError(error) }
+    }
+
+    @discardableResult
+    private func storeOffline(_ operation: OfflineOperation, key: String, notice: String) -> Bool {
+        guard let offlineOutbox else {
+            reportOfflineError(OfflineOutbox.Failure.unreadable)
+            return false
+        }
+        do {
+            expireOfflineEvents()
+            try offlineOutbox.enqueue(key: key, payload: JSONEncoder().encode(operation))
+            queuedEventCount = offlineOutbox.entries.count
+            offlineNotice = notice
+            lastOfflineAttempt = nil
+            forwardOfflineEvents()
+            return true
+        } catch {
+            reportOfflineError(error)
+            return false
+        }
+    }
+
+    private func storeAlert(state: EmergencyState, type: String) -> Bool {
+        let xml = usableMarkerCoordinate != nil || state == .cancel ? sitxClient.emergencyXML(state: state, type: type) : nil
+        return storeOffline(OfflineOperation(kind: .alert, scope: offlineScope, alertState: state,
+                                             alertType: type, xml: xml),
+                            key: "alert-\(type)", notice: "\(state == .cancel ? "Cancel alert" : "Alert") stored and will be sent when connected and/or location is updated")
+    }
+
+    private func routeReady(_ route: ContactChatRoute) -> Bool {
+        switch route {
+        case .companion: return companionClient.isReady
+        case .multicast: return multicastClient.isReady
+        case .sitx: return sitxClient.isSitxConnected
+        }
+    }
+
+    private func forwardOfflineEvents() {
+        guard isAppActive, !forwardingOffline, let offlineOutbox,
+              lastOfflineAttempt.map({ Date().timeIntervalSince($0) >= 5 }) ?? true else { return }
+        expireOfflineEvents()
+        guard !offlineOutbox.entries.isEmpty else { return }
+        forwardingOffline = true
+        lastOfflineAttempt = Date()
+        Task {
+            defer { forwardingOffline = false; queuedEventCount = offlineOutbox.entries.count }
+            for entry in offlineOutbox.entries {
+                guard isAppActive else { return }
+                guard Date().timeIntervalSince(entry.createdAt) < OfflineOutbox.retention else {
+                    expireOfflineEvents()
+                    continue
                 }
-            } catch {
-                automaticAlertDeliveryFailed = true
+                guard offlineOutbox.entries.contains(where: { $0.id == entry.id }) else { continue }
+                do {
+                    var operation = try JSONDecoder().decode(OfflineOperation.self, from: entry.payload)
+                    guard operation.scope == offlineScope else {
+                        offlineNotice = "Stored events are waiting for their original network configuration."
+                        continue
+                    }
+                    if operation.xml == nil, operation.kind == .marker,
+                       let id = operation.markerID, let kind = operation.markerKind,
+                       let coordinate = usableMarkerCoordinate {
+                        let marker = WatchMarker(id: id, kind: kind, latitude: coordinate.latitude,
+                            longitude: coordinate.longitude, createdAt: entry.createdAt,
+                            title: operation.title, remark: operation.remark)
+                        operation.marker = marker
+                        operation.xml = sitxClient.markerXML(marker)
+                        try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
+                        if !markers.contains(where: { $0.id == id }) { markers.insert(marker, at: 0); saveMarkers() }
+                    }
+                    if operation.xml == nil, operation.kind == .alert,
+                       let state = operation.alertState, let type = operation.alertType,
+                       usableMarkerCoordinate != nil {
+                        operation.xml = sitxClient.emergencyXML(state: state, type: type)
+                        try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
+                    }
+                    guard let xml = operation.xml else { continue }
+                    if operation.kind == .chat {
+                        if operation.route == nil, let recipient = operation.recipientUID,
+                           let route = incomingEntities.first(where: { $0.id == recipient && $0.isUser })?.chatRoute {
+                            operation.route = route
+                            try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
+                        }
+                        guard let route = operation.route else { continue }
+                        guard routeReady(route) else { continue }
+                        switch route {
+                        case .companion(let server): try await companionClient.sendChat(xml, serverID: server)
+                        case .multicast: try await multicastClient.send(xml)
+                        case .sitx: try await sitxClient.sendContactChat(xml)
+                        }
+                    } else {
+                        guard sitxClient.hasReadyOutput else { continue }
+                        try await sitxClient.sendQueuedEvent(xml)
+                    }
+                    try offlineOutbox.acknowledge(id: entry.id)
+                    offlineNotice = "Accepted by transport; recipient delivery is not confirmed."
+                } catch {
+                    reportOfflineError(error)
+                    // Keep the original payload/ID for retry. Other destinations can still make progress.
+                }
             }
         }
     }
@@ -1258,6 +1351,8 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         lastLocation = location
         sitxClient.currentLocation = location
+        lastOfflineAttempt = nil
+        forwardOfflineEvents()
         checkBloodhoundProximity(at: location)
         guard connectionState == .connected else { return }
         sendPLIIfDue(for: location)

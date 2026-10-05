@@ -500,7 +500,7 @@ struct NetworkPreferencesView: View {
                 Text("TAK Relay (\(settings.relayProvider.rawValue))")
             }
             NavigationLink {
-                MulticastPreferencesView(settings: settings)
+                MulticastPreferencesView(settings: settings, client: model.multicastClient, model: model)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("TAK SA Multicast")
@@ -526,12 +526,29 @@ struct NetworkPreferencesView: View {
 
 private struct MulticastPreferencesView: View {
     @ObservedObject var settings: AppSettings
+    @ObservedObject var client: MulticastTAKTransport
+    @ObservedObject var model: WatchSessionModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         List {
             Toggle("TAK SA Multicast", isOn: $settings.multicastEnabled)
                 .disabled(!AppSettings.isMulticastAddress(settings.multicastAddress))
+            Section("Runtime Status") {
+                Text(client.status)
+                    .foregroundStyle(client.isReady ? .green : .orange)
+                LabeledContent("Datagrams sent", value: "\(client.sentDatagrams)")
+                LabeledContent("Datagrams received", value: "\(client.receivedDatagrams)")
+                if let date = client.lastSentAt {
+                    LabeledContent("Last local send") { Text(date, style: .time) }
+                }
+                if let error = client.lastSendError {
+                    Text(error).font(.caption).foregroundStyle(.orange)
+                }
+                LabeledContent("Stored events", value: "\(model.queuedEventCount)")
+                Text("Sent means accepted locally, not received by TAK.")
+                    .font(.caption)
+            }
             NavigationLink {
                 MulticastAddressView(settings: settings)
             } label: {

@@ -6,7 +6,6 @@ struct PointTypePickerView: View {
     let onDrop: (MarkerKind) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showTools = false
-    @State private var locationUnavailable = false
     @State private var dropDraft: PointDropDraft?
 
     var body: some View {
@@ -63,9 +62,6 @@ struct PointTypePickerView: View {
                 }
             }
         }
-        .alert("Location unavailable", isPresented: $locationUnavailable) {
-            Button("OK", role: .cancel) {}
-        }
         .onAppear {
             #if DEBUG
             showTools = ProcessInfo.processInfo.arguments.contains("--preview-marker-tools")
@@ -83,13 +79,7 @@ struct PointTypePickerView: View {
         let shape = PointTypeSector(start: .degrees(angle - 43), end: .degrees(angle + 43))
         return Button {
             guard dropDraft == nil else { return }
-            guard let coordinate = model.lastLocation?.coordinate,
-                  CLLocationCoordinate2DIsValid(coordinate) else {
-                model.requestLocation()
-                locationUnavailable = true
-                return
-            }
-            dropDraft = PointDropDraft(coordinate: coordinate, kind: kind)
+            dropDraft = PointDropDraft(coordinate: model.usableMarkerCoordinate, kind: kind)
         } label: {
             shape.fill(Color(white: 0.26))
                 .overlay {
@@ -110,7 +100,7 @@ struct PointTypePickerView: View {
 
 struct PointDropDraft: Identifiable {
     let id = UUID()
-    let coordinate: CLLocationCoordinate2D
+    let coordinate: CLLocationCoordinate2D?
     let kind: MarkerKind
 }
 
@@ -126,13 +116,17 @@ struct PointDropConfirmationView: View {
 
     var body: some View {
         List {
+            if draft.coordinate == nil {
+                Text(WatchSessionModel.markerStoredMessage)
+                    .font(.caption)
+            }
             TextField("Title (optional)", text: $title)
             TextField("Remark (optional)", text: $remark)
             Button("Drop") {
                 guard !isDropping else { return }
                 isDropping = true
                 let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard model.addMarker(
+                guard model.storeMarker(
                     at: draft.coordinate,
                     kind: draft.kind,
                     title: trimmedTitle.isEmpty ? model.defaultPointTitle() : trimmedTitle,
@@ -149,8 +143,10 @@ struct PointDropConfirmationView: View {
             Button("Cancel", role: .cancel) { dismiss() }
         }
         .navigationTitle("Drop \(draft.kind.rawValue)")
-        .alert("Location unavailable", isPresented: $locationUnavailable) {
+        .alert("Unable to store marker", isPresented: $locationUnavailable) {
             Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.offlineNotice ?? "Unable to store marker details.")
         }
     }
 }

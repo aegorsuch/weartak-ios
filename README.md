@@ -687,8 +687,10 @@ cannot send to an IP multicast group. The transport joins the selected group
 on the watch's WiFi interface, publishes PLI/alerts/points, and displays
 incoming nonexpired CoT users and points on the map. Enabled means the
 preference is on, not that delivery is confirmed. UDP has no receiver
-acknowledgment. Runtime readiness and errors are tracked internally; there is
-no State row in the multicast submenu.
+acknowledgment. The Runtime Status section shows readiness/errors, local
+datagrams sent/received since launch, the last local send time/error, and the
+stored-event count. A successful local send is not receiver confirmation;
+use a separate TAK receiver to validate the watch-to-LAN path.
 
 Multicast and Sit(x) can run independently or together. They share the same
 Dynamic/Constant PLI reporting intervals and Save Battery on WiFi multiplier.
@@ -846,7 +848,32 @@ Failed Sit(x) alert/point events are retained in a bounded in-memory queue and
 retried after reconnect. Cancellation supersedes a queued activation. Queued
 events do not survive app termination and are discarded when Sit(x) is turned
 Off, its address changes, the destination group changes, or Re-auth starts.
-Multicast does not retain offline events or retry unacknowledged datagrams.
+The watch persists a shared offline outbox for markers (including location-
+pending drops), marker edits/deletions, manual/automatic/environmental alerts
+and cancellations, and outgoing GeoChat/point replies. PLI is not backlogged.
+Dropping a deferred marker reports: "Marker details stored and will be sent
+when connected and/or location is updated". A drop without a fresh valid fix
+keeps its title/type/remark and original UID, then uses the next fresh watch
+location. It does not claim that the eventual coordinates were the drop
+location.
+
+The outbox survives app restarts, holds at most 200 operations/1 MB, and expires
+unsent operations after 24 hours with a visible warning. New edits/deletions
+replace the same marker's pending state; alert cancellations replace pending
+activations. Chat keeps its original XML/message ID, recipient, and source
+route/server. Events wait if the network configuration changes rather than
+being silently redirected to a different group or multicast endpoint.
+Queue-full/storage errors are displayed; failed transport attempts remain
+queued for retry while the watch app is active. Foreground retries run at most
+once per five seconds. A location-pending marker becomes a normal saved map
+marker once a valid fix arrives.
+
+An operation is removed only when a transport accepts it. This is not a
+recipient acknowledgement: multicast UDP can be lost even after a successful
+send, and Companion acceptance is not proof that another TAK user received it.
+Multicast does not retry datagrams after local transport acceptance. Offline
+mission edits/subscriptions remain unavailable because they require current
+server permissions; Data Sync is not replayed from this outbox.
 
 ### Limitations
 
@@ -866,6 +893,13 @@ for distribution builds.
 
 Run these checks on macOS. They use mocked HTTP, in-memory tokens, and fake
 outputs; they do not use real credentials or broadcast onto the LAN.
+
+The Foundation-only outbox checks can also run with Swift on Windows:
+
+```powershell
+swiftc -parse-as-library Shared\OfflineOutbox.swift Tests\OfflineOutboxChecks.swift -o "$env:TEMP\weartak-offline-checks.exe"
+if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-offline-checks.exe" }
+```
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \

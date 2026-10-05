@@ -435,6 +435,10 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     func sendMarker(_ marker: WatchMarker) async throws {
+        try await deliver(markerXML(marker), eventKey: marker.id.uuidString)
+    }
+
+    func markerXML(_ marker: WatchMarker) -> String {
         let affiliation: String
         switch marker.kind {
         case .friendly: affiliation = "f"
@@ -443,17 +447,25 @@ final class SitxClient: ObservableObject, TAKTransport {
         case .unknown: affiliation = "u"
         }
         let detail = "<contact callsign=\"\(SitxCoT.escape(marker.displayTitle))\"/><remarks>\(SitxCoT.escape(marker.remark ?? ""))</remarks><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/>"
-        try await deliver(SitxCoT.event(uid: marker.id.uuidString, type: "a-\(affiliation)-G", coordinate: marker.coordinate,
-                          detail: detail, lifetime: 86_400), eventKey: marker.id.uuidString)
+        return SitxCoT.event(uid: marker.id.uuidString, type: "a-\(affiliation)-G", coordinate: marker.coordinate,
+                            detail: detail, lifetime: 86_400)
     }
 
     func deleteMarker(uid: String) async throws {
+        try await deliver(deleteMarkerXML(uid: uid), eventKey: uid)
+    }
+
+    func deleteMarkerXML(uid: String) -> String {
         let detail = "<link uid=\"\(SitxCoT.escape(uid))\" relation=\"p-p\"/><__forcedelete/>"
-        try await deliver(SitxCoT.event(uid: uid + "-delete", type: "t-x-d-d", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                          detail: detail, lifetime: 300), eventKey: uid)
+        return SitxCoT.event(uid: uid + "-delete", type: "t-x-d-d", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                            detail: detail, lifetime: 86_400)
     }
 
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws {
+        try await deliver(emergencyXML(state: state, type: type), eventKey: Self.deviceID() + "-alert-" + type)
+    }
+
+    func emergencyXML(state: EmergencyState, type: String) -> String {
         let uid = Self.deviceID() + "-alert-" + type
         let cancel = state == .cancel
         let emergency = cancel ? "<emergency cancel=\"true\">\(SitxCoT.escape(settings.callSign))</emergency>"
@@ -461,8 +473,13 @@ final class SitxClient: ObservableObject, TAKTransport {
         let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\"/><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/><remarks>\(SitxCoT.escape(type))</remarks>" +
             biometrics.fresh().biometricsElement(uid: Self.deviceID(),
                 alertAttributes: " alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertCategory=\"\(SitxCoT.escape(type))\" alertPriority=\"1\" alertDescription=\"\(SitxCoT.escape(type))\"") + emergency
-        try await deliver(SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                          detail: detail, lifetime: 86_400), eventKey: uid)
+        return SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                            detail: detail, lifetime: 86_400)
+    }
+
+    /// The durable session outbox owns retries; do not also retain events in the transient Sit(x) queue.
+    func sendQueuedEvent(_ xml: String) async throws {
+        try await deliver(xml)
     }
 
     func incomingEntities() -> AsyncStream<EntityRelayPayload> {

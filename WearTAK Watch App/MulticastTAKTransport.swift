@@ -12,6 +12,10 @@ protocol CoTOutput {
 final class MulticastTAKTransport: ObservableObject, CoTOutput {
     @Published private(set) var status = "Disabled"
     @Published private(set) var isReady = false
+    @Published private(set) var sentDatagrams = 0
+    @Published private(set) var receivedDatagrams = 0
+    @Published private(set) var lastSentAt: Date?
+    @Published private(set) var lastSendError: String?
     var onStateChange: (() -> Void)?
     var onEntity: ((EntityRelayPayload) -> Void)?
     var onChat: ((TAKChatMessage) -> Void)?
@@ -98,6 +102,7 @@ final class MulticastTAKTransport: ObservableObject, CoTOutput {
                 Task { @MainActor [weak self] in
                     guard let self, self.generation == currentGeneration, self.isAppActive,
                           self.settings.multicastEnabled else { return }
+                    self.receivedDatagrams += 1
                     if let chat = TAKChatMessage.parse(String(decoding: data, as: UTF8.self), ownUID: SitxClient.deviceID()) {
                         self.onChat?(chat)
                         return
@@ -119,11 +124,19 @@ final class MulticastTAKTransport: ObservableObject, CoTOutput {
         }
         let data = Data(xml.utf8)
         guard data.count <= 65_507 else { throw MulticastError.datagramTooLarge }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            group.send(content: data) { error in
-                if let error { continuation.resume(throwing: error) }
-                else { continuation.resume() }
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                group.send(content: data) { error in
+                    if let error { continuation.resume(throwing: error) }
+                    else { continuation.resume() }
+                }
             }
+            sentDatagrams += 1
+            lastSentAt = Date()
+            lastSendError = nil
+        } catch {
+            lastSendError = error.localizedDescription
+            throw error
         }
     }
 }
