@@ -120,11 +120,18 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `7`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `8`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
   answers, and any review instructions needed for Sit(x) authorization.
+- Both apps set `ITSAppUsesNonExemptEncryption` to `NO` (iPhone in
+  `WearTAKCompanion-Info.plist`, watch through its generated Info.plist), so
+  App Store Connect skips the per-build encryption question. That matches the
+  "None of the algorithms mentioned above" answer: all TLS, certificates and
+  signing use Apple's Network/Security frameworks, and watch–phone transfer
+  uses WatchConnectivity's built-in encryption. Revisit this if custom or
+  third-party cryptography is added.
 - Physical-watch verification has been reported by the maintainer. Recheck
   PLI, alert activation/cancellation, marker updates/deletes, incoming users,
   compass, permissions, and battery behavior for each distribution build.

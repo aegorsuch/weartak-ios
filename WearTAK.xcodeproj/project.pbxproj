@@ -400,6 +400,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "WearTAK uses HealthKit for heart-rate monitoring and physiological alerts you enable. This version does not save or modify your Health data.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
@@ -446,6 +447,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WearTAK;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "WearTAK reads heart rate to show physiology and evaluate opted-in alerts.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "WearTAK uses HealthKit for heart-rate monitoring and physiological alerts you enable. This version does not save or modify your Health data.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network.";
