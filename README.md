@@ -120,7 +120,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `8`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `9`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -157,7 +157,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `7`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `9`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -358,9 +358,18 @@ and local multicast without Companion.
   IP or hostname (or a root HTTPS URL) and CoT stream port, normally `8089`.
   Use the hostname matching the server certificate; TLS verification is strict.
 2. Enroll with the administrator's username/password or import a `.p12` file
-  with its password. Save the server, then turn its individual switch on.
+  with its password. Saving a new server automatically enables it and attempts
+  to connect; no separate switch tap is needed. If no client certificate is
+  available, it remains enabled and reports that a certificate is required.
   Additional servers can be saved, edited, enabled independently, or removed
-  with confirmation. The Watch status appears above the TAK Servers list.
+  with confirmation. Edit Server also has a Server enabled switch: turn it off
+  to unlock address and authentication fields, including while a
+  server is connecting or retrying. Locked address and authentication sections
+  show Disable server to edit directly beneath their fields.
+  Save changes before enabling again.
+  The switch acts immediately on the saved server; Cancel discards form edits
+  but does not undo enable/disable changes. Saving an existing server preserves the current switch
+  state. The Watch status appears above the TAK Servers list.
   Each server row has a status dot (green connected, yellow connecting, red
   failed, gray off) and shows how long it has been connected or a
   plain-language error with the original error underneath. It also shows the
@@ -381,22 +390,48 @@ Enrollment uses HTTPS `8446` by default; an explicit HTTPS URL port overrides
 that enrollment port, not the separately entered CoT stream port. Client
 identities and import passwords are stored in endpoint-scoped Keychain entries.
 Enrollment passwords are not persisted; renew by enrolling again. The UI
-reports certificate expiration and a renewal warning within three days.
+identifies whether an HTTP enrollment failure came from configuration or
+certificate signing and shows the endpoint without query parameters or credentials.
+HTTP 401 means the endpoint rejected enrollment authorization; it is separate
+from CoT stream TLS identity validation.
+The UI reports certificate expiration and a renewal warning within three days.
 Authentication shows "Certificate ready" after validation, "Save to finish setup"
 for an unsaved certificate, and "Connected" only for a live server connection.
 Password fields mask entered text but are cleared after enrollment; placeholder
 dots are not used as a substitute for certificate or connection status.
 
-If a legacy stream certificate covers a different DNS name, disable the server
-and edit Advanced TLS identity > Stream TLS name. Enter only an
-administrator-confirmed DNS name covered by that server certificate's SAN.
-Blank restores validation against the connection host. The override changes
-CoT stream certificate hostname validation and TLS SNI, but not the connection
-address, port, certificate storage key, enrollment, or Channels HTTPS identity.
-CA trust, validity dates and client authentication remain enforced. Names
-are never selected automatically from a presented certificate. Reissuing the
-server certificate with the actual connection hostname in its SAN is preferred.
-The override cannot repair a certificate with no acceptable SAN.
+TLS identities are managed in the background; Edit Server has no Advanced TLS
+identity fields or manual inspection/approval controls. Existing saved stream
+and API names are preserved when saving edits to the same endpoint. Changing
+the endpoint clears those names so the new server can be discovered independently.
+Stream identity affects hostname validation and TLS SNI on the CoT port;
+API identity affects certificate hostname validation on HTTPS `8443` for
+Channels, latest-position requests and Data Sync, not its URL, HTTP host or SNI.
+Enrollment, certificate storage keys, CA trust, validity and mutual TLS remain
+unchanged.
+
+After enrollment/import and
+enabling the saved server, a stream hostname-mismatch error automatically starts
+certificate discovery when no TLS-name override is already saved. Channels,
+latest-position and Data Sync do the same for API hostname mismatches.
+For legacy private-CA TAK servers, a single exact DNS SAN is automatically saved
+and the failed operation retried without a user prompt. Automatic inspection
+restricts trust to the stored enrollment/import CA chain or explicitly configured
+CA; publicly trusted certificates cannot use this fallback. Multiple exact names,
+no supported SAN, missing/untrusted CA chains and expired certificates fail
+explicitly and require administrator assistance. Previously saved identities are
+not automatically replaced if validation later fails.
+
+This default compatibility behavior deliberately substitutes CA-scoped server
+identity for strict connection-hostname matching on the first legacy connection.
+It does not prove that another server certificate issued by the same CA belongs
+to the intended server. Administrators should provide a server-specific CA chain
+or a matching hostname certificate, especially where a CA is shared with
+other servers. No guessed names or credentials are sent by
+inspection. API requests retry once; if a watch request times out during
+discovery, refresh after the connection completes. Failed discovery is suppressed
+until the server is disabled and re-enabled. Authentication errors, network
+timeouts and other TLS errors do not trigger automatic identity changes.
 
 Watch CoT is sent to all connected, enabled servers. An acknowledgement means
 at least one server socket accepted the write, not that a remote TAK user
@@ -490,8 +525,19 @@ Streams stop when the background task expires and can reconnect on a subsequent
 watch request. This short refresh task is separate from phone location
 reporting and does not grant continuous background execution.
 
-Both apps cache up to 50 incoming Companion events. The watch displays cached
-positions immediately while refreshing. Cache replay preserves the original
+Both apps cache up to 50 incoming Companion events, with a conservative
+256 KiB encoded-storage budget. Large XML details reduce how many events fit;
+the oldest events are evicted first. This prevents watchOS from aborting the
+app when a preferences value reaches its 1 MiB platform limit.
+
+Incoming contact updates change the map immediately, but both apps batch cache
+writes on a fixed one-second interval rather than writing on every event.
+Pending writes flush when the app goes inactive (and when Companion's
+background refresh ends). Source invalidation and snapshot saves remain
+immediate. A sudden process termination can lose up to one interval of cached
+updates; this cache is not the durable offline event outbox.
+
+The watch displays cached positions immediately while refreshing. Cache replay preserves the original
 CoT timestamp; reconnecting does not make an old position appear new. Entries
 expire at the CoT stale time or after five minutes, whichever comes first.
 Disabling/removing a server excludes its cached events on the next snapshot,
@@ -687,7 +733,13 @@ cannot send to an IP multicast group. The transport joins the selected group
 on the watch's WiFi interface, publishes PLI/alerts/points, and displays
 incoming nonexpired CoT users and points on the map. Enabled means the
 preference is on, not that delivery is confirmed. UDP has no receiver
-acknowledgment. The Runtime Status section shows readiness/errors, local
+acknowledgment. Runtime diagnostics are hidden by default. Tap the version
+number at the bottom of watch Settings seven times to enable Developer mode.
+The unlock shows only "Developer mode enabled" and persists across launches; turn off
+Developer mode in Settings or at the bottom of the multicast diagnostics to
+hide diagnostics again. Leaving Settings resets an unfinished tap sequence.
+Developer-only controls appear at the bottom of their respective menus, below
+normal settings. In multicast, the Runtime Status section shows readiness/errors, local
 datagrams sent/received since launch, the last local send time/error, and the
 stored-event count. A successful local send is not receiver confirmation;
 use a separate TAK receiver to validate the watch-to-LAN path.
@@ -711,6 +763,22 @@ See [Apple's local-network guidance](https://developer.apple.com/documentation/t
 and [multicast entitlement platforms](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.networking.multicast).
 
 ## Sit(x) TAK
+
+When Sit(x) is configured in Companion, the watch shows the phone's enabled
+state, address, selected group and connection status. These phone-managed
+settings are read-only on the watch; edit them or reauthorize in Companion.
+Credentials are not copied to the watch. The last received settings are saved
+on the watch across app restarts and refreshed when the devices reconnect.
+When Companion is unreachable, the watch shows Needs iPhone: syncing settings
+does not enable standalone Sit(x) WebSocket streaming on physical watchOS.
+
+Sit(x) setup on both the watch and Companion ends with Remove Sit(x) connection.
+After confirmation, it stops streaming, turns Sit(x) off, and clears saved
+authorization, address and group settings; new setup requires authorization
+again. Watch removal also removes the phone-held relay without returning its
+refresh token and requires a reachable Companion when the phone owns the connection.
+Companion removal clears its local connection and device-authorization identifier.
+This removes local configuration, not the Sit(x) account or organization.
 
 ### Setup
 
@@ -928,7 +996,13 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 ```
 
 Map cache/snapshot checks preserve CoT timestamps and expiry, invalidate
-sources, reset bridge generations, and enforce 50-contact/60 KB bounds:
+sources, reset bridge generations, and enforce 50-contact/60 KB snapshot and
+256 KiB storage bounds, including large XML details and JSON escaping.
+They also exercise a 5,000-contact burst and repeated updates. Map events parse
+their immutable XML header once, including on cache restore, rather than
+reparsing every contact during sorting and pruning. This reduces high-traffic
+cache work on both the phone and watch without changing the saved-data format
+or contact limit; it does not establish the cause of a device crash:
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
@@ -937,6 +1011,29 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   -o /tmp/weartak-map-checks
 /tmp/weartak-map-checks
 ```
+
+The Debug simulator watch app also supports an isolated receive-path stress
+test. After building, run:
+
+```sh
+python3 Tests/run_watch_load_checks.py "/path/to/WearTAK Watch App.app" \
+  --artifacts /tmp/weartak-watch-load
+```
+
+The runner creates, boots and deletes a temporary unpaired SE 3 simulator
+(watchOS 26.2 by default; override with `--runtime`). It never uses the paired
+test watch or sends synthetic traffic to a real server. The app decodes
+synthetic bridge messages through its real contact/cache handlers with offered
+rates of 10, 100 and 500 events/sec, 48 KB details, a 5,000-event burst, new-point
+notifications, and model background/resume/bridge-session changes. Malformed
+and oversized messages must be rejected. JSON output and `report.json` include
+elapsed processing time, main-actor heartbeat delay, cache size and sampled
+process RSS. The runner fails on contact/storage bounds or heartbeat delay
+over one second; offered rate is not achieved throughput.
+These checks do not exercise radio delivery, actual OS suspension/reconnection,
+physical haptics, map-screen rendering or physical-watch memory limits.
+The large-detail test reproduced a watchOS preferences-size abort, now guarded
+by the cache byte budget. It does not identify every reported physical crash.
 
 Data Sync checks cover mission list filtering and bounds, single-segment
 mission name encoding, mission CoT parsing (wrapped or bare events, nested
@@ -1000,5 +1097,13 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 certificate/key matching, expiry, `.p12` import/password handling, private-CA
 server trust, hostname rejection, explicit CA restrictions, invalid CA data,
 and endpoint/error diagnostics with temporary test identities. It requires the resolved SwiftASN1 module linked
-alongside CertificateStore, EnrollmentClient and TAKHTTPS. No simulator or mock test
+alongside CertificateStore, EnrollmentClient, TAKHTTPS, TAKServerConnection and
+its Shared dependencies (CompanionEndpoint, CompanionServer, BridgeWire,
+CompanionMapSnapshot, TAKChannelModels and TAKMissionModels).
+It also checks exact DNS SAN extraction, no Common Name
+fallback, inspection trust/expiry rejection, and a local TLS listener proving
+that inspection returns names without completing TLS; cancellation and repeated
+inspections are covered. A private-CA fixture verifies automatic recovery from
+a hostname mismatch to the single DNS SAN `takserver2`, while ambiguous-name
+selection and missing CA chains are rejected. No simulator or mock test
 establishes physical-device background reliability or live server compatibility.

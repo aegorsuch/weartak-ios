@@ -24,7 +24,7 @@ enum EnrollmentClient {
         var request = URLRequest(url: configURL)
         request.setValue(authorization, forHTTPHeaderField: "Authorization")
         let (config, response) = try await session.data(for: request)
-        try validate(response, data: config)
+        try validate(response, data: config, endpoint: configURL)
         let subject = EnrollmentSubject()
         let parser = XMLParser(data: config)
         parser.shouldResolveExternalEntities = false
@@ -47,7 +47,7 @@ enum EnrollmentClient {
         request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(csr.base64EncodedString().utf8)
         let (data, signingResponse) = try await session.data(for: request)
-        try validate(signingResponse, data: data)
+        try validate(signingResponse, data: data, endpoint: signURL)
         try Task.checkCancellation()
         let result = try JSONDecoder().decode(Result.self, from: data)
         let chain = try [result.signedCert, result.ca0, result.ca1].map(CertificateStore.decodeCertificate)
@@ -108,12 +108,17 @@ enum EnrollmentClient {
         }
     }
 
-    private static func validate(_ response: URLResponse, data: Data) throws {
+    static func validate(_ response: URLResponse, data: Data, endpoint: URL) throws {
         guard data.count <= 1_048_576, let http = response as? HTTPURLResponse else {
             throw CompanionFailure.message("Invalid enrollment response.")
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw CompanionFailure.message("Enrollment failed: HTTP \(http.statusCode).")
+            let stage = endpoint.path == "/Marti/api/tls/config" ? "configuration" : "certificate signing"
+            let address = "\(endpoint.host ?? ""):\(endpoint.port ?? 443)\(endpoint.path)"
+            let authorization = http.statusCode == 401
+                ? " Enrollment authorization was rejected; compare this account and endpoint with the working client."
+                : ""
+            throw CompanionFailure.message("Enrollment \(stage) failed: HTTP \(http.statusCode) at \(address).\(authorization)")
         }
     }
 }

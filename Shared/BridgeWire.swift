@@ -34,6 +34,7 @@ enum BridgeWire {
         var sitxConfig: SitxRelayConfig?
         /// Phone-side Sit(x) relay state; empty when Companion holds no Sit(x) configuration.
         var sitxStatus: String?
+        var sitxSettings: SitxSettingsSnapshot?
         /// Data Sync: servers with their missions; a server's subscribed missions include their map items.
         var missionServers: [TAKMissionServer]?
         var missionName: String?
@@ -101,8 +102,10 @@ struct SitxRelayConfig: Codable, Equatable {
     var flowTag: String
     var groupName: String?
     var refreshToken: String?
+    var removeConnection: Bool?
 
     var isValid: Bool {
+        if removeConnection == true { return !enabled && refreshToken == nil }
         guard !enabled else {
             guard let url = URL(string: host), url.scheme == "https", let name = url.host,
                   name == "sitx.io" || name.hasSuffix(".sitx.io"),
@@ -110,8 +113,20 @@ struct SitxRelayConfig: Codable, Equatable {
                   (refreshToken?.count ?? 0) <= 8_192 else { return false }
             return refreshToken.map { !$0.isEmpty } ?? true
         }
+
         return true
     }
+}
+
+/// Display-only phone settings; authorization stays with its current owner.
+struct SitxSettingsSnapshot: Codable, Equatable {
+    static let contextKey = "WearTAKCompanion.sitxSettings"
+    var enabled: Bool
+    var host: String
+    var groupName: String?
+    var status: String
+
+    var isPresent: Bool { !host.isEmpty }
 }
 
 struct CompanionChatBuffer {

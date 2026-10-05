@@ -8,9 +8,11 @@ final class TAKChannelClient {
     private let session: URLSession
     private let trustDelegate: ChannelTrustDelegate
 
-    init(host: String, identity: ClientIdentity, trustedCA: Data?, requestTimeout: TimeInterval = 15) {
+    init(host: String, identity: ClientIdentity, trustedCA: Data?, requestTimeout: TimeInterval = 15,
+         apiTLSName: String? = nil) throws {
         self.host = host
-        let delegate = ChannelTrustDelegate(host: host, identity: identity, trustedCA: trustedCA)
+        let tlsName = try CompanionServer.validatedStreamTLSName(apiTLSName ?? "") ?? host
+        let delegate = ChannelTrustDelegate(host: host, tlsName: tlsName, identity: identity, trustedCA: trustedCA)
         trustDelegate = delegate
         let configuration = TAKHTTPS.configuration(requestTimeout: requestTimeout, resourceTimeout: requestTimeout + 5)
         session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
@@ -59,12 +61,14 @@ final class TAKChannelClient {
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         let data: Data
         let response: URLResponse
-        let endpoint = "\(label) https://\(host):8443\(path)"
+        let endpoint = "\(label) https://\(host):8443\(path) (TLS name \(trustDelegate.tlsName))"
         trustDelegate.diagnostics.reset()
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw CompanionFailure.message(trustDelegate.diagnostics.message(endpoint: endpoint, error: error))
+            let detail = trustDelegate.diagnostics.message(endpoint: endpoint, error: error)
+            if trustDelegate.diagnostics.hasHostnameMismatch { throw TLSHostnameMismatch(detail: detail) }
+            throw CompanionFailure.message(detail)
         }
         guard data.count <= maximumBytes, let http = response as? HTTPURLResponse else {
             throw TAKChannelGroups.ChannelError.invalidResponse
@@ -81,12 +85,14 @@ final class TAKChannelClient {
 private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
     private let logger = Logger(subsystem: "com.aegorsuch.weartak", category: "ChannelsTLS")
     let host: String
+    let tlsName: String
     let identity: ClientIdentity
     let trustedCA: Data?
     let diagnostics = TLSConnectionDiagnostics()
 
-    init(host: String, identity: ClientIdentity, trustedCA: Data?) {
+    init(host: String, tlsName: String, identity: ClientIdentity, trustedCA: Data?) {
         self.host = host
+        self.tlsName = tlsName
         self.identity = identity
         self.trustedCA = trustedCA
     }
@@ -109,7 +115,7 @@ private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessi
             return
         }
         do {
-            try CertificateStore.evaluateServerTrust(trust, host: host,
+            try CertificateStore.evaluateServerTrust(trust, host: tlsName,
                 certificates: identity.certificates, trustedCA: trustedCA)
             logger.notice("Channels server trust accepted")
             completionHandler(.useCredential, URLCredential(trust: trust))

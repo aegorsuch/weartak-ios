@@ -107,6 +107,20 @@ struct SitxProtocolChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
+        precondition(!settings.developerMode)
+        for _ in 0..<6 { precondition(!settings.registerVersionTap()) }
+        precondition(!settings.developerMode)
+        settings.resetVersionTaps()
+        for _ in 0..<6 { precondition(!settings.registerVersionTap()) }
+        precondition(settings.registerVersionTap() && settings.developerMode)
+        precondition(!settings.registerVersionTap())
+        precondition(AppSettings(defaults: defaults).developerMode)
+        settings.developerMode = false
+        precondition(!AppSettings(defaults: defaults).developerMode)
+        for _ in 0..<6 { precondition(!settings.registerVersionTap()) }
+        precondition(settings.registerVersionTap())
+        settings.developerMode = false
+        print("PASS: developer mode hidden default, seven-tap threshold, reset, persistence and disabling")
         precondition(DashboardPhysiologySeverity.resolve(warningActive: false, alertActive: false) == .normal)
         precondition(DashboardPhysiologySeverity.resolve(warningActive: true, alertActive: false) == .warning)
         precondition(DashboardPhysiologySeverity.resolve(warningActive: false, alertActive: true) == .alert)
@@ -427,6 +441,36 @@ struct SitxProtocolChecks {
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         let tokens = MemoryTokens()
+        let syncSuite = suite + ".settings-sync"
+        let syncDefaults = UserDefaults(suiteName: syncSuite)!
+        defer { syncDefaults.removePersistentDomain(forName: syncSuite) }
+        let syncSettings = AppSettings(defaults: syncDefaults)
+        let emptyTokens = MemoryTokens()
+        emptyTokens.values = [:]
+        let mirror = SitxClient(settings: syncSettings, session: session, defaults: syncDefaults, tokenStore: emptyTokens)
+        let phoneSettings = SitxSettingsSnapshot(enabled: true, host: "https://fixture.sitx.io",
+            groupName: "Fixture Team", status: "Connected")
+        mirror.applyPhoneSettings(phoneSettings)
+        precondition(mirror.phoneManagedSettings == phoneSettings && mirror.menuLabel == "Sit(x) Needs iPhone")
+        precondition(emptyTokens.values.isEmpty)
+        let restoredMirror = SitxClient(settings: syncSettings, session: session, defaults: syncDefaults, tokenStore: emptyTokens)
+        precondition(restoredMirror.phoneManagedSettings == phoneSettings && restoredMirror.menuLabel == "Sit(x) Needs iPhone")
+        restoredMirror.setAppActive(false)
+        restoredMirror.setAppActive(true)
+        precondition(restoredMirror.menuLabel == "Sit(x) Needs iPhone")
+        restoredMirror.applyPhoneSettings(nil)
+        precondition(restoredMirror.phoneManagedSettings == phoneSettings)
+        restoredMirror.canReachPhone = true
+        precondition(restoredMirror.menuLabel == "Sit(x) via iPhone")
+        let updatedPhone = SitxSettingsSnapshot(enabled: false, host: phoneSettings.host,
+            groupName: "Other Group", status: "Off")
+        restoredMirror.applyPhoneSettings(updatedPhone)
+        precondition(restoredMirror.phoneManagedSettings == updatedPhone)
+        restoredMirror.applyPhoneSettings(SitxSettingsSnapshot(enabled: false, host: "", status: "Not connected"))
+        precondition(restoredMirror.phoneManagedSettings == nil)
+        let removedMirror = SitxClient(settings: syncSettings, session: session, defaults: syncDefaults, tokenStore: emptyTokens)
+        precondition(removedMirror.phoneManagedSettings == nil && emptyTokens.values.isEmpty)
+        print("PASS: phone Sit(x) settings mirror, restart persistence, offline Needs iPhone, resync and removal without credentials")
         let client = SitxClient(settings: settings, session: session, defaults: defaults, tokenStore: tokens)
 
         await withCheckedContinuation { continuation in

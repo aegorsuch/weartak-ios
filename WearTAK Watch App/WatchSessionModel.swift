@@ -227,6 +227,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     /// Latest CoT `time` seen per point, so a sender's re-send notifies again but reconnect replays do not.
     private var pointSendTimes: [String: Date] = [:]
     private static let pointSendTimesKey = "WearTAK.incomingPointSendTimes"
+    private static let mapItemReplyLifetime: TimeInterval = 24 * 60 * 60
     @Published private var chatInbox = TAKChatInbox<ContactConversation>()
 
     var contactMessages: [ContactConversation: [TAKChatMessage]] { chatInbox.messages }
@@ -348,6 +349,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
         companionClient.$sitxRelayStatus.removeDuplicates().sink { [weak self] status in
             Task { @MainActor [weak self] in self?.sitxClient.phoneRelayStatus = status }
         }.store(in: &sitxRelaySubscriptions)
+        companionClient.$sitxSettings.removeDuplicates().sink { [weak self] settings in
+            Task { @MainActor [weak self] in self?.sitxClient.applyPhoneSettings(settings) }
+        }.store(in: &sitxRelaySubscriptions)
         companionClient.$isPhoneReachable.removeDuplicates().sink { [weak self] reachable in
             Task { @MainActor [weak self] in self?.sitxClient.canReachPhone = reachable }
         }.store(in: &sitxRelaySubscriptions)
@@ -378,7 +382,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             if let id = message.sourceServerID {
                 self.companionMapCache.receive(CompanionMapEvent(xml: xml, sourceServerID: id,
                     sourceGeneration: message.sourceGeneration ?? 0, receivedAt: now))
-                self.saveCompanionMapCache()
+                self.companionMapCacheWrites.schedule()
             }
             for entity in SitxCoT.parse(Data(xml.utf8), excluding: SitxClient.deviceID()) {
                 self.receiveEntity(entity, at: seen, sourceServerID: message.sourceServerID,
@@ -484,6 +488,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func setAppActive(_ active: Bool) {
         isAppActive = active
+        if !active { companionMapCacheWrites.flush() }
         if active {
             forwardOfflineEvents()
             pruneIncomingEntities()
@@ -1141,11 +1146,143 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private func saveCompanionMapCache() {
+        companionMapCacheWrites.cancel()
         do {
             UserDefaults.standard.set(try JSONEncoder().encode(companionMapCache), forKey: Self.companionCacheKey)
+            #if DEBUG && targetEnvironment(simulator)
+            loadTestCacheWrites += 1
+            #endif
             mapCacheError = nil
         } catch { mapCacheError = "Unable to save cached map: \(error.localizedDescription)" }
     }
+
+    private lazy var companionMapCacheWrites = MapCacheWriteBatcher { [weak self] in
+        self?.saveCompanionMapCache()
+    }
+
+    #if DEBUG && targetEnvironment(simulator)
+    private var loadTestCacheWrites = 0
+    private struct LoadStage: Codable {
+        let name: String
+        let events: Int
+        let elapsedSeconds: Double
+        let maxHeartbeatDelaySeconds: Double
+        let liveContacts: Int
+        let cachedContacts: Int
+        let cacheBytes: Int
+        let cacheWrites: Int
+    }
+
+    private var loadTestStarted: Bool {
+        get { UserDefaults.standard.bool(forKey: "WearTAK.loadTestStarted") }
+        set { UserDefaults.standard.set(newValue, forKey: "WearTAK.loadTestStarted") }
+    }
+
+    func runSimulatorLoadTest() async {
+        guard !loadTestStarted else { return }
+        loadTestStarted = true
+        var stages: [LoadStage] = []
+        let source = UUID()
+        var session = UUID()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        do {
+            for (name, rate, count, detailBytes) in [
+                ("10-events-per-second", 10, 50, 0),
+                ("100-events-per-second", 100, 500, 0),
+                ("500-events-per-second", 500, 2_500, 0),
+                ("large-48KB-details", 50, 250, 48_000),
+                ("new-map-point-notifications", 100, 250, 0),
+                ("5000-event-burst", 0, 5_000, 0),
+                ("reconnect-and-lifecycle", 100, 500, 0)
+            ] {
+                let started = Date()
+                let initialWrites = loadTestCacheWrites
+                var maxDelay = 0.0
+                let heartbeat = Task { @MainActor in
+                    while !Task.isCancelled {
+                        let before = Date()
+                        do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+                        maxDelay = max(maxDelay, Date().timeIntervalSince(before) - 0.05)
+                    }
+                }
+                defer { heartbeat.cancel() }
+                for index in 0..<count {
+                    if name == "reconnect-and-lifecycle", index.isMultiple(of: 50) {
+                        setAppActive(false)
+                        session = UUID()
+                        setAppActive(true)
+                    }
+                    let now = Date()
+                    let isPoint = name == "new-map-point-notifications"
+                    let uid = isPoint ? "load-point-\(index)" : "load-\(index % 5000)"
+                    let type = isPoint ? "a-n-G" : "a-f-G-U-C"
+                    let xml = """
+                    <event uid="\(uid)" type="\(type)" time="\(formatter.string(from: now))" stale="\(formatter.string(from: now.addingTimeInterval(300)))"><point lat="38.0" lon="-77.0"/><detail><contact callsign="LOAD-\(index)"/><remarks>\(String(repeating: "A", count: detailBytes))</remarks></detail></event>
+                    """
+                    let data = try BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: source,
+                        sourceGeneration: 1, sessionID: session).encoded()
+                    try companionClient.receiveLoadTestMessage(data)
+                    guard incomingEntities.count <= Self.maximumLiveEntities,
+                          companionMapCache.events.count <= CompanionMapCache.maximumEvents,
+                          mapCacheError == nil else {
+                        throw NSError(domain: "WearTAK.LoadTest", code: 1,
+                            userInfo: [NSLocalizedDescriptionKey: mapCacheError ?? "Contact limit exceeded"])
+                    }
+                    if rate > 0 {
+                        let wait = Double(index + 1) / Double(rate) - Date().timeIntervalSince(started)
+                        if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
+                        else { await Task.yield() }
+                    } else if index.isMultiple(of: 10) {
+                        await Task.yield()
+                    }
+                }
+                // Allow pending UI and heartbeat work to drain before measuring.
+                try await Task.sleep(for: .milliseconds(100))
+                heartbeat.cancel()
+                await heartbeat.value
+                companionMapCacheWrites.flush()
+                guard let stored = UserDefaults.standard.data(forKey: Self.companionCacheKey) else {
+                    throw NSError(domain: "WearTAK.LoadTest", code: 5,
+                        userInfo: [NSLocalizedDescriptionKey: "Cache flush did not persist data"])
+                }
+                let restored = try JSONDecoder().decode(CompanionMapCache.self, from: stored)
+                guard restored.events.map(\.xml) == companionMapCache.events.map(\.xml) else {
+                    throw NSError(domain: "WearTAK.LoadTest", code: 6,
+                        userInfo: [NSLocalizedDescriptionKey: "Cache flush persisted stale data"])
+                }
+                let bytes = try JSONEncoder().encode(companionMapCache).count
+                guard bytes < CompanionMapCache.maximumStorageBytes else {
+                    throw NSError(domain: "WearTAK.LoadTest", code: 3,
+                        userInfo: [NSLocalizedDescriptionKey: "Cached map exceeds storage byte budget"])
+                }
+                stages.append(LoadStage(name: name, events: count,
+                    elapsedSeconds: Date().timeIntervalSince(started), maxHeartbeatDelaySeconds: maxDelay,
+                    liveContacts: incomingEntities.count, cachedContacts: companionMapCache.events.count,
+                    cacheBytes: bytes, cacheWrites: loadTestCacheWrites - initialWrites))
+            }
+            let oversized = Data(repeating: 65, count: BridgeWire.maximumMessageBytes + 1)
+            do {
+                try companionClient.receiveLoadTestMessage(oversized)
+                throw NSError(domain: "WearTAK.LoadTest", code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Oversized message accepted"])
+            } catch BridgeWire.Failure.tooLarge {}
+            do {
+                let malformed = try BridgeWire.Message(kind: .cot, xml: "<event><point>").encoded()
+                try companionClient.receiveLoadTestMessage(malformed)
+                throw NSError(domain: "WearTAK.LoadTest", code: 4,
+                    userInfo: [NSLocalizedDescriptionKey: "Malformed XML accepted"])
+            } catch BridgeWire.Failure.invalidCoT {}
+            let report = try JSONEncoder().encode(stages)
+            let directory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                        appropriateFor: nil, create: true)
+            try report.write(to: directory.appendingPathComponent("watch-load-report.json"), options: .atomic)
+        } catch {
+            chatLogger.error("Simulator load test failed: \(error.localizedDescription, privacy: .public)")
+            mapCacheError = "Simulator load test failed: \(error.localizedDescription)"
+        }
+    }
+    #endif
 
     private func saveMarkers() {
         if let data = try? JSONEncoder().encode(markers) {

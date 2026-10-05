@@ -36,6 +36,31 @@ struct BridgeProtocolChecks {
         precondition(decodedLocation.phoneLocationEnabled == true)
         let legacyStatus = try BridgeWire.Message.decode(BridgeWire.Message(kind: .status).encoded())
         precondition(legacyStatus.phoneLocationEnabled == nil)
+        precondition(legacyStatus.sitxSettings == nil)
+        let phoneSitx = SitxSettingsSnapshot(enabled: true, host: "https://team.sitx.io",
+            groupName: "Operations", status: "Connected")
+        let mirroredSitx = try BridgeWire.Message.decode(
+            BridgeWire.Message(kind: .status, sitxSettings: phoneSitx).encoded())
+        precondition(mirroredSitx.sitxSettings == phoneSitx && phoneSitx.isPresent)
+        let offSitx = SitxSettingsSnapshot(enabled: false, host: phoneSitx.host,
+            groupName: phoneSitx.groupName, status: "Off")
+        let contextSitx = try JSONDecoder().decode(SitxSettingsSnapshot.self, from: JSONEncoder().encode(offSitx))
+        precondition(contextSitx == offSitx && contextSitx.isPresent)
+        let removedSitx = SitxSettingsSnapshot(enabled: false, host: "", status: "Not connected")
+        precondition(!removedSitx.isPresent)
+        let removedReply = try BridgeWire.Message.decode(
+            BridgeWire.Message(kind: .status, sitxSettings: removedSitx).encoded())
+        precondition(removedReply.sitxSettings == removedSitx)
+        let removeSitx = SitxRelayConfig(enabled: false, host: "", flowTag: "", removeConnection: true)
+        let removal = try BridgeWire.Message.decode(
+            BridgeWire.Message(kind: .sitxConfig, sitxConfig: removeSitx).encoded())
+        precondition(removal.sitxConfig?.removeConnection == true && removal.sitxConfig?.refreshToken == nil)
+        var invalidRemoval = removeSitx
+        invalidRemoval.enabled = true
+        precondition(!invalidRemoval.isValid)
+        invalidRemoval.enabled = false
+        invalidRemoval.refreshToken = "must-not-return-a-token"
+        precondition(!invalidRemoval.isValid)
         print("PASS: channel selection/snapshot correlation, server provenance and bridge session identity")
         let endpoint = try CompanionEndpoint.parse(address: "https://tak.example:8447", streamPort: "8089", enrollmentPort: "8446")
         precondition(endpoint.host == "tak.example" && endpoint.streamPort == 8089 && endpoint.enrollmentPort == 8447)

@@ -44,6 +44,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     private var connectInFlight = false
     private var relayTask: Task<Void, Never>?
     private var discardRelayedToken = false
+    private var removingConnection = false
     private(set) var relayedHost: String?
     private var relayedGroup: String?
     /// Sends Sit(x) relay settings to Companion; set by the session model.
@@ -55,6 +56,27 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
     var phoneRelayStatus: String? {
         didSet { if phoneRelayStatus != oldValue { updateRelayStatus() } }
+    }
+    private static let phoneSettingsKey = "WearTAK.sitxPhoneSettings"
+    @Published private(set) var phoneSettings: SitxSettingsSnapshot?
+    var phoneManagedSettings: SitxSettingsSnapshot? {
+        guard let phoneSettings, phoneSettings.isPresent else { return nil }
+        return phoneSettings
+    }
+
+    func applyPhoneSettings(_ snapshot: SitxSettingsSnapshot?) {
+        guard let snapshot else { return }
+        do {
+            if snapshot.isPresent {
+                defaults.set(try JSONEncoder().encode(snapshot), forKey: Self.phoneSettingsKey)
+            } else {
+                defaults.removeObject(forKey: Self.phoneSettingsKey)
+            }
+            phoneSettings = snapshot
+            updateRelayStatus()
+        } catch {
+            status = "Sit(x) settings sync failed: \(error.localizedDescription)"
+        }
     }
     var isRelayedViaPhone: Bool { relayedHost != nil }
     var onReady: (() -> Void)?
@@ -80,6 +102,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             } else if settings.sitxEnabled, !selectedGroupID.isEmpty {
                 onReady?()
             }
+            if phoneManagedSettings != nil { updateRelayStatus() }
         }
     }
     var pliReportingRoute: PLIReportingRoute { .standaloneSitx }
@@ -102,6 +125,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     /// Keeps Companion's Sit(x) relay in step with the watch's settings. The refresh token has a single owner:
     /// the watch deletes its copy once the phone accepts it, and takes it back when Sit(x) is turned Off.
     func reconcileRelay() {
+        guard !removingConnection else { return }
         guard canReachPhone, relayTask == nil, let relayHandler else { updateRelayStatus(); return }
         let host = Self.normalizedHost(settings.sitxApiHost)
         let ownsToken = refreshToken != nil && tokenHost == host
@@ -169,6 +193,10 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     private func updateRelayStatus() {
+        if let phone = phoneManagedSettings {
+            status = canReachPhone ? Self.phoneSetupPrefix + phone.status : Self.streamBlockedStatus
+            return
+        }
         if relayedHost == nil, refreshToken == nil, relayTask == nil, pairingTask == nil, authorizationCode.isEmpty {
             // Sit(x) set up in Companion itself: the watch holds no credentials and just reports the phone's state.
             if let phoneRelayStatus, !phoneRelayStatus.isEmpty {
@@ -231,6 +259,7 @@ final class SitxClient: ObservableObject, TAKTransport {
             status = !settings.sitxEnabled ? "Off" : relayedHost != nil ? "Via iPhone" :
                 refreshToken == nil ? State.unconfigured : "Authorized; app inactive"
         }
+        if phoneManagedSettings != nil { updateRelayStatus() }
     }
 
     func connect() async throws {
@@ -558,6 +587,14 @@ final class SitxClient: ObservableObject, TAKTransport {
             self.forgetAuthorization()
         }
         if !settings.sitxEnabled { status = "Off" }
+        if let data = defaults.data(forKey: Self.phoneSettingsKey) {
+            do {
+                phoneSettings = try JSONDecoder().decode(SitxSettingsSnapshot.self, from: data)
+                updateRelayStatus()
+            } catch {
+                status = "Sit(x) saved settings could not be loaded: \(error.localizedDescription)"
+            }
+        }
     }
 
     func refreshAuthorizationCode() {
@@ -588,6 +625,40 @@ final class SitxClient: ObservableObject, TAKTransport {
             discardRelayedToken = true
             reconcileRelay()
         }
+
+    }
+
+    func removeConnection() async throws {
+        removingConnection = true
+        defer { removingConnection = false }
+        let pendingPairing = pairingTask
+        pendingPairing?.cancel()
+        disconnect()
+        await pendingPairing?.value
+        if let relayTask { await relayTask.value }
+        if relayedHost != nil || phoneManagedSettings != nil || !(phoneRelayStatus ?? "").isEmpty {
+            guard canReachPhone, let relayHandler else {
+                throw NSError(domain: "WearTAK.SitxRemoval", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Open Companion on the paired iPhone to remove the relayed Sit(x) connection."])
+            }
+            let reply = try await relayHandler(SitxRelayConfig(enabled: false, host: relayedHost ?? "",
+                flowTag: relayedGroup ?? "", removeConnection: true))
+            guard reply.kind == .acknowledgement, reply.ready == true,
+                  reply.sitxConfig?.removeConnection == true else {
+                throw NSError(domain: "WearTAK.SitxRemoval", code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: reply.detail ?? "The iPhone did not confirm Sit(x) removal."])
+            }
+        }
+        setRelayed(host: nil, group: nil)
+        settings.sitxEnabled = false
+        forgetAuthorization()
+        settings.sitxApiHost = ""
+        deviceCode = nil
+        expiresAt = nil
+        phoneRelayStatus = ""
+        phoneSettings = nil
+        defaults.removeObject(forKey: Self.phoneSettingsKey)
+        status = State.unconfigured
     }
 
     private func beginPairing() async {

@@ -35,6 +35,7 @@ struct CompanionSetupView: View {
     var body: some View {
         NavigationStack {
             List {
+                TLSApprovalSection(bridge: bridge)
                 Section {
                     LabeledContent("Watch status", value: bridge.isWatchPaired ? "Paired" : "Not paired")
                     if let error = bridge.watchSetupError {
@@ -96,8 +97,6 @@ struct CompanionSetupView: View {
                     } label: {
                         CompanionSitxRow(sitx: bridge.sitx)
                     }
-                } footer: {
-                    Text("Set up here or on the watch. Companion holds the Sit(x) connection because watchOS blocks direct streaming on Apple Watch.")
                 }
             }
             .navigationTitle("WearTAK Companion")
@@ -279,7 +278,6 @@ private struct CompanionServerEditor: View {
     @State private var host: String
     @State private var port: String
     @State private var enrollmentPort: String
-    @State private var streamTLSName: String
     @AppStorage("WearTAK.bridge.deviceID") private var deviceID = ""
     @State private var username = ""
     @State private var password = ""
@@ -294,6 +292,7 @@ private struct CompanionServerEditor: View {
     @State private var pendingIdentity: StoredIdentity?
     @State private var pendingEndpointKey: String?
     @State private var saved = false
+    @State private var connectionError: String?
 
     init(bridge: PhoneBridgeModel, server: CompanionServer?) {
         self.bridge = bridge
@@ -302,15 +301,31 @@ private struct CompanionServerEditor: View {
         _host = State(initialValue: server?.host ?? "")
         _port = State(initialValue: "\(server?.port ?? 8089)")
         _enrollmentPort = State(initialValue: "\(server?.enrollmentPort ?? 8446)")
-        _streamTLSName = State(initialValue: server?.streamTLSName ?? "")
     }
 
     private var connected: Bool { bridge.serverStates[serverID]?.connected == true }
+    private var enabled: Bool { bridge.servers.first { $0.id == serverID }?.enabled ?? false }
+    private var settingsLocked: Bool { enabled || connected }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("TAK Server") {
+                TLSApprovalSection(bridge: bridge)
+                if original != nil {
+                    Section {
+                        Toggle("Server enabled", isOn: Binding(
+                            get: { enabled },
+                            set: { value in
+                                do { try bridge.setEnabled(value, id: serverID) }
+                                catch { connectionError = error.localizedDescription }
+                            }
+                        ))
+                        .disabled(busy)
+                    } footer: {
+                        Text("Turn off Server enabled to edit the address or authentication. Save your changes before enabling again. This switch immediately changes the saved server; Cancel does not undo it.")
+                    }
+                }
+                Section {
                     LabeledContent("IP or URL") {
                         TextField("192.0.2.1", text: $host)
                             .textInputAutocapitalization(.never)
@@ -323,16 +338,15 @@ private struct CompanionServerEditor: View {
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                     }
+                } header: {
+                    Text("TAK Server")
+                } footer: {
+                    if settingsLocked {
+                        Label("Disable server to edit", systemImage: "lock.fill")
+                    }
                 }
-                .disabled(busy || connected)
-                Section("Advanced TLS identity") {
-                    TextField("Stream TLS name (optional)", text: $streamTLSName)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                }
-                .disabled(busy || connected)
-                Section("Authentication") {
+                .disabled(busy || settingsLocked)
+                Section {
                     if connected {
                         Label("Connected", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
@@ -373,8 +387,14 @@ private struct CompanionServerEditor: View {
                         .disabled(busy || endpoint == nil)
                     }
                     LabeledContent("Certificate", value: certificateStatus)
+                } header: {
+                    Text("Authentication")
+                } footer: {
+                    if settingsLocked {
+                        Label("Disable server to edit", systemImage: "lock.fill")
+                    }
                 }
-                .disabled(connected)
+                .disabled(settingsLocked)
                 if let original {
                     CompanionServerStatusSection(
                         bridge: bridge,
@@ -396,6 +416,14 @@ private struct CompanionServerEditor: View {
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.data]) { result in
                 importFile(result)
+            }
+            .alert("Server settings", isPresented: Binding(
+                get: { connectionError != nil },
+                set: { if !$0 { connectionError = nil } }
+            )) {
+                Button("OK", role: .cancel) { connectionError = nil }
+            } message: {
+                Text(connectionError ?? "")
             }
             .onAppear {
                 if deviceID.isEmpty { deviceID = UUID().uuidString.lowercased() }
@@ -502,13 +530,15 @@ private struct CompanionServerEditor: View {
         guard let endpoint else { return }
         do {
             try validateUnique(endpoint)
-            let tlsName = try CompanionServer.validatedStreamTLSName(streamTLSName)
             if let pendingIdentity {
                 guard pendingEndpointKey == endpoint.key else { throw CompanionFailure.message("Enroll or import for this server again.") }
                 try CertificateStore.save(pendingIdentity, endpoint: endpoint.key)
             }
-            let record = CompanionServer(id: serverID, endpoint: endpoint, enabled: original?.enabled ?? false,
-                                         streamTLSName: tlsName)
+            let current = bridge.servers.first { $0.id == serverID }
+            let sameEndpoint = current?.endpoint.key == endpoint.key
+            let record = CompanionServer(id: serverID, endpoint: endpoint, enabled: original == nil ? true : enabled,
+                                         streamTLSName: sameEndpoint ? current?.streamTLSName : nil,
+                                         apiTLSName: sameEndpoint ? current?.apiTLSName : nil)
             try bridge.save(record)
             saved = true
             dismiss()
@@ -516,16 +546,23 @@ private struct CompanionServerEditor: View {
     }
 }
 
+private struct TLSApprovalSection: View {
+    @ObservedObject var bridge: PhoneBridgeModel
+
+    var body: some View {
+        if let error = bridge.tlsDiscoveryError {
+            Section("Certificate discovery") {
+                Text(error).foregroundStyle(.orange)
+            }
+        }
+    }
+}
+
 private struct CompanionSitxRow: View {
     @ObservedObject var sitx: CompanionSitxSession
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("Sit(x) TAK")
-            Text(sitx.state.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        Text("Sit(x) TAK")
     }
 }
 
@@ -533,6 +570,8 @@ private struct CompanionSitxRow: View {
 private struct CompanionSitxView: View {
     @ObservedObject var sitx: CompanionSitxSession
     @State private var showAuthorization = false
+    @State private var confirmRemoval = false
+    @State private var removing = false
 
     var body: some View {
         List {
@@ -569,8 +608,20 @@ private struct CompanionSitxView: View {
                 Label("Re-auth", systemImage: "arrow.clockwise")
             }
             .disabled(!sitx.enabled || sitx.host.isEmpty)
+            Button("Remove Sit(x) connection", role: .destructive) { confirmRemoval = true }
+                .disabled(removing)
         }
         .navigationTitle("Sit(x) TAK")
+        .confirmationDialog("Remove Sit(x) connection and all saved authorization, address and groups?", isPresented: $confirmRemoval) {
+            Button("Remove Sit(x) connection", role: .destructive) {
+                removing = true
+                Task {
+                    await sitx.removeConnection()
+                    removing = false
+                }
+            }
+        }
+        .disabled(removing)
         .onAppear {
             showAuthorization = !sitx.authorizationCode.isEmpty
             if sitx.enabled, sitx.hasAuthorization, sitx.groups.count <= 1 { sitx.refreshGroups() }

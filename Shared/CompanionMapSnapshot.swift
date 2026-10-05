@@ -8,13 +8,38 @@ struct CompanionMapEvent: Codable {
     let sourceServerID: UUID
     let sourceGeneration: Int
     let receivedAt: Date
+    let header: CoTMapHeader?
+    let storageByteBudget: Int
+
+    init(xml: String, sourceServerID: UUID, sourceGeneration: Int, receivedAt: Date) {
+        self.xml = xml
+        self.sourceServerID = sourceServerID
+        self.sourceGeneration = sourceGeneration
+        self.receivedAt = receivedAt
+        header = CoTMapHeader.parse(xml)
+        // JSON escapes control bytes; reserve space for the fixed event metadata.
+        storageByteBudget = xml.utf8.reduce(512) { size, byte in
+            size + (byte < 32 ? 6 : byte == 34 || byte == 92 ? 2 : 1)
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case xml, sourceServerID, sourceGeneration, receivedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(xml: try values.decode(String.self, forKey: .xml),
+                  sourceServerID: try values.decode(UUID.self, forKey: .sourceServerID),
+                  sourceGeneration: try values.decode(Int.self, forKey: .sourceGeneration),
+                  receivedAt: try values.decode(Date.self, forKey: .receivedAt))
+    }
 
     var isValid: Bool {
         sourceGeneration >= 0 && receivedAt.timeIntervalSince1970.isFinite &&
-            CoTStreamFramer.isEvent(Data(xml.utf8)) && header != nil && header?.type != "b-t-f"
+            header != nil && header?.type != "b-t-f"
     }
 
-    var header: CoTMapHeader? { CoTMapHeader.parse(xml) }
     var lastSeen: Date { min(header?.time ?? receivedAt, receivedAt) }
 
     func isCurrent(at now: Date) -> Bool {
@@ -26,6 +51,7 @@ struct CompanionMapEvent: Codable {
 
 struct CompanionMapCache: Codable {
     static let maximumEvents = 50
+    static let maximumStorageBytes = 262_144
     static let maximumAge: TimeInterval = 300
     private(set) var events: [CompanionMapEvent] = []
 
@@ -50,6 +76,11 @@ struct CompanionMapCache: Codable {
         }
         events.sort { $0.lastSeen > $1.lastSeen }
         if events.count > Self.maximumEvents { events.removeLast(events.count - Self.maximumEvents) }
+        var bytes = events.reduce(0) { $0 + $1.storageByteBudget }
+        while bytes > Self.maximumStorageBytes, let oldest = events.last {
+            bytes -= oldest.storageByteBudget
+            events.removeLast()
+        }
     }
 
     mutating func remove(sourceID: UUID, beforeGeneration: Int? = nil) {
@@ -82,6 +113,37 @@ struct CompanionMapCache: Codable {
         }
         _ = try reply.encoded()
         return reply
+    }
+}
+
+@MainActor
+final class MapCacheWriteBatcher {
+    private let interval: Duration
+    private let write: @MainActor () -> Void
+    private var task: Task<Void, Never>?
+
+    init(interval: Duration = .seconds(1), write: @escaping @MainActor () -> Void) {
+        self.interval = interval
+        self.write = write
+    }
+
+    func schedule() {
+        guard task == nil else { return }
+        task = Task { [weak self, interval] in
+            do { try await Task.sleep(for: interval) } catch { return }
+            self?.flush()
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+    }
+
+    func flush() {
+        guard task != nil else { return }
+        cancel()
+        write()
     }
 }
 

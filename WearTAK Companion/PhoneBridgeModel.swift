@@ -18,6 +18,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var configured = false
     @Published private(set) var connected = false
     @Published private(set) var mapCacheError: String?
+    @Published private(set) var tlsDiscoveryError: String?
+    private var tlsWaiters: [String: [CheckedContinuation<Void, Error>]] = [:]
+    private var tlsDiscoveryTasks: [String: Task<Void, Never>] = [:]
+    private var failedTLSDiscoveries = Set<String>()
     @Published private(set) var phoneReporting = PhoneReportingStatus()
 
     struct ServerState {
@@ -49,6 +53,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var backgroundDeadline: Task<Void, Never>?
     private var refreshInFlight = false
     private var mapCache = CompanionMapCache()
+    private lazy var mapCacheWrites = MapCacheWriteBatcher { [weak self] in self?.saveMapCache() }
     private var chatBuffer = CompanionChatBuffer()
     private var lastMapEventReceivedAt: Date?
     private static let mapStorageKey = "WearTAK.companion.mapCache"
@@ -121,7 +126,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             for record in servers {
                 let endpoint = try CompanionEndpoint.parse(address: record.host, streamPort: "\(record.port)", enrollmentPort: "\(record.enrollmentPort)")
                 checked = try CompanionServer.saving(CompanionServer(id: record.id, endpoint: endpoint,
-                    enabled: record.enabled, streamTLSName: record.streamTLSName), into: checked)
+                    enabled: record.enabled, streamTLSName: record.streamTLSName,
+                    apiTLSName: record.apiTLSName), into: checked)
             }
             servers = checked
             synchronize()
@@ -152,11 +158,14 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     func setEnabled(_ enabled: Bool, id: UUID) throws {
         guard var server = servers.first(where: { $0.id == id }) else { return }
         server.enabled = enabled
+        if !enabled { cancelTLSApprovals(serverID: id) }
+        if enabled { failedTLSDiscoveries = failedTLSDiscoveries.filter { !$0.hasPrefix(id.uuidString + ":") } }
         try save(server)
     }
 
     func remove(id: UUID) throws {
         guard let server = servers.first(where: { $0.id == id }) else { return }
+        cancelTLSApprovals(serverID: id)
         sessions[server.id]?.stop()
         try CertificateStore.remove(endpoint: server.endpoint.key)
         let updated = servers.filter { $0.id != id }
@@ -169,11 +178,68 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     func setActive(_ active: Bool) {
         self.active = active
+        if !active { mapCacheWrites.flush() }
         if active {
             endBackgroundRefresh()
             reporter.refreshServicesEnabled()
         }
         synchronize()
+    }
+
+    private func cancelTLSApprovals(serverID: UUID) {
+        for key in Array(tlsWaiters.keys) where key.hasPrefix(serverID.uuidString + ":") {
+            finishTLSApproval(key, result: .failure(CompanionFailure.message("Certificate approval cancelled because the server was disabled or removed.")))
+        }
+    }
+
+    private func requestTLSApproval(serverID: UUID, isAPI: Bool) async throws {
+        guard let server = servers.first(where: { $0.id == serverID && $0.enabled }) else {
+            throw CompanionFailure.message("Server unavailable for certificate discovery.")
+        }
+        let key = "\(serverID.uuidString):\(isAPI ? "api" : "stream")"
+        guard (isAPI ? server.apiTLSName : server.streamTLSName) == nil else {
+            throw CompanionFailure.message("The configured TLS name failed validation. Automatic discovery does not replace a manual or previously saved identity.")
+        }
+        guard !failedTLSDiscoveries.contains(key) else {
+            throw CompanionFailure.message("Automatic certificate discovery failed. Disable and re-enable the server to try again, or ask the administrator to check its certificate.")
+        }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            tlsWaiters[key, default: []].append(continuation)
+            guard tlsDiscoveryTasks[key] == nil else { return }
+            tlsDiscoveryTasks[key] = Task {
+                do {
+                    guard let stored = try CertificateStore.read(endpoint: server.endpoint.key) else {
+                        throw CompanionFailure.message("Enroll or import a client certificate first.")
+                    }
+                    let identity = try CertificateStore.resolve(stored)
+                    let ca = defaults.data(forKey: "WearTAK.bridge.serverCA.\(server.endpoint.key)")
+                    let names = try await ServerCertificateInspection().inspect(host: server.host,
+                        port: isAPI ? 8443 : server.port, certificates: identity.certificates, trustedCA: ca,
+                        automatic: true)
+                    let name = try CertificateStore.automaticTLSName(names)
+                    try Task.checkCancellation()
+                    guard servers.first(where: { $0.id == serverID }) == server else {
+                        throw CompanionFailure.message("Server settings changed during certificate discovery.")
+                    }
+                    tlsDiscoveryError = nil
+                    var updated = server
+                    if isAPI { updated.apiTLSName = name } else { updated.streamTLSName = name }
+                    try save(updated)
+                    Logger(subsystem: "com.aegorsuch.weartak", category: "TLSDiscovery")
+                        .notice("Saved automatic \(isAPI ? "API" : "stream", privacy: .public) certificate identity \(name, privacy: .public) for \(server.host, privacy: .public)")
+                    finishTLSApproval(key, result: .success(()))
+                } catch {
+                    tlsDiscoveryError = "Certificate discovery for \(server.host) failed: \(error.localizedDescription)"
+                    failedTLSDiscoveries.insert(key)
+                    finishTLSApproval(key, result: .failure(error))
+                }
+            }
+        }
+    }
+
+    private func finishTLSApproval(_ key: String, result: Result<Void, Error>) {
+        tlsDiscoveryTasks.removeValue(forKey: key)?.cancel()
+        for waiter in tlsWaiters.removeValue(forKey: key) ?? [] { waiter.resume(with: result) }
     }
 
     /// Short, bounded time for one watch request. Not used while phone location reporting keeps Companion running.
@@ -186,6 +252,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         }
         guard backgroundTask != .invalid else {
             backgroundGeneration = nil
+            mapCacheWrites.flush()
             throw CompanionFailure.message("iOS could not grant time for a watch refresh. Open Companion on the phone.")
         }
         backgroundDeadline = Task { [weak self] in
@@ -207,8 +274,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private func saveMapCache() {
+        mapCacheWrites.cancel()
         do {
             defaults.set(try JSONEncoder().encode(mapCache), forKey: Self.mapStorageKey)
+            mapCacheError = nil
         } catch { mapCacheError = "Unable to cache map: \(error.localizedDescription)" }
     }
 
@@ -242,6 +311,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                     }
                 }
                 session.onCoT = { [weak self] xml in self?.forward(xml, sourceID: server.id) }
+                session.onTLSMismatch = { [weak self] isAPI in
+                    guard let self else { throw CompanionFailure.message("Companion unavailable.") }
+                    try await self.requestTLSApproval(serverID: server.id, isAPI: isAPI)
+                }
                 session.onChannelsChanged = { [weak self] in
                     self?.sourceGenerations[server.id, default: 0] += 1
                     self?.mapCache.remove(sourceID: server.id)
@@ -295,7 +368,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private func snapshot(id: UUID = UUID()) -> BridgeWire.Message {
         BridgeWire.Message(kind: .status, id: id, ready: canRelay && connected, configured: configured, detail: status,
                    sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary,
-                   phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "")
+                   phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
+                   sitxSettings: sitx.settingsSnapshot)
     }
 
     private var phoneReportingSummary: String {
@@ -480,12 +554,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         let session = WCSession.default
         isWatchPaired = WCSession.isSupported() && session.isPaired
         guard session.activationState == .activated else { return }
-        let context: [String: Any] = [
+        var context: [String: Any] = [
             "WearTAKCompanion.serverConfigured": configured,
             "WearTAKCompanion.serverReady": canRelay && connected,
             "WearTAKCompanion.sitxSetUp": sitx.isSetUp
         ]
         do {
+            context[SitxSettingsSnapshot.contextKey] = try JSONEncoder().encode(sitx.settingsSnapshot)
             try session.updateApplicationContext(context)
             watchSetupError = nil
         } catch {
@@ -506,7 +581,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         }
         if event.isValid { lastMapEventReceivedAt = event.receivedAt }
         mapCache.receive(event)
-        saveMapCache()
+        mapCacheWrites.schedule()
         guard canRelay, connected, WCSession.default.isReachable, incomingInFlight < 16,
               let data = try? BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: sourceID,
                   sourceGeneration: sourceGenerations[sourceID, default: 0], sessionID: bridgeSessionID).encoded() else {
@@ -569,7 +644,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 }
                 if message.kind == .sitxConfig, let config = message.sitxConfig {
                     var released: SitxRelayConfig?
-                    if config.enabled {
+                    if config.removeConnection == true {
+                        await self.sitx.removeConnection()
+                        released = SitxRelayConfig(enabled: false, host: "", flowTag: "", removeConnection: true)
+                    } else if config.enabled {
                         try self.applySitx(config)
                     } else {
                         let token = await self.sitx.release()
@@ -577,7 +655,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                                                    refreshToken: token)
                     }
                     replyHandler(try BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true,
-                        sitxConfig: released, sitxStatus: self.sitxStatusSummary ?? "").encoded())
+                        sitxConfig: released, sitxStatus: self.sitxStatusSummary ?? "",
+                        sitxSettings: self.sitx.settingsSnapshot).encoded())
                     return
                 }
                 if message.kind == .mapSnapshot {
@@ -676,7 +755,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         let reply = BridgeWire.Message(kind: .mapSnapshot, id: message.id, ready: connected,
             configured: configured, detail: status, sessionID: bridgeSessionID,
             enabledServerIDs: Array(enabledSourceIDs), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"),
-            phoneReporting: phoneReportingSummary, phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "")
+            phoneReporting: phoneReportingSummary, phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
+            sitxSettings: sitx.settingsSnapshot)
         return try mapCache.filling(reply)
     }
 
@@ -837,6 +917,8 @@ private final class CompanionServerSession {
     var onState: ((PhoneBridgeModel.ServerState) -> Void)?
     var onCoT: ((String) -> Void)?
     var onChannelsChanged: (() -> Void)?
+    var onTLSMismatch: ((Bool) async throws -> Void)?
+    private var streamApprovalTask: Task<Void, Never>?
     private(set) var state = PhoneBridgeModel.ServerState()
     private let connection = TAKServerConnection()
     private var record: CompanionServer?
@@ -857,10 +939,27 @@ private final class CompanionServerSession {
             else if detail != "Connecting" { self.retry() }
         }
         connection.onCoT = { [weak self] xml in self?.onCoT?(xml) }
+        connection.onHostnameMismatch = { [weak self] in
+            guard let self, self.streamApprovalTask == nil else { return }
+            self.streamApprovalTask = Task {
+                defer { self.streamApprovalTask = nil }
+                do {
+                    guard let approve = self.onTLSMismatch else { return }
+                    try await approve(false)
+                } catch {
+                    self.state.lastError = error.localizedDescription
+                    self.state.lastErrorAt = Date()
+                    self.onState?(self.state)
+                }
+            }
+        }
     }
 
     func configure(_ record: CompanionServer, active: Bool) {
-        let changed = self.record != record || self.active != active
+        var previous = self.record
+        // API identity changes do not require interrupting the independent CoT stream.
+        previous?.apiTLSName = record.apiTLSName
+        let changed = previous != record || self.active != active
         self.record = record
         self.active = active
         if changed { stop() }
@@ -929,46 +1028,72 @@ private final class CompanionServerSession {
             throw CompanionFailure.message("Server disconnected or channel request already running.")
         }
         let ca = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(record.endpoint.key)")
-        let client = TAKChannelClient(host: record.host, identity: try CertificateStore.resolve(stored), trustedCA: ca)
+        let client = try TAKChannelClient(host: record.host, identity: CertificateStore.resolve(stored),
+                                          trustedCA: ca, apiTLSName: record.apiTLSName)
         channelClient = client
         return client
     }
 
     func loadChannels() async throws -> TAKChannelGroups {
+        try await retryAPIOnApproval { try await self.loadChannelsOnce() }
+    }
+
+    private func loadChannelsOnce() async throws -> TAKChannelGroups {
         let client = try makeChannelClient()
         defer { client.cancel(); channelClient = nil }
         return try await client.load(checkSupport: true, sendLatestSA: true)
     }
 
     func refreshLatestSA() async throws {
+        try await retryAPIOnApproval { try await self.refreshLatestSAOnce() }
+    }
+
+    private func refreshLatestSAOnce() async throws {
         guard active, state.connected, let record,
               let stored = try CertificateStore.read(endpoint: record.endpoint.key) else {
             throw CompanionFailure.message("TAK server is not connected.")
         }
         let ca = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(record.endpoint.key)")
-        let client = TAKChannelClient(host: record.host, identity: try CertificateStore.resolve(stored),
-                                      trustedCA: ca, requestTimeout: 3)
+        let client = try TAKChannelClient(host: record.host, identity: CertificateStore.resolve(stored),
+                                          trustedCA: ca, requestTimeout: 3, apiTLSName: record.apiTLSName)
         defer { client.cancel() }
         _ = try await client.load(checkSupport: false, sendLatestSA: true)
     }
 
     func missionRequest(path: String, method: String = "GET", query: [URLQueryItem] = []) async throws -> Data {
+        try await retryAPIOnApproval { try await self.missionRequestOnce(path: path, method: method, query: query) }
+    }
+
+    private func missionRequestOnce(path: String, method: String, query: [URLQueryItem]) async throws -> Data {
         guard active, state.connected, let record, record.enabled,
               let stored = try CertificateStore.read(endpoint: record.endpoint.key) else {
             throw CompanionFailure.message("TAK server is not connected.")
         }
         let ca = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(record.endpoint.key)")
-        let client = TAKChannelClient(host: record.host, identity: try CertificateStore.resolve(stored),
-                                      trustedCA: ca, requestTimeout: 20)
+        let client = try TAKChannelClient(host: record.host, identity: CertificateStore.resolve(stored),
+                                          trustedCA: ca, requestTimeout: 20, apiTLSName: record.apiTLSName)
         defer { client.cancel() }
         return try await client.missionRequest(path: path, method: method, query: query)
     }
 
     func updateChannel(bit: Int, active: Bool, clientUID: String) async throws -> TAKChannelGroups {
+        try await retryAPIOnApproval { try await self.updateChannelOnce(bit: bit, active: active, clientUID: clientUID) }
+    }
+
+    private func updateChannelOnce(bit: Int, active: Bool, clientUID: String) async throws -> TAKChannelGroups {
         let client = try makeChannelClient()
         defer { client.cancel(); channelClient = nil }
         _ = try await client.update(bitPosition: bit, active: active, clientUID: clientUID)
         onChannelsChanged?()
         return try await client.load(checkSupport: false, sendLatestSA: true)
+    }
+
+    private func retryAPIOnApproval<T>(_ operation: () async throws -> T) async throws -> T {
+        do { return try await operation() }
+        catch let mismatch as TLSHostnameMismatch {
+            guard let approve = onTLSMismatch else { throw mismatch }
+            try await approve(true)
+            return try await operation()
+        }
     }
 }

@@ -11,6 +11,7 @@ final class TAKServerConnection {
     private(set) var ready = false
     var onState: ((Bool, String) -> Void)?
     var onCoT: ((String) -> Void)?
+    var onHostnameMismatch: (() -> Void)?
 
     func connect(endpoint: CompanionEndpoint, identity: ClientIdentity, trustedCA: Data?, streamTLSName: String? = nil) throws {
         disconnect()
@@ -53,8 +54,10 @@ final class TAKServerConnection {
                     self.onState?(true, "Connected")
                     self.receive(socket)
                 case .waiting(let error), .failed(let error):
+                    let mismatch = diagnostics.hasHostnameMismatch
                     self.fail(socket, message: diagnostics.message(
                         endpoint: "TAK stream \(endpoint.host):\(endpoint.streamPort) (TLS name \(host))", error: error))
+                    if mismatch { self.onHostnameMismatch?() }
                 case .cancelled:
                     self.ready = false
                 default: break

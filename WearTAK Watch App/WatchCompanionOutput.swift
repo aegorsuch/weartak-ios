@@ -59,6 +59,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
     /// Companion's Sit(x) relay state: nil when unknown, empty when the phone holds no Sit(x) configuration.
     @Published private(set) var sitxRelayStatus: String?
+    @Published private(set) var sitxSettings: SitxSettingsSnapshot?
     /// Sit(x) set up in Companion itself, reported through the phone's application context.
     private var phoneSitxSetUp = false {
         didSet {
@@ -221,6 +222,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         if let reporting = message.phoneReporting { phoneReportingStatus = reporting }
         phoneLocationEnabled = message.phoneLocationEnabled == true
         if let sitxStatus = message.sitxStatus { sitxRelayStatus = sitxStatus }
+        if let settings = message.sitxSettings { sitxSettings = settings }
         lastConfirmation = Date()
         status = message.detail ?? (serverReady ? "Connected" : "Not connected")
         onStateChange?()
@@ -229,6 +231,24 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
                 sourceGeneration: event.sourceGeneration, sessionID: message.sessionID))
         }
     }
+
+    private func applySitxSettingsContext(_ context: [String: Any]) {
+        guard let data = context[SitxSettingsSnapshot.contextKey] as? Data else { return }
+        do {
+            sitxSettings = try JSONDecoder().decode(SitxSettingsSnapshot.self, from: data)
+        } catch {
+            sitxRelayStatus = "Sit(x) settings sync failed: \(error.localizedDescription)"
+        }
+    }
+
+    #if DEBUG && targetEnvironment(simulator)
+    func receiveLoadTestMessage(_ data: Data) throws {
+        let message = try BridgeWire.Message.decode(data)
+        guard message.kind == .cot else { throw BridgeWire.Failure.invalidCoT }
+        applySession(message)
+        onCoT?(message)
+    }
+    #endif
 
     private func applySession(_ message: BridgeWire.Message) {
         guard let incoming = message.sessionID, incoming != sessionID else { return }
@@ -268,6 +288,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             throw CompanionRefreshFailure.message(reply.detail ?? "Companion did not accept the Sit(x) settings.")
         }
         if let status = reply.sitxStatus { sitxRelayStatus = status }
+        if let settings = reply.sitxSettings { sitxSettings = settings }
         return reply
     }
 
@@ -468,6 +489,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         let sitxSetUp = session.receivedApplicationContext["WearTAKCompanion.sitxSetUp"] as? Bool ?? false
         Task { @MainActor [weak self] in
             self?.configured = configured
+            self?.applySitxSettingsContext(session.receivedApplicationContext)
             self?.phoneSitxSetUp = sitxSetUp
             self?.publishIdentity(force: true)
             self?.refresh()
@@ -485,6 +507,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         Task { @MainActor [weak self] in
             guard let self else { return }
             if let configured { self.configured = configured }
+            self.applySitxSettingsContext(context)
             self.phoneSitxSetUp = sitxSetUp
             if unavailable && !self.handshakeInFlight && !self.mapRefreshing { self.invalidate() }
             else { self.refresh() }

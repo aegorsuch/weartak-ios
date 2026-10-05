@@ -104,6 +104,7 @@ enum WiFiBatteryPolicy: String, CaseIterable, Identifiable {
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Keys {
+        static let developerMode = "WearTAK.developerMode"
         static let dashboardMetric = "WearTAK.dashboardMetric"
         static let mapButtonsVisible = "WearTAK.mapButtonsVisible"
         static let hiddenMapTeams = "WearTAK.hiddenMapTeams"
@@ -169,6 +170,27 @@ final class AppSettings: ObservableObject {
     static let bloodhoundProximityIntensityOptions = ["Single Burst", "Triple Burst", "Until In Position"]
 
     private let defaults: UserDefaults
+    private var developerUnlockTaps = 0
+
+    @Published var developerMode: Bool {
+        didSet {
+            developerUnlockTaps = 0
+            defaults.set(developerMode, forKey: Keys.developerMode)
+        }
+    }
+
+    @discardableResult
+    func registerVersionTap() -> Bool {
+        guard !developerMode else { return false }
+        developerUnlockTaps += 1
+        guard developerUnlockTaps == 7 else { return false }
+        developerMode = true
+        return true
+    }
+
+    func resetVersionTaps() {
+        developerUnlockTaps = 0
+    }
 
     @Published var dashboardMetric: DashboardMetric {
         didSet { defaults.set(dashboardMetric.rawValue, forKey: Keys.dashboardMetric) }
@@ -512,6 +534,7 @@ final class AppSettings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        developerMode = defaults.bool(forKey: Keys.developerMode)
         dashboardMetric = DashboardMetric(rawValue: defaults.string(forKey: Keys.dashboardMetric) ?? "") ?? .exertion
         mapButtonsVisible = defaults.object(forKey: Keys.mapButtonsVisible) as? Bool ?? true
         hiddenMapTeams = Set(defaults.stringArray(forKey: Keys.hiddenMapTeams) ?? [])

@@ -73,6 +73,10 @@ final class CompanionSitxSession: ObservableObject {
     var isSetUp: Bool { hasAuthorization || pairingTask != nil }
     var selectedGroupName: String? { groups.first { $0.id == selectedFlowTag }?.name ?? groupName }
 
+    var settingsSnapshot: SitxSettingsSnapshot {
+        SitxSettingsSnapshot(enabled: enabled, host: host, groupName: selectedGroupName, status: state.detail)
+    }
+
     init(defaults: UserDefaults = .standard, session: URLSession = .shared) {
         self.defaults = defaults
         self.session = session
@@ -311,6 +315,22 @@ final class CompanionSitxSession: ObservableObject {
         forgetAuthorization(detail: Status.unconfigured)
         enabled = false
         save()
+        publish()
+    }
+
+    func removeConnection() async {
+        let pendingPairing = pairingTask
+        cancelPairing()
+        enabled = false
+        disconnect(detail: Status.unconfigured)
+        await pendingPairing?.value
+        await tokenChain?.value
+        clear()
+        host = ""
+        releasedToken = nil
+        defaults.removeObject(forKey: Self.configKey)
+        defaults.removeObject(forKey: Self.groupsKey)
+        defaults.removeObject(forKey: Self.deviceIDKey)
         publish()
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Security
 import SwiftASN1
 
@@ -23,17 +24,26 @@ struct ClientIdentity {
 nonisolated final class TLSConnectionDiagnostics: @unchecked Sendable {
     private let lock = NSLock()
     private var failure: String?
+    private var hostnameMismatch = false
+
+    var hasHostnameMismatch: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return hostnameMismatch
+    }
 
     func reset() {
         lock.lock()
         defer { lock.unlock() }
         failure = nil
+        hostnameMismatch = false
     }
 
     func record(_ error: Error) {
         lock.lock()
         defer { lock.unlock() }
         let underlying = error as NSError
+        hostnameMismatch = underlying.domain == NSOSStatusErrorDomain && underlying.code == -67602
         failure = "\(error.localizedDescription) [\(underlying.domain) \(underlying.code)]"
     }
 
@@ -45,12 +55,57 @@ nonisolated final class TLSConnectionDiagnostics: @unchecked Sendable {
     }
 }
 
+struct TLSHostnameMismatch: LocalizedError {
+    let detail: String
+    var errorDescription: String? { detail }
+}
+
 enum CertificateStore {
     private static let service = "com.aegorsuch.weartak.companion.identities"
 
     nonisolated static func evaluateServerTrust(_ trust: SecTrust, host: String,
                                     certificates: [SecCertificate], trustedCA: Data?) throws {
-        let policyStatus = SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host as CFString))
+        try evaluateTrust(trust, host: host, certificates: certificates, trustedCA: trustedCA)
+    }
+
+    nonisolated static func inspectServerTrust(_ trust: SecTrust, certificates: [SecCertificate],
+                                              trustedCA: Data?, automatic: Bool = false) throws -> [String] {
+        if automatic {
+            guard let chain = SecTrustCopyCertificateChain(trust) else {
+                throw CompanionFailure.message("The server did not provide a certificate chain.")
+            }
+            var publicTrust: SecTrust?
+            guard SecTrustCreateWithCertificates(chain, SecPolicyCreateSSL(true, nil), &publicTrust) == errSecSuccess,
+                  let publicTrust else { throw CompanionFailure.message("Unable to check public CA trust.") }
+            SecTrustSetNetworkFetchAllowed(publicTrust, false)
+            if SecTrustEvaluateWithError(publicTrust, nil) {
+                throw CompanionFailure.message("Automatic legacy identity discovery is unavailable for public-CA certificates. Ask the administrator for a certificate matching the server hostname.")
+            }
+        }
+        try evaluateTrust(trust, host: nil, certificates: certificates, trustedCA: trustedCA,
+                          restrictToProvidedCA: automatic)
+        guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate], let leaf = chain.first else {
+            throw CompanionFailure.message("The server did not provide a certificate.")
+        }
+        let names = try dnsSubjectAlternativeNames(leaf)
+        guard !names.isEmpty else {
+            throw CompanionFailure.message("The server certificate has no supported exact DNS SAN names. Ask the administrator for a certificate with a DNS SAN; names are not guessed from its Common Name.")
+        }
+        return names
+    }
+
+    nonisolated static func automaticTLSName(_ names: [String]) throws -> String {
+        guard names.count == 1, let name = names.first,
+              let validated = try CompanionServer.validatedStreamTLSName(name), name == validated else {
+            throw CompanionFailure.message("Automatic certificate discovery requires one exact DNS SAN. Ask the administrator for a certificate matching the server hostname when multiple or unsupported names are present.")
+        }
+        return validated
+    }
+
+    nonisolated private static func evaluateTrust(_ trust: SecTrust, host: String?,
+                                                  certificates: [SecCertificate], trustedCA: Data?,
+                                                  restrictToProvidedCA: Bool = false) throws {
+        let policyStatus = SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host.map { $0 as CFString }))
         guard policyStatus == errSecSuccess else {
             throw CompanionFailure.message("Unable to configure TLS hostname validation (\(policyStatus)).")
         }
@@ -63,10 +118,13 @@ enum CertificateStore {
         } else {
             anchors = Array(certificates.dropFirst())
         }
+        if restrictToProvidedCA && anchors.isEmpty {
+            throw CompanionFailure.message("Automatic certificate discovery requires the server's enrollment/import CA chain.")
+        }
         if !anchors.isEmpty {
             let anchorStatus = SecTrustSetAnchorCertificates(trust, anchors as CFArray)
             // An explicit CA restricts trust; inferred client CAs supplement system roots.
-            let rootsStatus = SecTrustSetAnchorCertificatesOnly(trust, trustedCA != nil)
+            let rootsStatus = SecTrustSetAnchorCertificatesOnly(trust, trustedCA != nil || restrictToProvidedCA)
             guard anchorStatus == errSecSuccess, rootsStatus == errSecSuccess else {
                 throw CompanionFailure.message("Unable to configure TLS trust anchors (\(anchorStatus), \(rootsStatus)).")
             }
@@ -76,6 +134,49 @@ enum CertificateStore {
             if let error { throw error as Error }
             throw CompanionFailure.message("The server certificate failed hostname or certificate-chain validation.")
         }
+    }
+
+    nonisolated static func dnsSubjectAlternativeNames(_ certificate: SecCertificate) throws -> [String] {
+        let root = try DER.parse(Array(SecCertificateCopyData(certificate) as Data))
+        guard case .constructed(let children) = root.content, let tbs = Array(children).first,
+              case .constructed(let fields) = tbs.content else {
+            throw CompanionFailure.message("Invalid X.509 certificate.")
+        }
+        guard let extensions = fields.first(where: {
+            $0.identifier == ASN1Identifier(tagWithNumber: 3, tagClass: .contextSpecific)
+        }) else { return [] }
+        guard case .constructed(let wrapper) = extensions.content, let sequence = Array(wrapper).first,
+              case .constructed(let entries) = sequence.content else {
+            throw CompanionFailure.message("Invalid certificate extensions.")
+        }
+        for entry in entries {
+            guard case .constructed(let values) = entry.content else {
+                throw CompanionFailure.message("Invalid certificate extension.")
+            }
+            let nodes = Array(values)
+            guard let oid = nodes.first else {
+                throw CompanionFailure.message("Missing certificate extension identifier.")
+            }
+            guard try ASN1ObjectIdentifier(derEncoded: oid) == [2, 5, 29, 17] else { continue }
+            guard let value = nodes.last else {
+                throw CompanionFailure.message("Missing certificate SAN extension.")
+            }
+            let namesNode = try DER.parse(ASN1OctetString(derEncoded: value).bytes)
+            guard namesNode.identifier == .sequence, case .constructed(let names) = namesNode.content else {
+                throw CompanionFailure.message("Invalid certificate SAN extension.")
+            }
+            var result = Set<String>()
+            for name in names where name.identifier == ASN1Identifier(tagWithNumber: 2, tagClass: .contextSpecific) {
+                guard case .primitive(let bytes) = name.content, let text = String(bytes: bytes, encoding: .ascii) else {
+                    throw CompanionFailure.message("Invalid certificate DNS SAN.")
+                }
+                // Wildcard SANs cannot be used as an exact, approved TLS-name override.
+                if text.contains("*") { continue }
+                if let validated = try CompanionServer.validatedStreamTLSName(text) { result.insert(validated) }
+            }
+            return result.sorted()
+        }
+        return []
     }
 
     static func read(endpoint: String) throws -> StoredIdentity? {
@@ -88,6 +189,7 @@ enum CertificateStore {
         guard status == errSecSuccess, let data = result as? Data else {
             throw CompanionFailure.message("Keychain read failed (\(status)).")
         }
+
         return try JSONDecoder().decode(StoredIdentity.self, from: data)
     }
 
@@ -251,5 +353,71 @@ enum CertificateStore {
             throw CompanionFailure.message("Invalid certificate data.")
         }
         return data
+    }
+}
+
+@MainActor
+final class ServerCertificateInspection {
+    private let queue = DispatchQueue(label: "WearTAK.CertificateInspection")
+    private var connection: NWConnection?
+    private var continuation: CheckedContinuation<[String], Error>?
+    private var timeout: Task<Void, Never>?
+    private var inspectionID: UUID?
+
+    func inspect(host: String, port: Int, certificates: [SecCertificate], trustedCA: Data?,
+                 automatic: Bool = false) async throws -> [String] {
+        guard (1...65535).contains(port), let networkPort = NWEndpoint.Port(rawValue: UInt16(port)),
+              !host.isEmpty else { throw CompanionFailure.message("Invalid certificate inspection endpoint.") }
+        guard connection == nil else { throw CompanionFailure.message("Certificate inspection is already running.") }
+        let id = UUID()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                self.continuation = continuation
+                self.inspectionID = id
+                let tls = NWProtocolTLS.Options()
+                sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, host)
+                sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
+                sec_protocol_options_set_verify_block(tls.securityProtocolOptions, { [weak self] _, securityTrust, complete in
+                    let trust = sec_trust_copy_ref(securityTrust).takeRetainedValue()
+                    let result = Result { try CertificateStore.inspectServerTrust(trust, certificates: certificates,
+                                                                                 trustedCA: trustedCA, automatic: automatic) }
+                    Task { @MainActor in
+                        // Inspection never completes TLS or sends a client identity or application data.
+                        complete(false)
+                        self?.finish(result, id: id)
+                    }
+                }, queue)
+                let socket = NWConnection(host: .init(host), port: networkPort,
+                                          using: NWParameters(tls: tls, tcp: NWProtocolTCP.Options()))
+                connection = socket
+                socket.stateUpdateHandler = { [weak self] state in
+                    if case .failed(let error) = state {
+                        Task { @MainActor in self?.finish(.failure(error), id: id) }
+                    } else if case .waiting(let error) = state {
+                        Task { @MainActor in self?.finish(.failure(error), id: id) }
+                    }
+                }
+                socket.start(queue: queue)
+                timeout = Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                    self?.finish(.failure(CompanionFailure.message("Certificate inspection timed out at \(host):\(port).")), id: id)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor in self.finish(.failure(CancellationError()), id: id) }
+        }
+    }
+
+    private func finish(_ result: Result<[String], Error>, id: UUID) {
+        guard inspectionID == id, let continuation else { return }
+        self.continuation = nil
+        inspectionID = nil
+        timeout?.cancel()
+        timeout = nil
+        connection?.stateUpdateHandler = nil
+        connection?.cancel()
+        connection = nil
+        continuation.resume(with: result)
     }
 }

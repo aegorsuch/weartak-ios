@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     @ObservedObject private var sitxClient: SitxClient
+    @State private var showDeveloperModeEnabled = false
 
     init(model: WatchSessionModel, settings: AppSettings) {
         self.model = model
@@ -31,10 +32,21 @@ struct SettingsView: View {
             NavigationLink("Tool Preferences") {
                 ToolPreferencesView(model: model, settings: settings)
             }
-            Text("Version \(versionLabel)")
-                .foregroundStyle(.secondary)
+            Button {
+                showDeveloperModeEnabled = settings.registerVersionTap()
+            } label: {
+                Text("Version \(versionLabel)")
+                    .foregroundStyle(.secondary)
+            }
+            if settings.developerMode {
+                Toggle("Developer mode", isOn: $settings.developerMode)
+            }
         }
         .navigationTitle("Settings")
+        .onDisappear { settings.resetVersionTaps() }
+        .alert("Developer mode enabled", isPresented: $showDeveloperModeEnabled) {
+            Button("OK", role: .cancel) {}
+        }
     }
 }
 
@@ -534,21 +546,6 @@ private struct MulticastPreferencesView: View {
         List {
             Toggle("TAK SA Multicast", isOn: $settings.multicastEnabled)
                 .disabled(!AppSettings.isMulticastAddress(settings.multicastAddress))
-            Section("Runtime Status") {
-                Text(client.status)
-                    .foregroundStyle(client.isReady ? .green : .orange)
-                LabeledContent("Datagrams sent", value: "\(client.sentDatagrams)")
-                LabeledContent("Datagrams received", value: "\(client.receivedDatagrams)")
-                if let date = client.lastSentAt {
-                    LabeledContent("Last local send") { Text(date, style: .time) }
-                }
-                if let error = client.lastSendError {
-                    Text(error).font(.caption).foregroundStyle(.orange)
-                }
-                LabeledContent("Stored events", value: "\(model.queuedEventCount)")
-                Text("Sent means accepted locally, not received by TAK.")
-                    .font(.caption)
-            }
             NavigationLink {
                 MulticastAddressView(settings: settings)
             } label: {
@@ -566,6 +563,22 @@ private struct MulticastPreferencesView: View {
             }
             Button { dismiss() } label: {
                 Label("Back", systemImage: "arrow.left")
+            }
+            if settings.developerMode {
+                Section("Runtime Status") {
+                    Text(client.status)
+                        .foregroundStyle(client.isReady ? .green : .orange)
+                    LabeledContent("Datagrams sent", value: "\(client.sentDatagrams)")
+                    LabeledContent("Datagrams received", value: "\(client.receivedDatagrams)")
+                    if let date = client.lastSentAt {
+                        LabeledContent("Last local send") { Text(date, style: .time) }
+                    }
+                    if let error = client.lastSendError {
+                        Text(error).font(.caption).foregroundStyle(.orange)
+                    }
+                    LabeledContent("Stored events", value: "\(model.queuedEventCount)")
+                    Toggle("Developer mode", isOn: $settings.developerMode)
+                }
             }
         }
         .navigationTitle("TAK SA Multicast")
@@ -673,9 +686,35 @@ private struct SitxDeviceAPIView: View {
     @ObservedObject var client: SitxClient
     @Environment(\.dismiss) private var dismiss
     @State private var showAuthorization = false
+    @State private var confirmRemoval = false
+    @State private var removing = false
+    @State private var removalError: String?
 
-    var body: some View {
+    private var settingsList: some View {
         List {
+            if let phone = client.phoneManagedSettings {
+                Toggle("Sit(x) TAK", isOn: .constant(phone.enabled))
+                    .disabled(true)
+                LabeledContent("Address", value: phone.host.replacingOccurrences(of: "https://", with: ""))
+                LabeledContent("Group", value: phone.groupName ?? "Not selected")
+                LabeledContent("Sit(x) State", value: client.canReachPhone ? phone.status : "Needs iPhone")
+                Text("Managed in Companion")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                watchSettings
+            }
+            Button {
+                dismiss()
+            } label: {
+                Label("Back", systemImage: "arrow.left")
+            }
+            Button("Remove Sit(x) connection", role: .destructive) { confirmRemoval = true }
+        }
+    }
+
+    private var watchSettings: some View {
+        Group {
             Toggle("Sit(x) TAK", isOn: Binding(
                 get: { settings.sitxEnabled },
                 set: { client.setTAKEnabled($0) }
@@ -721,13 +760,28 @@ private struct SitxDeviceAPIView: View {
                 Label("Re-auth", systemImage: "arrow.clockwise")
             }
             .disabled(!settings.sitxEnabled || settings.sitxApiHost.isEmpty)
-            Button {
-                dismiss()
-            } label: {
-                Label("Back", systemImage: "arrow.left")
+        }
+    }
+
+    var body: some View {
+        settingsList
+        .navigationTitle("Sit(x) TAK")
+        .disabled(removing)
+        .confirmationDialog("Remove Sit(x) connection and all saved authorization, address and groups?", isPresented: $confirmRemoval) {
+            Button("Remove Sit(x) connection", role: .destructive) {
+                removing = true
+                Task {
+                    defer { removing = false }
+                    do { try await client.removeConnection() }
+                    catch { removalError = error.localizedDescription }
+                }
             }
         }
-        .navigationTitle("Sit(x) TAK")
+        .alert("Sit(x) removal failed", isPresented: Binding(
+            get: { removalError != nil }, set: { if !$0 { removalError = nil } }
+        )) {
+            Button("OK", role: .cancel) { removalError = nil }
+        } message: { Text(removalError ?? "") }
         .navigationBarBackButtonHidden(true)
         .onAppear { showAuthorization = !client.authorizationCode.isEmpty }
         .onChange(of: client.authorizationCode) { _, code in

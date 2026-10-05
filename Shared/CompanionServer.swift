@@ -7,23 +7,27 @@ struct CompanionServer: Codable, Identifiable, Equatable {
     var enrollmentPort: Int
     var enabled: Bool
     var streamTLSName: String?
+    var apiTLSName: String?
 
     var endpoint: CompanionEndpoint {
         CompanionEndpoint(host: host, streamPort: port, enrollmentPort: enrollmentPort)
     }
 
-    init(id: UUID = UUID(), endpoint: CompanionEndpoint, enabled: Bool = false, streamTLSName: String? = nil) {
+    init(id: UUID = UUID(), endpoint: CompanionEndpoint, enabled: Bool = false, streamTLSName: String? = nil,
+         apiTLSName: String? = nil) {
         self.id = id
         host = endpoint.host
         port = endpoint.streamPort
         enrollmentPort = endpoint.enrollmentPort
         self.enabled = enabled
         self.streamTLSName = streamTLSName
+        self.apiTLSName = apiTLSName
     }
 
     var expectedStreamTLSName: String { streamTLSName ?? host }
+    var expectedAPITLSName: String { apiTLSName ?? host }
 
-    static func validatedStreamTLSName(_ input: String) throws -> String? {
+    nonisolated static func validatedStreamTLSName(_ input: String) throws -> String? {
         let name = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !name.isEmpty else { return nil }
         let labels = name.split(separator: ".", omittingEmptySubsequences: false)
@@ -37,6 +41,7 @@ struct CompanionServer: Codable, Identifiable, Equatable {
     static func saving(_ server: Self, into servers: [Self]) throws -> [Self] {
         var server = server
         server.streamTLSName = try validatedStreamTLSName(server.streamTLSName ?? "")
+        server.apiTLSName = try validatedStreamTLSName(server.apiTLSName ?? "")
         guard !servers.contains(where: { $0.id != server.id && $0.endpoint.key == server.endpoint.key }) else {
             throw ServerError.duplicate
         }
