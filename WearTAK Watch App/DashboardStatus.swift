@@ -10,10 +10,19 @@ enum DashboardPhysiologySeverity {
     }
 }
 
-enum DashboardLocationStatus: String {
-    case watch = "Watch location enabled"
-    case phone = "Phone location enabled"
-    case disabled = "Location disabled or unavailable"
+enum DashboardLocationStatus {
+    case watch, phone, disabled
+
+    var label: String {
+        switch self {
+        case .watch: return String(localized: "Watch location enabled", table: "WatchStatus")
+        case .phone: return String(localized: "Phone location enabled", table: "WatchStatus")
+        case .disabled: return String(localized: "Location disabled or unavailable", table: "WatchStatus")
+        }
+    }
+
+    /// Localized display text for existing call sites; never persisted or sent.
+    var rawValue: String { label }
 
     static func resolve(watchEnabled: Bool, phoneEnabled: Bool) -> Self {
         if phoneEnabled { return .phone }
@@ -21,12 +30,21 @@ enum DashboardLocationStatus: String {
     }
 }
 
-enum DashboardNetworkConnectivity: String {
-    case phone = "Phone reachable"
-    case wifi = "WiFi"
-    case cellular = "Cellular"
-    case offline = "No network connection"
-    case other = "Network available"
+enum DashboardNetworkConnectivity {
+    case phone, wifi, cellular, offline, other
+
+    var label: String {
+        switch self {
+        case .phone: return String(localized: "Phone reachable", table: "WatchStatus")
+        case .wifi: return String(localized: "WiFi", table: "WatchStatus")
+        case .cellular: return String(localized: "Cellular", table: "WatchStatus")
+        case .offline: return String(localized: "No network connection", table: "WatchStatus")
+        case .other: return String(localized: "Network available", table: "WatchStatus")
+        }
+    }
+
+    /// Localized display text for existing call sites; never persisted or sent.
+    var rawValue: String { label }
 
     var symbol: String {
         switch self {
@@ -52,6 +70,14 @@ enum DashboardTAKTransport: String, Hashable {
     case phoneRelay = "TAK BLE relay"
     case sitx = "Sit(x)"
 
+    var label: String {
+        switch self {
+        case .multicast: return String(localized: "Multicast", table: "WatchStatus")
+        case .phoneRelay: return String(localized: "TAK BLE relay", table: "WatchStatus")
+        case .sitx: return rawValue
+        }
+    }
+
     var symbol: String {
         switch self {
         case .multicast: return "dot.radiowaves.left.and.right"
@@ -73,11 +99,14 @@ enum CompanionLinkState: Equatable {
 
     var label: String {
         switch self {
-        case .connected: return "Connected"
-        case .checking: return "Checking…"
-        case .reconnecting: return "Reconnecting…"
-        case .paused(let reason): return "Phone paused – open Companion" + (reason.isEmpty ? "" : " (\(reason))")
-        case .disconnected: return "Not connected"
+        case .connected: return String(localized: "Connected", table: "WatchStatus")
+        case .checking: return String(localized: "Checking…", table: "WatchStatus")
+        case .reconnecting: return String(localized: "Reconnecting…", table: "WatchStatus")
+        case .paused(let reason):
+            if reason.isEmpty { return String(localized: "Phone paused – open Companion", table: "WatchStatus") }
+            return String(localized: "Phone paused – open Companion (\(reason))", table: "WatchStatus",
+                          comment: "Argument is a pause reason reported by the phone")
+        case .disconnected: return String(localized: "Not connected", table: "WatchStatus")
         }
     }
 
@@ -105,10 +134,10 @@ enum DashboardServerBadge: Equatable {
 
     var label: String {
         switch self {
-        case .connected: return "TAK server connected"
-        case .pending: return "TAK server reconnecting"
-        case .paused: return "TAK server paused on phone"
-        case .disconnected: return "TAK server not connected"
+        case .connected: return String(localized: "TAK server connected", table: "WatchStatus")
+        case .pending: return String(localized: "TAK server reconnecting", table: "WatchStatus")
+        case .paused: return String(localized: "TAK server paused on phone", table: "WatchStatus")
+        case .disconnected: return String(localized: "TAK server not connected", table: "WatchStatus")
         }
     }
 
@@ -134,17 +163,35 @@ struct DashboardTAKStatus: Equatable {
     }
     var isServerConnected: Bool { active.contains { $0 != .multicast } }
     var indicatorLabel: String {
-        if usesServerIcon { return isServerConnected ? "TAK server connected" : "TAK server not connected" }
-        if configured.contains(.multicast) || active.contains(.multicast) {
-            return active.contains(.multicast) ? "TAK multicast ready" : "TAK multicast not ready"
+        if usesServerIcon {
+            return isServerConnected ? String(localized: "TAK server connected", table: "WatchStatus")
+                : String(localized: "TAK server not connected", table: "WatchStatus")
         }
-        return "No TAK connection"
+        if configured.contains(.multicast) || active.contains(.multicast) {
+            return active.contains(.multicast) ? String(localized: "TAK multicast ready", table: "WatchStatus")
+                : String(localized: "TAK multicast not ready", table: "WatchStatus")
+        }
+        return String(localized: "No TAK connection", table: "WatchStatus")
     }
     var label: String {
-        if isConnected { return active.map(\.rawValue).joined(separator: " and ") + " connected" }
-        if configured == [.phoneRelay] { return "TAK BLE relay incomplete" }
-        if configured.isEmpty { return "No TAK connection" }
-        return configured.map(\.rawValue).joined(separator: " and ") + " not connected"
+        if isConnected {
+            let transports = Self.joined(active)
+            return String(localized: "\(transports) connected", table: "WatchStatus",
+                          comment: "Argument is a list of connected TAK transports, e.g. Multicast and Sit(x)")
+        }
+        if configured == [.phoneRelay] { return String(localized: "TAK BLE relay incomplete", table: "WatchStatus") }
+        if configured.isEmpty { return String(localized: "No TAK connection", table: "WatchStatus") }
+        let transports = Self.joined(configured)
+        return String(localized: "\(transports) not connected", table: "WatchStatus",
+                      comment: "Argument is a list of configured TAK transports that are not connected")
+    }
+
+    /// Joins transport names using the list conjunction of the app's active localization.
+    private static func joined(_ transports: [DashboardTAKTransport]) -> String {
+        let names = transports.map(\.label)
+        let formatter = ListFormatter()
+        formatter.locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")
+        return formatter.string(from: names) ?? names.joined(separator: ", ")
     }
 
     static func resolve(multicastReady: Bool, sitxConnected: Bool, phoneRelayConnected: Bool,

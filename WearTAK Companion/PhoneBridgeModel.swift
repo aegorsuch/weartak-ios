@@ -12,7 +12,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var lastReportingDiagnostic: String?
     @Published private(set) var servers: [CompanionServer] = []
     @Published private(set) var serverStates: [UUID: ServerState] = [:]
-    @Published private(set) var status = "No servers configured"
+    @Published private(set) var status = String(localized: "No servers configured", table: "PhoneBridgeStatus")
     @Published private(set) var isWatchPaired = false
     @Published private(set) var watchSetupError: String?
     @Published private(set) var configured = false
@@ -29,7 +29,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     struct ServerState {
         var configured = false
         var connected = false
-        var detail = "Disabled"
+        var detail = String(localized: "Disabled", table: "PhoneBridgeStatus")
         var connectedSince: Date?
         var certificateExpires: Date?
         var lastError: String?
@@ -38,10 +38,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     struct PhoneReportingStatus {
         var running = false
-        var state = "Not started"
+        var state = String(localized: "Not started", table: "PhoneBridgeStatus")
         var detail: String?
         var identity: String?
-        var permission = "Not requested"
+        var permission = String(localized: "Not requested", table: "PhoneBridgeStatus")
         var interval: TimeInterval?
         var lastReportAt: Date?
         var suppressedWatchPLIs = 0
@@ -137,7 +137,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             synchronize()
         } catch {
             servers = []
-            status = "Unable to load server settings"
+            status = String(localized: "Unable to load server settings", table: "PhoneBridgeStatus")
         }
         if WCSession.isSupported() {
             WCSession.default.delegate = self
@@ -382,13 +382,28 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         guard !active, !reporter.isRunning, configured else { return nil }
         if let fix = PhoneBackgroundAdvice.watchReason(authorization: reporter.authorization,
             preciseLocation: reporter.preciseLocation, servicesEnabled: reporter.servicesEnabled) {
-            return "on iPhone, \(fix)"
+            let localizedFix: String
+            switch fix {
+            case "turn on Location Services":
+                localizedFix = String(localized: "turn on Location Services", table: "PhoneBridgeStatus")
+            case "turn on Precise Location":
+                localizedFix = String(localized: "turn on Precise Location", table: "PhoneBridgeStatus")
+            case "location restricted":
+                localizedFix = String(localized: "location restricted", table: "PhoneBridgeStatus")
+            case "set Location to Always":
+                localizedFix = String(localized: "set Location to Always", table: "PhoneBridgeStatus")
+            default:
+                localizedFix = fix
+            }
+            return String(localized: "On iPhone, \(localizedFix)", table: "PhoneBridgeStatus")
         }
-        return String((phoneReporting.detail ?? "Phone location reporting is off").prefix(200))
+        return String((phoneReporting.detail ?? String(localized: "Phone location reporting is off", table: "PhoneBridgeStatus")).prefix(200))
     }
 
     private var phoneReportingSummary: String {
-        guard phoneReporting.running else { return "Off - " + (phoneReporting.detail ?? phoneReporting.state) }
+        guard phoneReporting.running else {
+            return String(localized: "Off - \(phoneReporting.detail ?? phoneReporting.state)", table: "PhoneBridgeStatus")
+        }
         return phoneReporting.state
     }
 
@@ -416,12 +431,12 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 latestPhoneFix = nil
                 phoneReporting.lastReportAt = nil
                 phoneReporting.detail = nil
-                phoneReporting.state = "Waiting for phone GPS fix"
+                phoneReporting.state = String(localized: "Waiting for phone GPS fix", table: "PhoneBridgeStatus")
                 reporter.start(appActive: active)
             }
         case .requestWhenInUse:
             reporter.stop()
-            phoneReporting.state = "Requesting location permission"
+            phoneReporting.state = String(localized: "Requesting location permission", table: "PhoneBridgeStatus")
             phoneReporting.detail = nil
             if !requestedWhenInUse {
                 requestedWhenInUse = true
@@ -432,8 +447,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             lastPhoneReportAt = nil
             phoneReportsByServer = [:]
             latestPhoneFix = nil
-            phoneReporting.state = "Stopped"
-            phoneReporting.detail = reason
+            phoneReporting.state = String(localized: "Stopped", table: "PhoneBridgeStatus")
+            phoneReporting.detail = localizedReportingBlockReason(reason)
             phoneReporting.interval = nil
         }
         phoneReporting.running = reporter.isRunning
@@ -441,7 +456,20 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         let advice = PhoneBackgroundAdvice.message(hasServers: enabledConfigured > 0,
             authorization: reporter.authorization, preciseLocation: reporter.preciseLocation,
             servicesEnabled: reporter.servicesEnabled)
-        if backgroundAdvice != advice { backgroundAdvice = advice }
+        let localizedAdvice: String?
+        switch advice {
+        case "Turn on Location Services so the watch stays connected to TAK while this phone is locked.":
+            localizedAdvice = String(localized: "Turn on Location Services so the watch stays connected to TAK while this phone is locked.", table: "PhoneBridgeStatus")
+        case "Turn on Precise Location so the watch stays connected to TAK while this phone is locked.":
+            localizedAdvice = String(localized: "Turn on Precise Location so the watch stays connected to TAK while this phone is locked.", table: "PhoneBridgeStatus")
+        case "Location access is restricted, so the watch will lose TAK when this phone is locked.":
+            localizedAdvice = String(localized: "Location access is restricted, so the watch will lose TAK when this phone is locked.", table: "PhoneBridgeStatus")
+        case "Set Location to Always (with Precise Location on) so the watch stays connected to TAK while this phone is locked or in your pocket.":
+            localizedAdvice = String(localized: "Set Location to Always (with Precise Location on) so the watch stays connected to TAK while this phone is locked or in your pocket.", table: "PhoneBridgeStatus")
+        default:
+            localizedAdvice = advice
+        }
+        if backgroundAdvice != localizedAdvice { backgroundAdvice = localizedAdvice }
         if case .success(let identity) = watchIdentity {
             phoneReporting.identity = "\(identity.resolvedCallSign) - \(identity.team) - \(identity.resolvedRole) (UID \(identity.uid.prefix(8)))"
         } else { phoneReporting.identity = nil }
@@ -468,8 +496,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         guard !phoneSendInFlight, PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt, interval: interval) else { return }
         let ready = readyOutputs()
         guard !ready.isEmpty else {
-            updatePhoneReportingState("Waiting for TAK server connection",
-                detail: "No enabled TAK server is connected; Companion retries automatically.")
+            updatePhoneReportingState(String(localized: "Waiting for TAK server connection", table: "PhoneBridgeStatus"),
+                detail: String(localized: "No enabled TAK server is connected; Companion retries automatically.", table: "PhoneBridgeStatus"))
             return
         }
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -501,7 +529,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 self.lastPhoneReportAt = Date()
                 self.phoneReporting.lastReportAt = self.lastPhoneReportAt
             }
-            self.updatePhoneReportingState(!delivered.isEmpty ? "Reporting phone GPS" : "Report failed; reconnecting",
+            self.updatePhoneReportingState(!delivered.isEmpty
+                ? String(localized: "Reporting phone GPS", table: "PhoneBridgeStatus")
+                : String(localized: "Report failed; reconnecting", table: "PhoneBridgeStatus"),
                 detail: failures.isEmpty ? nil : failures.joined(separator: "\n"))
         }
     }
@@ -511,6 +541,25 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         guard phoneReporting.state != state else { return }
         phoneReporting.state = state
         publishState()
+    }
+
+    private func localizedReportingBlockReason(_ reason: String) -> String {
+        switch reason {
+        case "Enable a TAK server with a certificate.":
+            return String(localized: "Enable a TAK server with a certificate.", table: "PhoneBridgeStatus")
+        case "Location Services are off on this phone.":
+            return String(localized: "Location Services are off on this phone.", table: "PhoneBridgeStatus")
+        case "Location access denied. Allow it in Settings > WearTAK Companion > Location.":
+            return String(localized: "Location access denied. Allow it in Settings > WearTAK Companion > Location.", table: "PhoneBridgeStatus")
+        case "Location access is restricted on this phone.":
+            return String(localized: "Location access is restricted on this phone.", table: "PhoneBridgeStatus")
+        case "Open Companion to allow location access.":
+            return String(localized: "Open Companion to allow location access.", table: "PhoneBridgeStatus")
+        case "Turn on Precise Location for WearTAK Companion in Settings.":
+            return String(localized: "Turn on Precise Location for WearTAK Companion in Settings.", table: "PhoneBridgeStatus")
+        default:
+            return reason
+        }
     }
 
     /// Accepts identity only from the activated session of a paired watch with WearTAK installed. WatchConnectivity
@@ -569,7 +618,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         evaluateReporting()
         configured = serverStates.values.contains { $0.configured }
         connected = canRelay && serverStates.values.contains { $0.connected }
-        status = !canRelay ? "Waiting for watch refresh" : connected ? "Connected" : configured ? "No connected servers" : "Configure on phone"
+        status = !canRelay ? String(localized: "Waiting for watch refresh", table: "PhoneBridgeStatus")
+            : connected ? String(localized: "Connected", table: "PhoneBridgeStatus")
+            : configured ? String(localized: "No connected servers", table: "PhoneBridgeStatus")
+            : String(localized: "Configure on phone", table: "PhoneBridgeStatus")
         let session = WCSession.default
         isWatchPaired = WCSession.isSupported() && session.isPaired
         guard session.activationState == .activated else { return }
@@ -1040,9 +1092,9 @@ private final class CompanionServerSession {
                 state.certificateExpires = try CertificateStore.resolve(stored).expires
                 state.configured = true
             } else { state.configured = false; state.certificateExpires = nil }
-            if !active { state.detail = "Paused in background" }
-            else if !record.enabled { state.detail = "Disabled" }
-            else if !state.configured { state.detail = "Configure certificate" }
+            if !active { state.detail = String(localized: "Paused in background", table: "PhoneBridgeStatus") }
+            else if !record.enabled { state.detail = String(localized: "Disabled", table: "PhoneBridgeStatus") }
+            else if !state.configured { state.detail = String(localized: "Configure certificate", table: "PhoneBridgeStatus") }
             else if !connection.ready && state.detail != "Connecting" { connect() }
         } catch { state.configured = false; state.certificateExpires = nil; state.detail = error.localizedDescription }
         onState?(state)
@@ -1079,7 +1131,7 @@ private final class CompanionServerSession {
         channelClient = nil
         state.connected = false
         state.connectedSince = nil
-        state.detail = "Disabled"
+        state.detail = String(localized: "Disabled", table: "PhoneBridgeStatus")
         onState?(state)
     }
 

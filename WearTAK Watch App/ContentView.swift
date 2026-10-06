@@ -43,7 +43,7 @@ struct ContentView: View {
         .sheet(isPresented: $showPointTypePicker) {
             NavigationStack {
                 PointTypePickerView(model: model) { kind in
-                    showToast(model.offlineNotice ?? "\(kind.rawValue) point dropped")
+                    showToast(model.offlineNotice ?? String(localized: "\(kind.watchMainLabel) point dropped", table: "WatchMain"))
                 }
             }
         }
@@ -83,11 +83,11 @@ struct ContentView: View {
         .onChange(of: model.offlineNotice) { _, notice in
             if let notice { showToast(notice) }
         }
-        .alert("Stored events", isPresented: Binding(
+        .alert(String(localized: "Stored events", table: "WatchMain"), isPresented: Binding(
             get: { model.offlineExpiryNotice != nil },
             set: { if !$0 { model.offlineExpiryNotice = nil } }
         )) {
-            Button("OK", role: .cancel) { model.offlineExpiryNotice = nil }
+            Button(String(localized: "OK", table: "WatchMain"), role: .cancel) { model.offlineExpiryNotice = nil }
         } message: {
             Text(model.offlineExpiryNotice ?? "")
         }
@@ -181,7 +181,7 @@ private struct WatchDashboardView: View {
                     navigationRow(small: small)
                         .frame(height: rowHeight * 0.24)
                     if model.queuedEventCount > 0 {
-                        Text("\(model.queuedEventCount) stored for forwarding")
+                        Text("\(model.queuedEventCount) stored for forwarding", tableName: "WatchMain")
                             .font(.caption2)
                             .foregroundStyle(.orange)
                     }
@@ -213,14 +213,16 @@ private struct WatchDashboardView: View {
     private var metricAccessibilityText: String {
         switch settings.dashboardMetric {
         case .exertion:
-            return "Exertion \(physiology.exertionPercent.map { "\($0) percent" } ?? "unavailable")"
+            return physiology.exertionPercent.map { String(localized: "Exertion \($0) percent", table: "WatchMain") }
+                ?? String(localized: "Exertion unavailable", table: "WatchMain")
         case .heartRate:
-            return "Heart rate \(physiology.heartRate.map { "\($0) beats per minute" } ?? "unavailable")"
+            return physiology.heartRate.map { String(localized: "Heart rate \($0) beats per minute", table: "WatchMain") }
+                ?? String(localized: "Heart rate unavailable", table: "WatchMain")
         case .latLon, .mgrs:
             let lines = model.lastLocation.flatMap {
                 MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: settings.dashboardMetric == .mgrs)
             }
-            return "\(settings.dashboardMetric.rawValue) \(lines.map { "\($0.0) \($0.1)" } ?? "unavailable")"
+            return "\(settings.dashboardMetric.watchMainLabel) \(lines.map { "\($0.0) \($0.1)" } ?? String(localized: "unavailable", table: "WatchMain"))"
         }
     }
 
@@ -256,7 +258,7 @@ private struct WatchDashboardView: View {
                             MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: settings.dashboardMetric == .mgrs)
                         }
                         VStack(spacing: 1) {
-                            Text(lines?.0 ?? settings.dashboardMetric.rawValue)
+                            Text(lines?.0 ?? settings.dashboardMetric.watchMainLabel)
                                 .font(.system(size: small ? 13 : 15, weight: .semibold))
                             Text(lines?.1 ?? "--")
                                 .font(.system(size: small ? 13 : 15, weight: .semibold))
@@ -266,7 +268,7 @@ private struct WatchDashboardView: View {
                         .minimumScaleFactor(0.6)
                     } else {
                         VStack(spacing: 2) {
-                            Text(settings.dashboardMetric.rawValue)
+                            Text(settings.dashboardMetric.watchMainLabel)
                                 .font(.system(size: small ? 10 : 12))
                                 .foregroundStyle(.secondary)
                             HStack(spacing: 2) {
@@ -289,7 +291,7 @@ private struct WatchDashboardView: View {
                 .padding(.vertical, 3)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(physiologyBorderColor, lineWidth: 2))
             }
-            .accessibilityLabel("Select metric. " + metricAccessibilityText)
+            .accessibilityLabel(String(localized: "Select metric. \(metricAccessibilityText)", table: "WatchMain"))
             Spacer(minLength: 0)
             VStack(spacing: small ? 2 : 3) {
                 NavigationLink {
@@ -302,7 +304,8 @@ private struct WatchDashboardView: View {
                     Image(systemName: battery < 0 ? "battery.0percent" : battery < 0.25 ? "battery.25percent" : battery < 0.5 ? "battery.50percent" : battery < 0.75 ? "battery.75percent" : "battery.100percent")
                         .font(.system(size: small ? 11 : 14))
                         .foregroundStyle(battery < 0 ? .white : battery < 0.25 ? .red : battery <= 0.75 ? .yellow : .green)
-                        .accessibilityLabel(battery < 0 ? "Battery unavailable" : "Battery \(Int(battery * 100)) percent")
+                        .accessibilityLabel(battery < 0 ? String(localized: "Battery unavailable", table: "WatchMain")
+                        : String(localized: "Battery \(Int(battery * 100)) percent", table: "WatchMain"))
                 }
             }
         }
@@ -316,7 +319,8 @@ private struct WatchDashboardView: View {
                 outlinedControl("exclamationmark.triangle", color: .red)
                     .background(model.activeAlertType == nil ? Color.clear : Color.red, in: Capsule())
             }
-            .accessibilityLabel(model.activeAlertType.map { "Manual alert active: \($0.rawValue)" } ?? "Manual alert")
+            .accessibilityLabel(model.activeAlertType.map { String(localized: "Manual alert active: \($0.watchMainLabel)", table: "WatchMain") }
+                ?? String(localized: "Manual alert", table: "WatchMain"))
             Button(action: dropPoint) {
                 PointDropSymbol()
                     .stroke(.white, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
@@ -324,7 +328,7 @@ private struct WatchDashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(Capsule().stroke(.white, lineWidth: 3))
             }
-            .accessibilityLabel("Drop 2525D point")
+            .accessibilityLabel(String(localized: "Drop 2525D point", table: "WatchMain"))
         }
     }
 
@@ -346,7 +350,7 @@ private struct WatchDashboardView: View {
                             }
                         }
                 }
-                .accessibilityLabel("Chat, \(model.unreadChatCount) unread messages")
+                .accessibilityLabel(String(localized: "Chat, \(model.unreadChatCount) unread messages", table: "WatchMain"))
             }
             NavigationLink {
                 SettingsView(model: model, settings: settings)
@@ -364,7 +368,8 @@ private struct WatchDashboardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(Capsule().stroke(.gray, lineWidth: 1.5))
             }
-            .accessibilityLabel("Settings\(settings.callSign.isEmpty ? "" : ", \(settings.callSign)")")
+            .accessibilityLabel(settings.callSign.isEmpty ? String(localized: "Settings", table: "WatchMain")
+                : String(localized: "Settings, \(settings.callSign)", table: "WatchMain"))
         }
     }
 
@@ -396,7 +401,7 @@ private struct WatchDashboardView: View {
                             }
                         }
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(model.bloodhoundTarget?.displayTitle ?? "Compass")
+                        Text(model.bloodhoundTarget?.displayTitle ?? String(localized: "Compass", table: "WatchMain"))
                             .font(.system(size: small ? 10 : 11, weight: .medium))
                             .lineLimit(1)
                         Text(reading.map { "\(Int($0.rangeMeters)) m" } ?? "___")
@@ -408,14 +413,16 @@ private struct WatchDashboardView: View {
                     Spacer(minLength: 0)
                 }
             }
-            .accessibilityLabel((model.bloodhoundTarget == nil ? "Compass" : "Bloodhound navigation") +
-                (model.unseenIncomingPointIDs.isEmpty ? "" : ", \(model.unseenIncomingPointIDs.count) new points"))
+            .accessibilityLabel((model.bloodhoundTarget == nil ? String(localized: "Compass", table: "WatchMain")
+                : String(localized: "Bloodhound navigation", table: "WatchMain")) +
+                (model.unseenIncomingPointIDs.isEmpty ? ""
+                    : String(localized: ", \(model.unseenIncomingPointIDs.count) new points", table: "WatchMain")))
             NavigationLink {
                 TacticalMapView(model: model, settings: settings)
             } label: {
                 roundControl("map", color: Color(red: 0.81, green: 0.81, blue: 0.73), size: small ? 28 : 34)
             }
-            .accessibilityLabel("Map")
+            .accessibilityLabel(String(localized: "Map", table: "WatchMain"))
         }
     }
 
@@ -445,13 +452,13 @@ private struct DashboardMetricPreferencesView: View {
         List {
             Toggle(isOn: $settings.physiologicalAlertsEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Physiological Alerts")
-                    Text(settings.physiologicalAlertsEnabled ? "On" : "Off")
+                    Text("Physiological Alerts", tableName: "WatchMain")
+                    Text(settings.physiologicalAlertsEnabled ? String(localized: "On", table: "WatchMain") : String(localized: "Off", table: "WatchMain"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("Display") {
+            Section(String(localized: "Display", table: "WatchMain")) {
                 ForEach(DashboardMetric.allCases) { metric in
                     Button {
                         settings.dashboardMetric = metric
@@ -461,7 +468,7 @@ private struct DashboardMetricPreferencesView: View {
                             Image(systemName: metric.symbol)
                                 .frame(width: 22)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(metric.rawValue)
+                                Text(metric.watchMainLabel)
                                     .font(.caption)
                                     .lineLimit(1)
                                 Text(reading(for: metric))
@@ -480,7 +487,7 @@ private struct DashboardMetricPreferencesView: View {
                 }
             }
         }
-        .navigationTitle("Metric")
+        .navigationTitle(String(localized: "Metric", table: "WatchMain"))
         .task { await monitor.startViewing() }
         .onDisappear { monitor.stopViewing() }
     }
@@ -488,13 +495,13 @@ private struct DashboardMetricPreferencesView: View {
     private func reading(for metric: DashboardMetric) -> String {
         switch metric {
         case .exertion:
-            return monitor.exertionPercent.map { "\($0)%" } ?? "Unavailable"
+            return monitor.exertionPercent.map { "\($0)%" } ?? String(localized: "Unavailable", table: "WatchMain")
         case .heartRate:
-            return monitor.heartRate.map { "\($0) BPM" } ?? "Unavailable"
+            return monitor.heartRate.map { "\($0) BPM" } ?? String(localized: "Unavailable", table: "WatchMain")
         case .latLon, .mgrs:
             return model.lastLocation.flatMap {
                 MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: metric == .mgrs)
-            }.map { "\($0.0) \($0.1)" } ?? "No fix"
+            }.map { "\($0.0) \($0.1)" } ?? String(localized: "No fix", table: "WatchMain")
         }
     }
 }
@@ -527,7 +534,7 @@ private struct DashboardLocationIndicator: View {
             }
             .foregroundStyle(state == .disabled ? .gray : .white)
             .frame(width: 28, height: small ? 20 : 24)
-            .accessibilityLabel("\(state.rawValue). Reporting settings")
+            .accessibilityLabel(String(localized: "\(state.rawValue). Reporting settings", table: "WatchMain"))
     }
 }
 
@@ -577,7 +584,7 @@ private struct DashboardNetworkIndicator: View {
         Image(systemName: state.symbol)
             .font(.system(size: small ? 12 : 15, weight: .semibold))
             .frame(width: 28, height: small ? 12 : 16)
-            .accessibilityLabel("Network preferences: \(state.rawValue)")
+            .accessibilityLabel(String(localized: "Network preferences: \(state.rawValue)", table: "WatchMain"))
     }
 }
 
@@ -629,7 +636,7 @@ private struct DashboardTAKIndicator: View {
                 }
             }
         }
-        .accessibilityLabel((state.usesServerIcon ? badge.label : state.indicatorLabel) + ". Network preferences")
+        .accessibilityLabel(String(localized: "\(state.usesServerIcon ? badge.label : state.indicatorLabel). Network preferences", table: "WatchMain"))
     }
 }
 
@@ -693,10 +700,10 @@ private struct ChatView: View {
             NavigationLink {
                 TacticalMapView(model: model, settings: settings)
             } label: {
-                Label("Select a map user", systemImage: "map")
+                Label(String(localized: "Select a map user", table: "WatchMain"), systemImage: "map")
             }
         }
-        .navigationTitle("Chat")
+        .navigationTitle(String(localized: "Chat", table: "WatchMain"))
     }
 }
 
@@ -706,26 +713,26 @@ private struct PhysiologyView: View {
 
     var body: some View {
         List {
-            Section("Exertion") {
+            Section(String(localized: "Exertion", table: "WatchMain")) {
                 if let exertion = monitor.exertionPercent {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("\(exertion)%")
                             .font(.system(size: 22, weight: .medium, design: .rounded))
                         Gauge(value: Double(exertion), in: 0...100) {
-                            Text("Exertion")
+                            Text("Exertion", tableName: "WatchMain")
                         } currentValueLabel: {
                             Text("\(exertion)%")
                         }
                         .gaugeStyle(.linearCapacity)
                     }
                 } else {
-                    Text("Unavailable")
+                    Text("Unavailable", tableName: "WatchMain")
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("Heart Rate") {
+            Section(String(localized: "Heart Rate", table: "WatchMain")) {
                 HStack {
-                    Text(monitor.heartRate.map { "\($0) BPM" } ?? "Unavailable")
+                    Text(monitor.heartRate.map { "\($0) BPM" } ?? String(localized: "Unavailable", table: "WatchMain"))
                         .font(.system(size: 22, weight: .medium, design: .rounded))
                     Spacer(minLength: 0)
                     if monitor.heartRate != nil {
@@ -735,7 +742,7 @@ private struct PhysiologyView: View {
                 }
             }
         }
-        .navigationTitle("Physiology")
+        .navigationTitle(String(localized: "Physiology", table: "WatchMain"))
         .task { await monitor.startViewing() }
         .onDisappear { monitor.stopViewing() }
         .onChange(of: scenePhase) { _, phase in
@@ -752,27 +759,27 @@ private struct EnvironmentView: View {
 
     var body: some View {
         List {
-            Section("Altitude") {
+            Section(String(localized: "Altitude", table: "WatchMain")) {
                 if let altitude = monitor.relativeAltitudeMeters {
-                    Text(String(format: "%.1f m relative", altitude))
+                    Text("\(String(format: "%.1f", altitude)) m relative", tableName: "WatchMain")
                         .font(.caption)
                 } else {
-                    Text("Unavailable")
+                    Text("Unavailable", tableName: "WatchMain")
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("Pressure") {
+            Section(String(localized: "Pressure", table: "WatchMain")) {
                 if let pressure = monitor.pressureHpa {
                     Text(String(format: "%.1f hPa", pressure))
                         .font(.headline)
                 } else {
-                    Text("Unavailable")
+                    Text("Unavailable", tableName: "WatchMain")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .navigationTitle("Environment")
+        .navigationTitle(String(localized: "Environment", table: "WatchMain"))
         .onAppear { monitor.startMonitoring() }
         .onDisappear {
             if !settings.environmentalAlertsEnabled {
@@ -871,14 +878,14 @@ private struct TacticalMapView: View {
                     Button {
                         zoom(by: 0.5)
                     } label: {
-                        mapControl("plus", label: "Zoom in")
+                        mapControl("plus", label: String(localized: "Zoom in", table: "WatchMain"))
                     }
                     Spacer(minLength: 8)
 
                     Button {
                         centerOnLocation()
                     } label: {
-                        mapControl("scope", label: "Snap to self")
+                        mapControl("scope", label: String(localized: "Snap to self", table: "WatchMain"))
                     }
                     .disabled(model.lastLocation == nil)
                     Spacer(minLength: 8)
@@ -886,7 +893,7 @@ private struct TacticalMapView: View {
                     Button {
                         zoom(by: 2)
                     } label: {
-                        mapControl("minus", label: "Zoom out")
+                        mapControl("minus", label: String(localized: "Zoom out", table: "WatchMain"))
                     }
                 }
                 .padding(.leading, 5)
@@ -899,7 +906,7 @@ private struct TacticalMapView: View {
                 Button {
                     dismiss()
                 } label: {
-                    mapControl("arrow.left", label: "Back to menu")
+                    mapControl("arrow.left", label: String(localized: "Back to menu", table: "WatchMain"))
                 }
             }
             .padding(.trailing, 5)
@@ -918,14 +925,14 @@ private struct TacticalMapView: View {
                             .frame(width: 40, height: 36)
                             .background(.regularMaterial, in: Circle())
                     }
-                    .accessibilityLabel("Layers Menu")
+                    .accessibilityLabel(String(localized: "Layers Menu", table: "WatchMain"))
                     .frame(maxWidth: .infinity, alignment: .top)
                     HStack {
                         Spacer()
                         Button {
                             showChannelsMenu = true
                         } label: {
-                            mapControl("point.3.connected.trianglepath.dotted", label: "Channels")
+                            mapControl("point.3.connected.trianglepath.dotted", label: String(localized: "Channels", table: "WatchMain"))
                         }
                         .padding(.trailing, 5)
                     }
@@ -995,7 +1002,7 @@ private struct TacticalMapView: View {
                 MapPolyline(coordinates: [location.coordinate, target.coordinate])
                     .stroke(settings.teamColor.mapColor, lineWidth: 3)
             }
-            Annotation("Self", coordinate: location.coordinate, anchor: .center) {
+            Annotation(String(localized: "Self", table: "WatchMain"), coordinate: location.coordinate, anchor: .center) {
                 Image(systemName: model.headingDegrees == nil ? "circle.fill" : "location.north.fill")
                     .font(.title3)
                     .foregroundStyle(settings.teamColor.mapColor)
@@ -1003,8 +1010,8 @@ private struct TacticalMapView: View {
                     .padding(4)
                     .background(.ultraThinMaterial, in: Circle())
                     .accessibilityLabel(model.headingDegrees.map {
-                        "Self, \(settings.teamColor.rawValue), heading \(Int($0.rounded())) degrees"
-                    } ?? "Self, \(settings.teamColor.rawValue), compass unavailable")
+                        String(localized: "Self, \(settings.teamColor.watchMainLabel), heading \(Int($0.rounded())) degrees", table: "WatchMain")
+                    } ?? String(localized: "Self, \(settings.teamColor.watchMainLabel), compass unavailable", table: "WatchMain"))
             }
             .annotationTitles(.hidden)
             .tag(MapPointSelection.selfMarker)
@@ -1022,7 +1029,7 @@ private struct TacticalMapView: View {
                             .offset(y: 22)
                             .rotationEffect(.degrees(reading.bearingDegrees - cameraHeading))
                             .allowsHitTesting(false)
-                            .accessibilityLabel("Direction to Bloodhound target")
+                            .accessibilityLabel(String(localized: "Direction to Bloodhound target", table: "WatchMain"))
                     }
                     MapPointSymbol(kind: marker.kind)
                 }
@@ -1064,19 +1071,20 @@ private struct TacticalMapView: View {
                         .rotationEffect(.degrees(reading.relativeBearingDegrees))
                         .foregroundStyle(settings.teamColor.mapColor)
                         .frame(width: 40, height: 40)
-                        .accessibilityLabel("Direction to Bloodhound target")
+                        .accessibilityLabel(String(localized: "Direction to Bloodhound target", table: "WatchMain"))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(reading.rangeMeters < 1000
                              ? "\(Int(reading.rangeMeters)) m"
                              : "\((reading.rangeMeters / 1000).formatted(.number.precision(.fractionLength(2)))) km")
                             .font(.headline)
                             .monospacedDigit()
-                        Text(reading.isCompassRelative ? "To target" : "Compass unavailable")
+                        Text(reading.isCompassRelative ? String(localized: "To target", table: "WatchMain")
+                             : String(localized: "Compass unavailable", table: "WatchMain"))
                             .font(.caption2)
                             .foregroundStyle(reading.isCompassRelative ? Color.secondary : Color.orange)
                     }
                 } else {
-                    Text("Location unavailable")
+                    Text("Location unavailable", tableName: "WatchMain")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1135,12 +1143,12 @@ private struct MapLayersMenuView: View {
 
     var body: some View {
         List {
-            Toggle("Map Buttons", isOn: $settings.mapButtonsVisible)
+            Toggle(String(localized: "Map Buttons", table: "WatchMain"), isOn: $settings.mapButtonsVisible)
             if model.incomingUserTeams.isEmpty {
-                Text("Team Colors (0)")
+                Text("Team Colors (\(model.incomingUserTeams.count))", tableName: "WatchMain")
                     .font(.headline)
             } else {
-                Section("Team Colors (\(model.incomingUserTeams.count))") {
+                Section(String(localized: "Team Colors (\(model.incomingUserTeams.count))", table: "WatchMain")) {
                     ForEach(model.incomingUserTeams) { group in
                         Toggle(isOn: Binding(
                             get: { !settings.hiddenMapTeams.contains(group.id) },
@@ -1160,10 +1168,10 @@ private struct MapLayersMenuView: View {
                 }
             }
             if model.incomingUserRoles.isEmpty {
-                Text("Default Roles (0)")
+                Text("Default Roles (\(model.incomingUserRoles.count))", tableName: "WatchMain")
                     .font(.headline)
             } else {
-                Section("Default Roles (\(model.incomingUserRoles.count))") {
+                Section(String(localized: "Default Roles (\(model.incomingUserRoles.count))", table: "WatchMain")) {
                     ForEach(model.incomingUserRoles) { group in
                         Toggle("\(group.name) (\(group.count))", isOn: Binding(
                             get: { !settings.hiddenMapRoles.contains(group.id) },
@@ -1178,10 +1186,10 @@ private struct MapLayersMenuView: View {
             Button {
                 dismiss()
             } label: {
-                Label("Back", systemImage: "arrow.left")
+                Label(String(localized: "Back", table: "WatchMain"), systemImage: "arrow.left")
             }
         }
-        .navigationTitle("Layers Menu")
+        .navigationTitle(String(localized: "Layers Menu", table: "WatchMain"))
     }
 }
 
@@ -1193,7 +1201,7 @@ struct DataSyncMenuView: View {
     var body: some View {
         List {
             if settings.relayProvider != .companion || !client.isReady {
-                Text("Connect to a TAK Server to use Data Sync.")
+                Text("Connect to a TAK Server to use Data Sync.", tableName: "WatchMain")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(client.missionServers) { server in
@@ -1210,12 +1218,12 @@ struct DataSyncMenuView: View {
                     }
                 }
                 if client.missionServers.isEmpty && !client.missionsLoading && client.missionError == nil {
-                    Text("Connect to a TAK Server to use Data Sync.")
+                    Text("Connect to a TAK Server to use Data Sync.", tableName: "WatchMain")
                         .foregroundStyle(.secondary)
                 }
             }
             if client.missionsLoading {
-                ProgressView("Loading servers")
+                ProgressView(String(localized: "Loading servers", table: "WatchMain"))
             }
             if let error = client.missionError {
                 Text(error).font(.caption).foregroundStyle(.orange)
@@ -1223,7 +1231,7 @@ struct DataSyncMenuView: View {
             Button {
                 Task { await client.refreshMissions() }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(String(localized: "Refresh", table: "WatchMain"), systemImage: "arrow.clockwise")
             }
             .disabled(!client.isReady || client.missionsLoading)
         }
@@ -1233,7 +1241,7 @@ struct DataSyncMenuView: View {
 
     private func summary(_ server: TAKMissionServer) -> String {
         let subscribed = model.storedMissions.filter { $0.serverID == server.id }.count
-        return subscribed > 0 ? "\(subscribed) subscribed" : server.state
+        return subscribed > 0 ? String(localized: "\(subscribed) subscribed", table: "WatchMain") : server.state
     }
 }
 
@@ -1278,10 +1286,10 @@ private struct DataSyncServerView: View {
                         .textCase(nil)
                 }
             } else if !client.missionsLoading {
-                Text("Server unavailable").foregroundStyle(.secondary)
+                Text("Server unavailable", tableName: "WatchMain").foregroundStyle(.secondary)
             }
             if client.missionsLoading {
-                ProgressView("Updating missions")
+                ProgressView(String(localized: "Updating missions", table: "WatchMain"))
             }
             if let error = client.missionError, server?.error != error {
                 Text(error).font(.caption).foregroundStyle(.orange)
@@ -1289,22 +1297,22 @@ private struct DataSyncServerView: View {
             Button {
                 Task { await client.refreshMissions(serverID: serverID) }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(String(localized: "Refresh", table: "WatchMain"), systemImage: "arrow.clockwise")
             }
             .disabled(!client.isReady || client.missionsLoading)
         }
-        .navigationTitle("Missions")
+        .navigationTitle(String(localized: "Missions", table: "WatchMain"))
         .task { await client.refreshMissions(serverID: serverID) }
     }
 
     private func detail(_ mission: TAKMission) -> String {
         if let error = mission.error { return error }
-        if mission.passwordProtected && !mission.subscribed { return "Password protected" }
+        if mission.passwordProtected && !mission.subscribed { return String(localized: "Password protected", table: "WatchMain") }
         if mission.subscribed, let items = mission.items {
-            return items.count == 1 ? "Subscribed · 1 map item" : "Subscribed · \(items.count) map items"
+            return String(localized: "Subscribed · \(items.count) map items", table: "WatchMain")
         }
-        if let count = mission.itemCount { return count == 1 ? "1 item" : "\(count) items" }
-        return mission.description ?? "Not subscribed"
+        if let count = mission.itemCount { return String(localized: "\(count) items", table: "WatchMain") }
+        return mission.description ?? String(localized: "Not subscribed", table: "WatchMain")
     }
 }
 
@@ -1316,7 +1324,7 @@ private struct MapChannelsMenuView: View {
     var body: some View {
         List {
             if settings.relayProvider != .companion || !client.isReady {
-                Text("Connect to a TAK Server to configure channels.")
+                Text("Connect to a TAK Server to configure channels.", tableName: "WatchMain")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(client.channelServers) { server in
@@ -1333,12 +1341,12 @@ private struct MapChannelsMenuView: View {
                     }
                 }
                 if client.channelServers.isEmpty && !client.channelsLoading && client.channelError == nil {
-                    Text("Connect to a TAK Server to configure channels.")
+                    Text("Connect to a TAK Server to configure channels.", tableName: "WatchMain")
                         .foregroundStyle(.secondary)
                 }
             }
             if client.channelsLoading {
-                ProgressView("Loading channels")
+                ProgressView(String(localized: "Loading channels", table: "WatchMain"))
             }
             if let error = client.channelError {
                 Text(error).font(.caption).foregroundStyle(.orange)
@@ -1346,16 +1354,16 @@ private struct MapChannelsMenuView: View {
             Button {
                 Task { await client.refreshChannels() }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(String(localized: "Refresh", table: "WatchMain"), systemImage: "arrow.clockwise")
             }
             .disabled(!client.isReady || client.channelsLoading)
             Button {
                 dismiss()
             } label: {
-                Label("Back", systemImage: "arrow.left")
+                Label(String(localized: "Back", table: "WatchMain"), systemImage: "arrow.left")
             }
         }
-        .navigationTitle("Channels")
+        .navigationTitle(String(localized: "Channels", table: "WatchMain"))
         .task { await client.refreshChannels() }
     }
 }
@@ -1391,10 +1399,10 @@ private struct MapServerChannelsView: View {
                         .textCase(nil)
                 }
             } else if !client.channelsLoading {
-                Text("Server unavailable").foregroundStyle(.secondary)
+                Text("Server unavailable", tableName: "WatchMain").foregroundStyle(.secondary)
             }
             if client.channelsLoading {
-                ProgressView("Updating channels")
+                ProgressView(String(localized: "Updating channels", table: "WatchMain"))
             }
             if let error = client.channelError, server?.error != error {
                 Text(error).font(.caption).foregroundStyle(.orange)
@@ -1402,11 +1410,11 @@ private struct MapServerChannelsView: View {
             Button {
                 Task { await client.refreshChannels(serverID: serverID) }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(String(localized: "Refresh", table: "WatchMain"), systemImage: "arrow.clockwise")
             }
             .disabled(!client.isReady || client.channelsLoading)
         }
-        .navigationTitle("Channels")
+        .navigationTitle(String(localized: "Channels", table: "WatchMain"))
         .task { await client.refreshChannels(serverID: serverID) }
     }
 }
@@ -1430,30 +1438,31 @@ private struct MapContactDetailView: View {
     var body: some View {
         List {
             if let contact {
-                Text(String(format: "Lat: %.5f", contact.latitude))
-                Text(String(format: "Lon: %.5f", contact.longitude))
-                Text(MapCoordinateFormatter.mgrs(contact.coordinate) ?? "MGRS unavailable")
+                Text("Lat: \(String(format: "%.5f", contact.latitude))", tableName: "WatchMain")
+                Text("Lon: \(String(format: "%.5f", contact.longitude))", tableName: "WatchMain")
+                Text(MapCoordinateFormatter.mgrs(contact.coordinate) ?? String(localized: "MGRS unavailable", table: "WatchMain"))
                     .lineLimit(1).minimumScaleFactor(0.6)
                 if let route = contact.chatRoute {
-                    NavigationLink("Start Chat") {
+                    NavigationLink(String(localized: "Start Chat", table: "WatchMain")) {
                         ContactChatView(model: model, uid: contact.id, route: route,
                                         title: contact.callSign ?? contact.id)
                     }
                     .disabled(model.chatUnavailableReason(for: contact) != nil)
                 } else {
-                    Text("Start Chat").foregroundStyle(.secondary)
+                    Text("Start Chat", tableName: "WatchMain").foregroundStyle(.secondary)
                 }
                 if let reason = model.chatUnavailableReason(for: contact) {
                     Text(reason).font(.caption).foregroundStyle(.secondary)
                 }
-                Button(model.bloodhoundContactID == uid ? "Stop Bloodhound" : "Bloodhound to Contact") {
+                Button(model.bloodhoundContactID == uid ? String(localized: "Stop Bloodhound", table: "WatchMain")
+                       : String(localized: "Bloodhound to Contact", table: "WatchMain")) {
                     model.toggleContactBloodhound(uid: uid)
                 }
             } else {
-                Text("Contact unavailable or expired.").foregroundStyle(.secondary)
+                Text("Contact unavailable or expired.", tableName: "WatchMain").foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(contact?.callSign ?? "Contact")
+        .navigationTitle(contact?.callSign ?? String(localized: "Contact", table: "WatchMain"))
     }
 }
 
@@ -1473,20 +1482,20 @@ private struct ContactChatView: View {
         List {
             ForEach(model.contactMessages[ContactConversation(uid: uid, route: route)] ?? []) { message in
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(message.senderUID == SitxClient.deviceID() ? "You" : message.senderCallSign)
+                    Text(message.senderUID == SitxClient.deviceID() ? String(localized: "You", table: "WatchMain") : message.senderCallSign)
                         .font(.caption2).foregroundStyle(.secondary)
                     Text(message.text)
                 }
             }
-            TextField("Message", text: $text)
+            TextField(String(localized: "Message", table: "WatchMain"), text: $text)
                 .disabled(sending)
                 .submitLabel(.send)
                 .onSubmit(sendMessage)
-            Button(sending ? "Sending..." : "Send", action: sendMessage)
+            Button(sending ? String(localized: "Sending...", table: "WatchMain") : String(localized: "Send", table: "WatchMain"), action: sendMessage)
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-            if sent { Text(model.offlineNotice ?? "Chat stored for forwarding.").font(.caption) }
-            Section("Quick Messages") {
+            if sent { Text(model.offlineNotice ?? String(localized: "Chat stored for forwarding.", table: "WatchMain")).font(.caption) }
+            Section(String(localized: "Quick Messages", table: "WatchMain")) {
                 ForEach(TAKChatMessage.quickMessages, id: \.self) { message in
                     Button(message) {
                         text = message
@@ -1544,13 +1553,13 @@ private struct SelfCoordinateView: View {
 
     var body: some View {
         List {
-            Text(String(format: "Lat: %.5f", coordinate.latitude))
-            Text(String(format: "Lon: %.5f", coordinate.longitude))
-            Text(MapCoordinateFormatter.mgrs(coordinate) ?? "Unavailable")
+            Text("Lat: \(String(format: "%.5f", coordinate.latitude))", tableName: "WatchMain")
+            Text("Lon: \(String(format: "%.5f", coordinate.longitude))", tableName: "WatchMain")
+            Text(MapCoordinateFormatter.mgrs(coordinate) ?? String(localized: "Unavailable", table: "WatchMain"))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
-        .navigationTitle("Self")
+        .navigationTitle(String(localized: "Self", table: "WatchMain"))
     }
 }
 
@@ -1571,6 +1580,63 @@ private extension TeamColor {
         case .green: return .green
         case .darkGreen: return Color(red: 0, green: 0.35, blue: 0.12)
         case .brown: return .brown
+        }
+    }
+}
+
+// Display-only labels; raw values stay the persisted and CoT/network values.
+private extension DashboardMetric {
+    var watchMainLabel: String {
+        switch self {
+        case .exertion: return String(localized: "Exertion", table: "WatchMain")
+        case .heartRate: return String(localized: "Heart Rate", table: "WatchMain")
+        case .latLon: return String(localized: "Lat/Lon", table: "WatchMain")
+        case .mgrs: return rawValue
+        }
+    }
+}
+
+private extension MarkerKind {
+    var watchMainLabel: String {
+        switch self {
+        case .friendly: return String(localized: "Friendly", table: "WatchMain")
+        case .neutral: return String(localized: "Neutral", table: "WatchMain")
+        case .unknown: return String(localized: "Unknown", table: "WatchMain")
+        case .hostile: return String(localized: "Hostile", table: "WatchMain")
+        }
+    }
+}
+
+private extension TeamColor {
+    var watchMainLabel: String {
+        switch self {
+        case .white: return String(localized: "White", table: "WatchMain")
+        case .yellow: return String(localized: "Yellow", table: "WatchMain")
+        case .orange: return String(localized: "Orange", table: "WatchMain")
+        case .magenta: return String(localized: "Magenta", table: "WatchMain")
+        case .red: return String(localized: "Red", table: "WatchMain")
+        case .maroon: return String(localized: "Maroon", table: "WatchMain")
+        case .purple: return String(localized: "Purple", table: "WatchMain")
+        case .darkBlue: return String(localized: "Dark Blue", table: "WatchMain")
+        case .blue: return String(localized: "Blue", table: "WatchMain")
+        case .cyan: return String(localized: "Cyan", table: "WatchMain")
+        case .teal: return String(localized: "Teal", table: "WatchMain")
+        case .green: return String(localized: "Green", table: "WatchMain")
+        case .darkGreen: return String(localized: "Dark Green", table: "WatchMain")
+        case .brown: return String(localized: "Brown", table: "WatchMain")
+        }
+    }
+}
+
+private extension ManualAlertType {
+    var watchMainLabel: String {
+        switch self {
+        case .gateRunner: return String(localized: "Gate Runner", table: "WatchMain")
+        case .gunshot: return String(localized: "Gunshot", table: "WatchMain")
+        case .gunshotInjury: return String(localized: "Gunshot Injury", table: "WatchMain")
+        case .injury: return String(localized: "Injury", table: "WatchMain")
+        case .uas: return rawValue
+        case .vehicle: return String(localized: "Vehicle", table: "WatchMain")
         }
     }
 }
@@ -1675,6 +1741,7 @@ private struct BloodhoundView: View {
     @ObservedObject var model: WatchSessionModel
     @State private var responseError: String?
     @State private var selectedPoint: IncomingMapEntity?
+    @State private var confirmRemoveAll = false
 
     private func pointTitle(_ item: IncomingMapEntity) -> String {
         item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id
@@ -1683,13 +1750,13 @@ private struct BloodhoundView: View {
     private func pointDetail(_ item: IncomingMapEntity) -> String {
         let affiliation: String
         switch item.type.split(separator: "-").dropFirst().first {
-        case "f": affiliation = "Friendly"
-        case "h": affiliation = "Hostile"
-        case "n": affiliation = "Neutral"
-        case "u": affiliation = "Unknown"
-        default: affiliation = "Point"
+        case "f": affiliation = String(localized: "Friendly", table: "WatchMain")
+        case "h": affiliation = String(localized: "Hostile", table: "WatchMain")
+        case "n": affiliation = String(localized: "Neutral", table: "WatchMain")
+        case "u": affiliation = String(localized: "Unknown", table: "WatchMain")
+        default: affiliation = String(localized: "Point", table: "WatchMain")
         }
-        let mission = item.missionName.map { "\nMission: \($0)" } ?? ""
+        let mission = item.missionName.map { "\n" + String(localized: "Mission: \($0)", table: "WatchMain") } ?? ""
         guard let location = model.lastLocation else { return affiliation + mission }
         let meters = Int(location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)))
         return "\(affiliation) · \(meters) m" + mission
@@ -1708,15 +1775,15 @@ private struct BloodhoundView: View {
                         Text(target.displayTitle)
                             .font(.caption)
                             .multilineTextAlignment(.center)
-                        Text("Range: \(Int(reading.rangeMeters)) m")
+                        Text("Range: \(Int(reading.rangeMeters)) m", tableName: "WatchMain")
                             .font(.caption2)
                         if !reading.isCompassRelative {
-                            Text("Compass unavailable")
+                            Text("Compass unavailable", tableName: "WatchMain")
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
                         }
                     } else {
-                        Text("Location unavailable")
+                        Text("Location unavailable", tableName: "WatchMain")
                             .foregroundStyle(.secondary)
                     }
                     Button("nPos") {
@@ -1733,6 +1800,11 @@ private struct BloodhoundView: View {
                         Text("No incoming points")
                             .foregroundStyle(.secondary)
                     } else {
+                        Section {
+                            Button("Remove All", role: .destructive) {
+                                confirmRemoveAll = true
+                            }
+                        }
                         Section("Incoming Points") {
                             ForEach(model.bloodhoundOrderPoints) { item in
                                 Button { selectedPoint = item } label: {
@@ -1750,7 +1822,7 @@ private struct BloodhoundView: View {
                 }
             }
         }
-        .confirmationDialog(selectedPoint.map(pointTitle) ?? "Incoming Point", isPresented: Binding(
+        .confirmationDialog(selectedPoint.map(pointTitle) ?? String(localized: "Incoming Point", table: "WatchMain"), isPresented: Binding(
             get: { selectedPoint != nil },
             set: { if !$0 { selectedPoint = nil } }
         ), titleVisibility: .visible, presenting: selectedPoint) { item in
@@ -1761,24 +1833,31 @@ private struct BloodhoundView: View {
                     catch { responseError = error.localizedDescription }
                 }
             }
-            Button("Remove", role: .destructive) {
+            Button(String(localized: "Remove", table: "WatchMain"), role: .destructive) {
                 selectedPoint = nil
                 model.removeIncomingPoint(item.id)
             }
-            Button("Cancel", role: .cancel) { selectedPoint = nil }
+            Button(String(localized: "Cancel", table: "WatchMain"), role: .cancel) { selectedPoint = nil }
         } message: { item in
             Text(pointDetail(item))
+        }
+        .confirmationDialog("Remove all incoming points?", isPresented: $confirmRemoveAll) {
+            Button("Remove All", role: .destructive) {
+                for id in model.bloodhoundOrderPoints.map(\.id) {
+                    model.removeIncomingPoint(id)
+                }
+            }
         }
         .navigationTitle(model.bloodhoundTarget == nil ? "Compass" : "Navigation")
         .onAppear { model.markIncomingPointsSeen() }
         .onChange(of: model.unseenIncomingPointIDs) { _, ids in
             if !ids.isEmpty { model.markIncomingPointsSeen() }
         }
-        .alert("Bloodhound response", isPresented: Binding(
+        .alert(String(localized: "Bloodhound response", table: "WatchMain"), isPresented: Binding(
             get: { responseError != nil },
             set: { if !$0 { responseError = nil } }
         )) {
-            Button("OK", role: .cancel) { responseError = nil }
+            Button(String(localized: "OK", table: "WatchMain"), role: .cancel) { responseError = nil }
         } message: {
             Text(responseError ?? "")
         }
@@ -1792,16 +1871,16 @@ private struct ManualAlertView: View {
     var body: some View {
         List {
             if let activeType = model.activeAlertType {
-                LabeledContent("Active Alert", value: activeType.rawValue)
+                LabeledContent(String(localized: "Active Alert", table: "WatchMain"), value: activeType.watchMainLabel)
                 Button(role: .destructive) {
                     model.cancelEmergencyAlert()
                     dismiss()
                 } label: {
-                    Label("Clear Manual Alert", systemImage: "xmark.circle.fill")
+                    Label(String(localized: "Clear Manual Alert", table: "WatchMain"), systemImage: "xmark.circle.fill")
                 }
             } else {
                 ForEach(ManualAlertType.allCases) { type in
-                    Button(type.rawValue) {
+                    Button(type.watchMainLabel) {
                         model.startEmergencyAlert(type: type)
                         dismiss()
                     }
@@ -1810,10 +1889,10 @@ private struct ManualAlertView: View {
             Button {
                 dismiss()
             } label: {
-                Label("Back", systemImage: "arrow.left")
+                Label(String(localized: "Back", table: "WatchMain"), systemImage: "arrow.left")
             }
         }
-        .navigationTitle("Manual Alert")
+        .navigationTitle(String(localized: "Manual Alert", table: "WatchMain"))
     }
 }
 
@@ -1849,7 +1928,7 @@ struct PointListView: View {
             ScrollView {
                 VStack(spacing: 8) {
                     if model.markers.isEmpty {
-                        Text("No dropped markers")
+                        Text("No dropped markers", tableName: "WatchMain")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 20)
@@ -1869,7 +1948,7 @@ struct PointListView: View {
                                             .lineLimit(expandedMarkerID == marker.id ? 1 : 2)
                                             .minimumScaleFactor(0.8)
                                             .multilineTextAlignment(.leading)
-                                        Text(marker.kind.rawValue)
+                                        Text(marker.kind.watchMainLabel)
                                             .font(.system(size: compact ? 11 : 12))
                                             .lineLimit(1)
                                         Text(marker.createdAt, format: .dateTime.hour().minute().second())
@@ -1882,7 +1961,7 @@ struct PointListView: View {
                                 .frame(maxWidth: .infinity, minHeight: compact ? 64 : 80, alignment: .leading)
                                 .background(Color(white: 0.26), in: RoundedRectangle(cornerRadius: 8))
                             }
-                            .accessibilityLabel("\(marker.displayTitle), \(marker.kind.rawValue). Marker actions")
+                            .accessibilityLabel(String(localized: "\(marker.displayTitle), \(marker.kind.watchMainLabel). Marker actions", table: "WatchMain"))
                             if expandedMarkerID == marker.id {
                                 NavigationLink {
                                     PointDetailView(model: model, marker: marker)
@@ -1893,7 +1972,7 @@ struct PointListView: View {
                                         .frame(width: 34, height: compact ? 64 : 80)
                                         .background(Color(white: 0.19), in: Capsule())
                                 }
-                                .accessibilityLabel("Edit \(marker.displayTitle)")
+                                .accessibilityLabel(String(localized: "Edit \(marker.displayTitle)", table: "WatchMain"))
                                 Button {
                                     markerToDelete = marker
                                     confirmDelete = true
@@ -1904,14 +1983,14 @@ struct PointListView: View {
                                         .frame(width: 34, height: compact ? 64 : 80)
                                         .background(Color(red: 0.94, green: 0.39, blue: 0.35), in: Capsule())
                                 }
-                                .accessibilityLabel("Delete \(marker.displayTitle)")
+                                .accessibilityLabel(String(localized: "Delete \(marker.displayTitle)", table: "WatchMain"))
                             }
                         }
                     }
                 }
             }
             Button { confirmClearAll = true } label: {
-                Text("Clear All Markers")
+                Text("Clear All Markers", tableName: "WatchMain")
                     .font(.system(size: 14, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: compact ? 30 : 42)
@@ -1925,7 +2004,7 @@ struct PointListView: View {
                     .frame(width: 72, height: compact ? 30 : 40)
                     .background(Color(white: 0.5), in: Capsule())
             }
-            .accessibilityLabel("Back")
+            .accessibilityLabel(String(localized: "Back", table: "WatchMain"))
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 4)
@@ -1935,14 +2014,14 @@ struct PointListView: View {
         .buttonStyle(.plain)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
-        .confirmationDialog("Clear all dropped markers?", isPresented: $confirmClearAll) {
-            Button("Clear All Markers", role: .destructive) {
+        .confirmationDialog(String(localized: "Clear all dropped markers?", table: "WatchMain"), isPresented: $confirmClearAll) {
+            Button(String(localized: "Clear All Markers", table: "WatchMain"), role: .destructive) {
                 model.clearAllPoints()
                 expandedMarkerID = nil
             }
         }
-        .confirmationDialog("Delete marker?", isPresented: $confirmDelete) {
-            Button("Delete Marker", role: .destructive) {
+        .confirmationDialog(String(localized: "Delete marker?", table: "WatchMain"), isPresented: $confirmDelete) {
+            Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
                 if let markerToDelete {
                     model.deleteMarker(id: markerToDelete.id)
                     self.markerToDelete = nil
@@ -1980,7 +2059,7 @@ private struct PointDetailView: View {
             }
             Section {
                 HStack {
-                    Text(marker.kind.rawValue)
+                    Text(marker.kind.watchMainLabel)
                     Spacer(minLength: 4)
                     Text(MapCoordinateFormatter.droppedTime(marker.createdAt))
                         .font(.caption2.monospacedDigit())
@@ -1989,19 +2068,19 @@ private struct PointDetailView: View {
             }
             if let remark = marker.remark?.trimmingCharacters(in: .whitespacesAndNewlines), !remark.isEmpty {
                 Section {
-                    Text("Remark: \(remark)")
+                    Text("Remark: \(remark)", tableName: "WatchMain")
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if model.bloodhoundTargetID == marker.id {
                 Section {
-                    Label("Bloodhounding", systemImage: "location.north.fill")
+                    Label(String(localized: "Bloodhounding", table: "WatchMain"), systemImage: "location.north.fill")
                 }
             }
             Section {
                 HStack(alignment: .top, spacing: 6) {
                     VStack(spacing: 4) {
-                        Text("From You")
+                        Text("From You", tableName: "WatchMain")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         if let location = model.lastLocation {
@@ -2015,7 +2094,7 @@ private struct PointDetailView: View {
                         } else {
                             Image(systemName: "location.slash")
                                 .font(.title3)
-                            Text("Unavailable")
+                            Text("Unavailable", tableName: "WatchMain")
                                 .font(.caption2)
                         }
                     }
@@ -2030,14 +2109,14 @@ private struct PointDetailView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         } else {
-                            Text("Distance unavailable")
+                            Text("Distance unavailable", tableName: "WatchMain")
                                 .font(.caption.bold())
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
                         Text(String(format: "%.5f", marker.latitude))
                         Text(String(format: "%.5f", marker.longitude))
-                        Text(MapCoordinateFormatter.mgrs(marker.coordinate) ?? "Unavailable")
+                        Text(MapCoordinateFormatter.mgrs(marker.coordinate) ?? String(localized: "Unavailable", table: "WatchMain"))
                             .lineLimit(1)
                             .minimumScaleFactor(0.55)
                     }
@@ -2047,32 +2126,33 @@ private struct PointDetailView: View {
             }
 
             Section {
-                Button(model.bloodhoundTargetID == marker.id ? "Stop Bloodhound" : "Bloodhound to Marker") {
+                Button(model.bloodhoundTargetID == marker.id ? String(localized: "Stop Bloodhound", table: "WatchMain")
+                       : String(localized: "Bloodhound to Marker", table: "WatchMain")) {
                     model.toggleBloodhound(id: marker.id)
                 }
 
-                NavigationLink("Change Title") {
-                    PointTextEditorView(title: "Change Title", value: marker.title ?? "") { value in
+                NavigationLink(String(localized: "Change Title", table: "WatchMain")) {
+                    PointTextEditorView(title: String(localized: "Change Title", table: "WatchMain"), value: marker.title ?? "") { value in
                         update(title: value)
                     }
                 }
 
-                NavigationLink(marker.remark?.isEmpty == false ? "Change Remark" : "Add Remark") {
+                NavigationLink(marker.remark?.isEmpty == false ? String(localized: "Change Remark", table: "WatchMain") : String(localized: "Add Remark", table: "WatchMain")) {
                     PointTextEditorView(
-                        title: marker.remark?.isEmpty == false ? "Change Remark" : "Add Remark",
+                        title: marker.remark?.isEmpty == false ? String(localized: "Change Remark", table: "WatchMain") : String(localized: "Add Remark", table: "WatchMain"),
                         value: marker.remark ?? ""
                     ) { value in
                         update(remark: value)
                     }
                 }
 
-                NavigationLink("Change Marker") {
+                NavigationLink(String(localized: "Change Marker", table: "WatchMain")) {
                     PointMarkerTypeView(selection: marker.kind) { selectedKind in
                         update(kind: selectedKind)
                     }
                 }
 
-                Button("Move to Current Location") {
+                Button(String(localized: "Move to Current Location", table: "WatchMain")) {
                     guard let location = model.lastLocation else { return }
                     model.moveMarker(id: marker.id, to: location.coordinate)
                     marker.latitude = location.coordinate.latitude
@@ -2080,23 +2160,23 @@ private struct PointDetailView: View {
                 }
                 .disabled(model.lastLocation == nil)
 
-                Button("Delete Marker", role: .destructive) {
+                Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
                     confirmDelete = true
                 }
 
                 Button {
                     dismiss()
                 } label: {
-                    Label("Back", systemImage: "arrow.left")
+                    Label(String(localized: "Back", table: "WatchMain"), systemImage: "arrow.left")
                 }
             }
         }
-        .navigationTitle("Point Details")
+        .navigationTitle(String(localized: "Point Details", table: "WatchMain"))
         .onAppear {
             model.requestLocation()
         }
-        .confirmationDialog("Delete point?", isPresented: $confirmDelete) {
-            Button("Delete Marker", role: .destructive) {
+        .confirmationDialog(String(localized: "Delete point?", table: "WatchMain"), isPresented: $confirmDelete) {
+            Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
                 model.deleteMarker(id: marker.id)
                 dismiss()
             }
@@ -2142,7 +2222,7 @@ private struct IncomingPointDetailView: View {
                 }
                 Section {
                     HStack {
-                        Text(item.symbolKind?.rawValue ?? "Point")
+                        Text(item.symbolKind?.watchMainLabel ?? String(localized: "Point", table: "WatchMain"))
                         Spacer(minLength: 4)
                         Text(MapCoordinateFormatter.droppedTime(item.lastSeen))
                             .font(.caption2.monospacedDigit())
@@ -2152,7 +2232,7 @@ private struct IncomingPointDetailView: View {
                 if let missionName = item.missionName {
                     Section {
                         VStack(alignment: .leading, spacing: 2) {
-                            Label("Mission", systemImage: "arrow.triangle.2.circlepath")
+                            Label(String(localized: "Mission", table: "WatchMain"), systemImage: "arrow.triangle.2.circlepath")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             Text(missionName)
@@ -2163,19 +2243,19 @@ private struct IncomingPointDetailView: View {
                 }
                 if let remark = mission?.item.remark, !remark.isEmpty {
                     Section {
-                        Text("Remark: \(remark)")
+                        Text("Remark: \(remark)", tableName: "WatchMain")
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 if model.bloodhoundMapItemID == id {
                     Section {
-                        Label("Bloodhounding", systemImage: "location.north.fill")
+                        Label(String(localized: "Bloodhounding", table: "WatchMain"), systemImage: "location.north.fill")
                     }
                 }
                 Section {
                     HStack(alignment: .top, spacing: 6) {
                         VStack(spacing: 4) {
-                            Text("From You")
+                            Text("From You", tableName: "WatchMain")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             if let location = model.lastLocation {
@@ -2189,7 +2269,7 @@ private struct IncomingPointDetailView: View {
                             } else {
                                 Image(systemName: "location.slash")
                                     .font(.title3)
-                                Text("Unavailable")
+                                Text("Unavailable", tableName: "WatchMain")
                                     .font(.caption2)
                             }
                         }
@@ -2204,14 +2284,14 @@ private struct IncomingPointDetailView: View {
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
                             } else {
-                                Text("Distance unavailable")
+                                Text("Distance unavailable", tableName: "WatchMain")
                                     .font(.caption.bold())
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
                             }
                             Text(String(format: "%.5f", item.latitude))
                             Text(String(format: "%.5f", item.longitude))
-                            Text(MapCoordinateFormatter.mgrs(item.coordinate) ?? "Unavailable")
+                            Text(MapCoordinateFormatter.mgrs(item.coordinate) ?? String(localized: "Unavailable", table: "WatchMain"))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.55)
                         }
@@ -2221,53 +2301,55 @@ private struct IncomingPointDetailView: View {
                 }
 
                 Section {
-                    Button(model.bloodhoundMapItemID == id ? "Stop Bloodhound" : "Bloodhound to Marker") {
+                    Button(model.bloodhoundMapItemID == id ? String(localized: "Stop Bloodhound", table: "WatchMain")
+                       : String(localized: "Bloodhound to Marker", table: "WatchMain")) {
                         run { try await model.toggleMapItemBloodhound(id: id) }
                     }
 
                     if let mission {
-                        NavigationLink("Change Title") {
-                            PointTextEditorView(title: "Change Title", value: item.callSign ?? "") { value in
-                                confirm("Change title to \"\(value)\"") { try await model.editMissionItem(id: id, title: value) }
+                        NavigationLink(String(localized: "Change Title", table: "WatchMain")) {
+                            PointTextEditorView(title: String(localized: "Change Title", table: "WatchMain"), value: item.callSign ?? "") { value in
+                                confirm(String(localized: "Change title to \"\(value)\"", table: "WatchMain")) { try await model.editMissionItem(id: id, title: value) }
                             }
                         }
                         .disabled(!canEdit)
 
                         let hasRemark = mission.item.remark?.isEmpty == false
-                        NavigationLink(hasRemark ? "Change Remark" : "Add Remark") {
-                            PointTextEditorView(title: hasRemark ? "Change Remark" : "Add Remark",
+                        NavigationLink(hasRemark ? String(localized: "Change Remark", table: "WatchMain") : String(localized: "Add Remark", table: "WatchMain")) {
+                            PointTextEditorView(title: hasRemark ? String(localized: "Change Remark", table: "WatchMain") : String(localized: "Add Remark", table: "WatchMain"),
                                                 value: mission.item.remark ?? "") { value in
-                                confirm(value.isEmpty ? "Clear the remark" : "Set remark to \"\(value)\"") {
+                                confirm(value.isEmpty ? String(localized: "Clear the remark", table: "WatchMain")
+                                        : String(localized: "Set remark to \"\(value)\"", table: "WatchMain")) {
                                     try await model.editMissionItem(id: id, remark: value)
                                 }
                             }
                         }
                         .disabled(!canEdit)
 
-                        NavigationLink("Change Marker") {
+                        NavigationLink(String(localized: "Change Marker", table: "WatchMain")) {
                             PointMarkerTypeView(selection: item.symbolKind ?? .unknown) { kind in
-                                confirm("Change marker to \(kind.rawValue)") { try await model.editMissionItem(id: id, kind: kind) }
+                                confirm(String(localized: "Change marker to \(kind.watchMainLabel)", table: "WatchMain")) { try await model.editMissionItem(id: id, kind: kind) }
                             }
                         }
                         .disabled(!canEdit)
 
-                        Button("Move to Current Location") {
+                        Button(String(localized: "Move to Current Location", table: "WatchMain")) {
                             guard let location = model.lastLocation else { return }
                             let coordinate = location.coordinate
-                            confirm("Move to your current location") {
+                            confirm(String(localized: "Move to your current location", table: "WatchMain")) {
                                 try await model.editMissionItem(id: id, coordinate: coordinate)
                             }
                         }
                         .disabled(!canEdit || model.lastLocation == nil)
                     }
 
-                    Button("Delete Marker", role: .destructive) {
+                    Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
                         confirmDelete = true
                     }
                     .disabled(mission?.canEdit == false || working)
 
                     if mission?.canEdit == false {
-                        Text("Your mission role is read-only.")
+                        Text("Your mission role is read-only.", tableName: "WatchMain")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -2275,17 +2357,17 @@ private struct IncomingPointDetailView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Label("Back", systemImage: "arrow.left")
+                        Label(String(localized: "Back", table: "WatchMain"), systemImage: "arrow.left")
                     }
                 }
             } else {
-                Text("Point unavailable or removed.").foregroundStyle(.secondary)
+                Text("Point unavailable or removed.", tableName: "WatchMain").foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("Point Details")
+        .navigationTitle(String(localized: "Point Details", table: "WatchMain"))
         .onAppear { model.requestLocation() }
-        .confirmationDialog(mission == nil ? "Delete point?" : "Delete from mission?", isPresented: $confirmDelete) {
-            Button("Delete Marker", role: .destructive) {
+        .confirmationDialog(mission == nil ? String(localized: "Delete point?", table: "WatchMain") : String(localized: "Delete from mission?", table: "WatchMain"), isPresented: $confirmDelete) {
+            Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
                 if mission == nil {
                     model.removeIncomingPoint(id)
                     dismiss()
@@ -2294,26 +2376,27 @@ private struct IncomingPointDetailView: View {
                 }
             }
         } message: {
-            Text(mission.map { "Removes it from \($0.mission) for everyone subscribed." }
-                 ?? "Removes it from this watch.")
+            Text(mission.map { String(localized: "Removes it from \($0.mission) for everyone subscribed.", table: "WatchMain") }
+                 ?? String(localized: "Removes it from this watch.", table: "WatchMain"))
         }
-        .confirmationDialog("Update mission?", isPresented: Binding(
+        .confirmationDialog(String(localized: "Update mission?", table: "WatchMain"), isPresented: Binding(
             get: { pendingEdit != nil },
             set: { if !$0 { pendingEdit = nil } }
         ), titleVisibility: .visible, presenting: pendingEdit) { edit in
-            Button("Update") {
+            Button(String(localized: "Update", table: "WatchMain")) {
                 pendingEdit = nil
                 run(edit.action)
             }
-            Button("Cancel", role: .cancel) { pendingEdit = nil }
+            Button(String(localized: "Cancel", table: "WatchMain"), role: .cancel) { pendingEdit = nil }
         } message: { edit in
-            Text("\(edit.summary). This changes it in \(mission?.mission ?? "the mission") for everyone subscribed.")
+            Text(mission.map { String(localized: "\(edit.summary). This changes it in \($0.mission) for everyone subscribed.", table: "WatchMain") }
+                 ?? String(localized: "\(edit.summary). This changes it in the mission for everyone subscribed.", table: "WatchMain"))
         }
-        .alert("Point Details", isPresented: Binding(
+        .alert(String(localized: "Point Details", table: "WatchMain"), isPresented: Binding(
             get: { error != nil },
             set: { if !$0 { error = nil } }
         )) {
-            Button("OK", role: .cancel) { error = nil }
+            Button(String(localized: "OK", table: "WatchMain"), role: .cancel) { error = nil }
         } message: {
             Text(error ?? "")
         }
@@ -2356,7 +2439,7 @@ private struct PointTextEditorView: View {
         .navigationTitle(title)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
+                Button(String(localized: "Save", table: "WatchMain")) {
                     onSave(value)
                     dismiss()
                 }
@@ -2385,7 +2468,7 @@ private struct PointMarkerTypeView: View {
                 dismiss()
             } label: {
                 HStack {
-                    Text(kind.rawValue)
+                    Text(kind.watchMainLabel)
                     Spacer()
                     if selection == kind {
                         Image(systemName: "checkmark")
@@ -2393,7 +2476,7 @@ private struct PointMarkerTypeView: View {
                 }
             }
         }
-        .navigationTitle("Change Marker")
+        .navigationTitle(String(localized: "Change Marker", table: "WatchMain"))
     }
 }
 

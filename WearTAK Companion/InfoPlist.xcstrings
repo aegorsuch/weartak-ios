@@ -1,0 +1,890 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "CFBundleDisplayName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK المرافق"
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK помощник"
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK pratitelj"
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK – doprovodná aplikace"
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK-følgesvend"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK Companion"
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK kaasrakendus"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK-oheisappi"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK-Begleitapp"
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK συνοδευτική εφαρμογή"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK kísérőalkalmazás"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Pendamping"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK コンパニオン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 컴패니언"
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK pavadošā lietotne"
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK papildomoji programėlė"
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK-følgeapp"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK – sprievodná aplikácia"
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK – spremljevalna aplikacija"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK-kompanjon"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Yardımcı Uygulaması"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Đồng hành"
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Rakan Pengiring"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion"
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يتصل WearTAK Companion بخادم TAK الخاص بك وينقل مواقع ساعتك وتنبيهاتها ونقاطها."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion се свързва с вашия TAK сървър и препраща позициите, сигналите и точките от часовника ви."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion povezuje se s vašim TAK poslužiteljem i prosljeđuje položaje, upozorenja i točke s vašeg sata."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion se připojuje k vašemu serveru TAK a předává polohy, upozornění a body z vašich hodinek."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion opretter forbindelse til din TAK-server og videresender dit urs positioner, alarmer og punkter."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion maakt verbinding met je TAK-server en stuurt posities, waarschuwingen en punten van je Watch door."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK Companion connects to your TAK server and relays your watch's positions, alerts, and points."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion loob ühenduse sinu TAK-serveriga ning edastab sinu kella asukohti, hoiatusi ja punkte."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion muodostaa yhteyden TAK-palvelimeesi ja välittää kellosi sijainnit, hälytykset ja pisteet."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion se connecte à votre serveur TAK et relaie les positions, alertes et points de votre montre."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion verbindet sich mit deinem TAK-Server und leitet Positionen, Warnungen und Punkte deiner Watch weiter."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Το WearTAK Companion συνδέεται με τον διακομιστή TAK σας και μεταδίδει τις θέσεις, τις ειδοποιήσεις και τα σημεία του ρολογιού σας."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion מתחברת לשרת TAK שלך ומעבירה את המיקומים, ההתראות והנקודות מהשעון שלך."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A WearTAK Companion csatlakozik a TAK-kiszolgálódhoz, és továbbítja az órád pozícióit, riasztásait és pontjait."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion terhubung ke server TAK Anda dan meneruskan posisi, peringatan, dan titik dari jam Anda."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion si connette al tuo server TAK e inoltra posizioni, avvisi e punti del tuo orologio."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK CompanionはTAKサーバーに接続し、ウォッチの位置、アラート、ポイントを中継します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion은 TAK 서버에 연결하여 시계의 위치, 알림 및 지점을 중계합니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion izveido savienojumu ar jūsu TAK serveri un pārsūta pulksteņa pozīcijas, brīdinājumus un punktus."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion prisijungia prie jūsų TAK serverio ir persiunčia laikrodžio padėtis, įspėjimus ir taškus."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion kobler til TAK-serveren din og videresender klokkens posisjoner, varsler og punkter."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion łączy się z Twoim serwerem TAK i przekazuje pozycje, alerty oraz punkty z zegarka."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O WearTAK Companion liga-se ao seu servidor TAK e retransmite as posições, alertas e pontos do relógio."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion se conectează la serverul TAK și transmite pozițiile, alertele și punctele ceasului dvs."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion подключается к вашему серверу TAK и передаёт позиции, оповещения и точки с часов."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion sa pripája k vášmu serveru TAK a preposiela polohy, upozornenia a body z hodiniek."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion se poveže z vašim strežnikom TAK ter posreduje položaje, opozorila in točke z vaše ure."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion se conecta a tu servidor TAK y retransmite las posiciones, alertas y puntos de tu reloj."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion ansluter till din TAK-server och vidarebefordrar klockans positioner, aviseringar och punkter."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion เชื่อมต่อกับเซิร์ฟเวอร์ TAK ของคุณและส่งต่อตำแหน่ง การแจ้งเตือน และจุดจากนาฬิกาของคุณ"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion, TAK sunucunuza bağlanır ve saatinizin konumlarını, uyarılarını ve noktalarını iletir."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion підключається до вашого сервера TAK і передає позиції, сповіщення й точки з годинника."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion kết nối với máy chủ TAK của bạn và chuyển tiếp vị trí, cảnh báo cùng điểm từ đồng hồ."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion bersambung ke pelayan TAK anda dan menyampaikan kedudukan, amaran serta titik daripada jam tangan anda."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion 连接到你的 TAK 服务器，并转发手表的位置、提醒和点位。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion 會連線至您的 TAK 伺服器，並轉送手錶的位置、提示和點位。"
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يرسل WearTAK Companion تلقائيًا موقع GPS لهذا الـ iPhone إلى خوادم TAK التي فعّلتها، باعتباره هوية TAK لساعتك المقترنة."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion автоматично изпраща GPS позицията на този iPhone към включените от вас TAK сървъри като TAK идентичност на сдвоения ви часовник."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion automatski šalje GPS lokaciju ovog iPhonea na vaše omogućene TAK poslužitelje kao TAK identitet vašeg uparenog sata."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion automaticky odesílá GPS polohu tohoto iPhonu na povolené servery TAK jako identitu TAK vašich spárovaných hodinek."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion sender automatisk denne iPhones GPS-position til dine aktiverede TAK-servere som det parrede urs TAK-identitet."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion verstuurt automatisch de GPS-positie van deze iPhone naar je ingeschakelde TAK-servers als de TAK-identiteit van je gekoppelde Watch."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK Companion automatically sends this iPhone's GPS position to your enabled TAK servers as your paired watch's TAK identity."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion saadab selle iPhone'i GPS-asukoha automaatselt sinu lubatud TAK-serveritesse sinu seotud kella TAK-identiteedina."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion lähettää tämän iPhonen GPS-sijainnin automaattisesti käyttöön ottamiisi TAK-palvelimiin pariksi liitetyn kellosi TAK-identiteettinä."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion envoie automatiquement la position GPS de cet iPhone à vos serveurs TAK activés, en tant qu’identité TAK de votre montre jumelée."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion sendet den GPS-Standort dieses iPhone automatisch an deine aktivierten TAK-Server – als TAK-Identität deiner gekoppelten Watch."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Το WearTAK Companion στέλνει αυτόματα τη θέση GPS αυτού του iPhone στους ενεργοποιημένους διακομιστές TAK σας ως την ταυτότητα TAK του συζευγμένου ρολογιού σας."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion שולחת אוטומטית את מיקום ה‑GPS של ה‑iPhone הזה לשרתי TAK שהפעלת, בתור זהות ה‑TAK של השעון המותאם שלך."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A WearTAK Companion automatikusan elküldi ennek az iPhone-nak a GPS-helyzetét az engedélyezett TAK-kiszolgálóidnak a párosított órád TAK-azonosítójaként."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion otomatis mengirim posisi GPS iPhone ini ke server TAK yang Anda aktifkan sebagai identitas TAK jam yang dipasangkan."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion invia automaticamente la posizione GPS di questo iPhone ai server TAK abilitati, come identità TAK del tuo orologio abbinato."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companionは、このiPhoneのGPS位置を、ペアリングされたウォッチのTAK IDとして有効なTAKサーバーに自動送信します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion은 이 iPhone의 GPS 위치를 페어링된 시계의 TAK ID로 사용자가 활성화한 TAK 서버에 자동으로 전송합니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion automātiski nosūta šī iPhone GPS atrašanās vietu uz jūsu iespējotajiem TAK serveriem kā pārī savienotā pulksteņa TAK identitāti."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion automatiškai siunčia šio „iPhone“ GPS buvimo vietą į jūsų įjungtus TAK serverius kaip suporuoto laikrodžio TAK tapatybę."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion sender automatisk GPS-posisjonen til denne iPhonen til de aktiverte TAK-serverne dine som TAK-identiteten til den parede klokken."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion automatycznie wysyła pozycję GPS tego iPhone’a na włączone serwery TAK jako tożsamość TAK sparowanego zegarka."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O WearTAK Companion envia automaticamente a localização GPS deste iPhone para os servidores TAK ativados, como identidade TAK do relógio emparelhado."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion trimite automat poziția GPS a acestui iPhone către serverele TAK activate, ca identitate TAK a ceasului asociat."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion автоматически отправляет GPS-координаты этого iPhone на включённые серверы TAK как идентификатор TAK сопряжённых часов."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion automaticky odosiela GPS polohu tohto iPhonu na povolené servery TAK ako identitu TAK spárovaných hodiniek."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion samodejno pošilja GPS-lokacijo tega iPhona na omogočene strežnike TAK kot identiteto TAK vaše seznanjene ure."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion envía automáticamente la ubicación GPS de este iPhone a los servidores TAK que hayas activado como identidad TAK de tu reloj enlazado."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion skickar automatiskt den här iPhonens GPS-position till dina aktiverade TAK-servrar som den parkopplade klockans TAK-identitet."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion ส่งตำแหน่ง GPS ของ iPhone เครื่องนี้ไปยังเซิร์ฟเวอร์ TAK ที่คุณเปิดใช้โดยอัตโนมัติ ในฐานะข้อมูลระบุตัวตน TAK ของนาฬิกาที่จับคู่"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion, bu iPhone'un GPS konumunu eşleştirilmiş saatinizin TAK kimliği olarak etkin TAK sunucularınıza otomatik gönderir."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion автоматично надсилає GPS-місце цього iPhone на ввімкнені сервери TAK як ідентифікатор TAK спареного годинника."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion tự động gửi vị trí GPS của iPhone này đến các máy chủ TAK bạn đã bật, làm danh tính TAK của đồng hồ đã ghép đôi."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion menghantar lokasi GPS iPhone ini secara automatik ke pelayan TAK yang anda aktifkan sebagai identiti TAK jam tangan berpasangan anda."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion 会自动将此 iPhone 的 GPS 位置发送到已启用的 TAK 服务器，作为已配对手表的 TAK 身份。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK Companion 會自動將此 iPhone 的 GPS 位置傳送至已啟用的 TAK 伺服器，作為已配對手錶的 TAK 身分。"
+          }
+        }
+      }
+    },
+    "NSLocationAlwaysAndWhenInUseUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يتيح خيار «دائمًا» لـ WearTAK Companion استئناف إرسال موقع GPS لهذا الـ iPhone إلى خوادم TAK التي فعّلتها عندما توقظ الساعة التطبيق في الخلفية."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Разрешението „Винаги“ позволява на WearTAK Companion да възобнови изпращането на GPS позицията на този iPhone към включените TAK сървъри, когато часовникът ви го събуди във фонов режим."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dozvola „Uvijek” omogućuje aplikaciji WearTAK Companion da nastavi slati GPS lokaciju ovog iPhonea na omogućene TAK poslužitelje kada je sat probudi u pozadini."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Povolení „Vždy“ umožňuje aplikaci WearTAK Companion obnovit odesílání GPS polohy tohoto iPhonu na povolené servery TAK, když ji hodinky probudí na pozadí."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tilladelsen „Altid” gør det muligt for WearTAK Companion at genoptage afsendelsen af denne iPhones GPS-position til dine aktiverede TAK-servere, når dit ur vækker appen i baggrunden."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "De instelling ‘Altijd’ laat WearTAK Companion het versturen van de GPS-positie van deze iPhone naar je ingeschakelde TAK-servers hervatten wanneer je Watch de app op de achtergrond activeert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always lets WearTAK Companion resume sending this iPhone's GPS position to your enabled TAK servers when your watch wakes it in the background."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Luba „Alati” võimaldab WearTAK Companionil jätkata selle iPhone'i GPS-asukoha saatmist lubatud TAK-serveritesse, kui sinu kell äratab rakenduse taustal."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Aina-lupa antaa WearTAK Companionille mahdollisuuden jatkaa tämän iPhonen GPS-sijainnin lähettämistä käyttöön otettuihin TAK-palvelimiisi, kun kellosi herättää sen taustalla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "L’autorisation « Toujours » permet à WearTAK Companion de reprendre l’envoi de la position GPS de cet iPhone à vos serveurs TAK activés lorsque votre montre le réveille en arrière-plan."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Berechtigung „Immer“ ermöglicht WearTAK Companion, das Senden des GPS-Standorts dieses iPhone an deine aktivierten TAK-Server fortzusetzen, wenn deine Watch die App im Hintergrund aktiviert."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Η άδεια «Πάντα» επιτρέπει στο WearTAK Companion να συνεχίσει την αποστολή της θέσης GPS αυτού του iPhone στους ενεργοποιημένους διακομιστές TAK όταν το ρολόι σας το αφυπνίζει στο παρασκήνιο."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ההרשאה „תמיד” מאפשרת ל‑WearTAK Companion לחדש את שליחת מיקום ה‑GPS של ה‑iPhone הזה לשרתי TAK שהפעלת כאשר השעון מעיר אותה ברקע."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A „Mindig” engedély lehetővé teszi a WearTAK Companion számára, hogy folytassa ennek az iPhone-nak a GPS-helyzetküldését az engedélyezett TAK-kiszolgálókra, amikor az órád a háttérben felébreszti az alkalmazást."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Izin “Selalu” memungkinkan WearTAK Companion melanjutkan pengiriman posisi GPS iPhone ini ke server TAK yang diaktifkan saat jam Anda membangunkannya di latar belakang."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "L’autorizzazione “Sempre” consente a WearTAK Companion di riprendere l’invio della posizione GPS di questo iPhone ai server TAK abilitati quando l’orologio lo riattiva in background."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "「常に」を許可すると、ウォッチがバックグラウンドでWearTAK Companionを起動したとき、このiPhoneのGPS位置を有効なTAKサーバーへ送信し続けます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "‘항상’ 권한을 허용하면 시계가 백그라운드에서 WearTAK Companion을 깨울 때 이 iPhone의 GPS 위치를 활성화된 TAK 서버로 다시 전송합니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Atļauja “Vienmēr” ļauj WearTAK Companion atsākt šī iPhone GPS atrašanās vietas sūtīšanu uz iespējotajiem TAK serveriem, kad pulkstenis to aktivizē fonā."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Leidimas „Visada“ leidžia WearTAK Companion tęsti šio „iPhone“ GPS buvimo vietos siuntimą į įjungtus TAK serverius, kai laikrodis pažadina programėlę fone."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tillatelsen «Alltid» gjør at WearTAK Companion kan gjenoppta sendingen av GPS-posisjonen til denne iPhonen til aktiverte TAK-servere når klokken vekker appen i bakgrunnen."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Zezwolenie „Zawsze” umożliwia aplikacji WearTAK Companion wznowienie wysyłania pozycji GPS tego iPhone’a na włączone serwery TAK, gdy zegarek wybudzi ją w tle."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A autorização “Sempre” permite que o WearTAK Companion retome o envio da localização GPS deste iPhone para os servidores TAK ativados quando o relógio o ativa em segundo plano."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Permisiunea „Întotdeauna” îi permite aplicației WearTAK Companion să reia trimiterea poziției GPS a acestui iPhone către serverele TAK activate atunci când ceasul o activează în fundal."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Разрешение «Всегда» позволяет WearTAK Companion возобновлять отправку GPS-координат этого iPhone на включённые серверы TAK, когда часы пробуждают приложение в фоновом режиме."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Povolenie „Vždy“ umožňuje aplikácii WearTAK Companion obnoviť odosielanie GPS polohy tohto iPhonu na povolené servery TAK, keď ju hodinky prebudia na pozadí."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dovoljenje »Vedno« omogoča aplikaciji WearTAK Companion nadaljevanje pošiljanja GPS-lokacije tega iPhona na omogočene strežnike TAK, ko jo ura prebudi v ozadju."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El permiso «Siempre» permite a WearTAK Companion reanudar el envío de la ubicación GPS de este iPhone a los servidores TAK activados cuando el reloj lo activa en segundo plano."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Behörigheten ”Alltid” gör att WearTAK Companion kan återuppta sändningen av den här iPhonens GPS-position till aktiverade TAK-servrar när klockan väcker appen i bakgrunden."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "สิทธิ์ “ตลอดเวลา” ช่วยให้ WearTAK Companion กลับมาส่งตำแหน่ง GPS ของ iPhone เครื่องนี้ไปยังเซิร์ฟเวอร์ TAK ที่เปิดใช้ เมื่อนาฬิกาปลุกแอปในเบื้องหลัง"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "“Her Zaman” izni, saatiniz uygulamayı arka planda uyandırdığında WearTAK Companion'ın bu iPhone'un GPS konumunu etkin TAK sunucularınıza göndermeyi sürdürmesini sağlar."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Дозвіл «Завжди» дає змогу WearTAK Companion відновити надсилання GPS-місця цього iPhone на ввімкнені сервери TAK, коли годинник пробуджує програму у фоновому режимі."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Quyền “Luôn luôn” cho phép WearTAK Companion tiếp tục gửi vị trí GPS của iPhone này đến các máy chủ TAK đã bật khi đồng hồ đánh thức ứng dụng trong nền."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kebenaran “Sentiasa” membolehkan WearTAK Companion menyambung semula penghantaran lokasi GPS iPhone ini ke pelayan TAK yang diaktifkan apabila jam tangan anda membangunkannya di latar belakang."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "“始终”权限允许 WearTAK Companion 在手表于后台唤醒它时，恢复向已启用的 TAK 服务器发送此 iPhone 的 GPS 位置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "「永遠」權限可讓 WearTAK Companion 在手錶於背景喚醒它時，恢復將此 iPhone 的 GPS 位置傳送至已啟用的 TAK 伺服器。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -44,17 +44,17 @@ struct CompanionSetupView: View {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                         }
                         .font(.callout)
-                        Button("Open Settings") {
+                        Button(String(localized: "Open Settings", table: "CompanionApp")) {
                             if let url = URL(string: UIApplication.openSettingsURLString) {
                                 UIApplication.shared.open(url)
                             }
                         }
                     } header: {
-                        Text("Keep watch connected")
+                        Text("Keep watch connected", tableName: "CompanionApp")
                     }
                 }
                 Section {
-                    LabeledContent("Watch status", value: bridge.isWatchPaired ? "Paired" : "Not paired")
+                    LabeledContent(String(localized: "Watch status", table: "CompanionApp"), value: bridge.isWatchPaired ? String(localized: "Paired", table: "CompanionApp") : String(localized: "Not paired", table: "CompanionApp"))
                     if let error = bridge.watchSetupError {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
@@ -62,9 +62,9 @@ struct CompanionSetupView: View {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
                 }
-                Section("TAK Servers") {
+                Section(String(localized: "TAK Servers", table: "CompanionApp")) {
                     if bridge.servers.isEmpty {
-                        Text("No servers configured")
+                        Text("No servers configured", tableName: "CompanionApp")
                             .foregroundStyle(.secondary)
                     }
                     ForEach(bridge.servers) { server in
@@ -78,15 +78,15 @@ struct CompanionSetupView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Edit server \(server.host)")
+                            .accessibilityLabel(String(localized: "Edit server \(server.host)", table: "CompanionApp"))
                             if server.enabled, bridge.serverStates[server.id]?.detail != "Connecting" {
                                 Button { bridge.reconnect(id: server.id) } label: {
                                     Image(systemName: "arrow.clockwise")
                                 }
                                 .buttonStyle(.borderless)
-                                .accessibilityLabel("Reconnect \(server.host)")
+                                .accessibilityLabel(String(localized: "Reconnect \(server.host)", table: "CompanionApp"))
                             }
-                            Toggle("Enable \(server.host)", isOn: Binding(
+                            Toggle(String(localized: "Enable \(server.host)", table: "CompanionApp"), isOn: Binding(
                                 get: { bridge.servers.first { $0.id == server.id }?.enabled ?? false },
                                 set: { enabled in
                                     do { try bridge.setEnabled(enabled, id: server.id) }
@@ -101,11 +101,11 @@ struct CompanionSetupView: View {
                                 Image(systemName: "trash")
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Remove server \(server.host)")
+                            .accessibilityLabel(String(localized: "Remove server \(server.host)", table: "CompanionApp"))
                         }
                     }
                     Button { editor = ServerEditorRoute(server: nil) } label: {
-                        Label("Add Server", systemImage: "plus")
+                        Label(String(localized: "Add Server", table: "CompanionApp"), systemImage: "plus")
                     }
                 }
                 Section {
@@ -120,15 +120,15 @@ struct CompanionSetupView: View {
             .sheet(item: $editor) { route in
                 CompanionServerEditor(bridge: bridge, server: route.server)
             }
-            .confirmationDialog("Remove server and its certificate?", isPresented: $confirmRemove) {
-                Button("Remove Server", role: .destructive) {
+            .confirmationDialog(String(localized: "Remove server and its certificate?", table: "CompanionApp"), isPresented: $confirmRemove) {
+                Button(String(localized: "Remove Server", table: "CompanionApp"), role: .destructive) {
                     do {
                         if let serverToRemove { try bridge.remove(id: serverToRemove.id) }
                     } catch { errorText = error.localizedDescription }
                 }
             }
-            .alert("Server settings", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
-                Button("OK", role: .cancel) { errorText = nil }
+            .alert(String(localized: "Server settings", table: "CompanionApp"), isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
+                Button(String(localized: "OK", table: "CompanionApp"), role: .cancel) { errorText = nil }
             } message: { Text(errorText ?? "") }
             .onAppear { bridge.setActive(scenePhase == .active) }
             .onChange(of: scenePhase) { _, phase in
@@ -191,7 +191,7 @@ private struct CompanionServerStatusSection: View {
         let status = CompanionServerStatus(enabled: enabled, connected: state?.connected == true,
                                            detail: state?.detail ?? "Disabled",
                                            connectedSince: state?.connectedSince, now: now)
-        Section("Status") {
+        Section(String(localized: "Status", table: "CompanionApp")) {
             HStack(spacing: 8) {
                 Circle().fill(status.level.color).frame(width: 10, height: 10)
                     .accessibilityHidden(true)
@@ -199,7 +199,7 @@ private struct CompanionServerStatusSection: View {
                     .foregroundStyle(status.level == .failed ? .red : .primary)
             }
             if let since = state?.connectedSince, state?.connected == true {
-                LabeledContent("Connected since") {
+                LabeledContent(String(localized: "Connected since", table: "CompanionApp")) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(since.formatted(date: .abbreviated, time: .standard))
                         Text(since, style: .relative).font(.caption).foregroundStyle(.secondary)
@@ -208,20 +208,20 @@ private struct CompanionServerStatusSection: View {
             }
             if let detail = status.detail {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Error").font(.caption).foregroundStyle(.secondary)
+                    Text("Error", tableName: "CompanionApp").font(.caption).foregroundStyle(.secondary)
                     Text(detail).font(.footnote.monospaced()).textSelection(.enabled)
                 }
             }
             if let error = state?.lastError, let at = state?.lastErrorAt, error != status.detail {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Last error · \(at.formatted(date: .abbreviated, time: .standard))")
+                    Text("Last error · \(at.formatted(date: .abbreviated, time: .standard))", tableName: "CompanionApp")
                         .font(.caption).foregroundStyle(.secondary)
                     Text(error).font(.footnote.monospaced()).textSelection(.enabled)
                 }
             }
             if let expires = state?.certificateExpires {
                 let certificate = CompanionServerStatus.certificateText(expires: expires, now: now)
-                LabeledContent("Certificate") {
+                LabeledContent(String(localized: "Certificate", table: "CompanionApp")) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(expires.formatted(date: .abbreviated, time: .shortened))
                         if certificate.warning {
@@ -232,14 +232,14 @@ private struct CompanionServerStatusSection: View {
             }
             if enabled, status.level != .connecting {
                 Button { bridge.reconnect(id: serverID) } label: {
-                    Label("Reconnect Now", systemImage: "arrow.clockwise")
+                    Label(String(localized: "Reconnect Now", table: "CompanionApp"), systemImage: "arrow.clockwise")
                 }
             }
             Button {
                 UIPasteboard.general.string = report(status: status, state: state, now: Date())
                 copied = true
             } label: {
-                Label(copied ? "Copied" : "Copy Details", systemImage: copied ? "checkmark" : "doc.on.doc")
+                Label(copied ? String(localized: "Copied", table: "CompanionApp") : String(localized: "Copy Details", table: "CompanionApp"), systemImage: copied ? "checkmark" : "doc.on.doc")
             }
             .task(id: copied) {
                 guard copied else { return }
@@ -300,7 +300,7 @@ private struct CompanionServerEditor: View {
     @State private var password = ""
     @State private var p12Password = ""
     @State private var authentication = "Enroll"
-    @State private var certificateStatus = "Not configured"
+    @State private var certificateStatus = String(localized: "Not configured", table: "CompanionApp")
     @State private var certificateReady = false
     @State private var busy = false
     @State private var enrollmentTask: Task<Void, Never>?
@@ -330,7 +330,7 @@ private struct CompanionServerEditor: View {
                 TLSApprovalSection(bridge: bridge)
                 if original != nil {
                     Section {
-                        Toggle("Server enabled", isOn: Binding(
+                        Toggle(String(localized: "Server enabled", table: "CompanionApp"), isOn: Binding(
                             get: { enabled },
                             set: { value in
                                 do { try bridge.setEnabled(value, id: serverID) }
@@ -339,76 +339,76 @@ private struct CompanionServerEditor: View {
                         ))
                         .disabled(busy)
                     } footer: {
-                        Text("Turn off Server enabled to edit the address or authentication. Save your changes before enabling again. This switch immediately changes the saved server; Cancel does not undo it.")
+                        Text("Turn off Server enabled to edit the address or authentication. Save your changes before enabling again. This switch immediately changes the saved server; Cancel does not undo it.", tableName: "CompanionApp")
                     }
                 }
                 Section {
-                    LabeledContent("IP or URL") {
+                    LabeledContent(String(localized: "IP or URL", table: "CompanionApp")) {
                         TextField("192.0.2.1", text: $host)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.URL)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent("Port") {
+                    LabeledContent(String(localized: "Port", table: "CompanionApp")) {
                         TextField("8089", text: $port)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                     }
                 } header: {
-                    Text("TAK Server")
+                    Text("TAK Server", tableName: "CompanionApp")
                 } footer: {
                     if settingsLocked {
-                        Label("Disable server to edit", systemImage: "lock.fill")
+                        Label(String(localized: "Disable server to edit", table: "CompanionApp"), systemImage: "lock.fill")
                     }
                 }
                 .disabled(busy || settingsLocked)
                 Section {
                     if connected {
-                        Label("Connected", systemImage: "checkmark.circle.fill")
+                        Label(String(localized: "Connected", table: "CompanionApp"), systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     } else if certificateReady {
-                        Label("Certificate ready", systemImage: "checkmark.shield.fill")
+                        Label(String(localized: "Certificate ready", table: "CompanionApp"), systemImage: "checkmark.shield.fill")
                             .foregroundStyle(.green)
                         if pendingIdentity != nil {
-                            Text("Save to finish setup")
+                            Text("Save to finish setup", tableName: "CompanionApp")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Picker("Method", selection: $authentication) {
-                        Text("Enroll").tag("Enroll")
-                        Text("Import .p12").tag("Import .p12")
+                    Picker(String(localized: "Method", table: "CompanionApp"), selection: $authentication) {
+                        Text("Enroll", tableName: "CompanionApp").tag("Enroll")
+                        Text("Import .p12", tableName: "CompanionApp").tag("Import .p12")
                     }
                     .pickerStyle(.segmented)
                     if authentication == "Enroll" {
-                        TextField("Username", text: $username)
+                        TextField(String(localized: "Username", table: "CompanionApp"), text: $username)
                             .textContentType(.username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        SecureField("Password", text: $password)
+                        SecureField(String(localized: "Password", table: "CompanionApp"), text: $password)
                             .textContentType(.password)
                         Button {
                             enroll()
                         } label: {
-                            Label(busy ? "Enrolling..." : "Enroll Certificate", systemImage: "person.badge.key.fill")
+                            Label(busy ? String(localized: "Enrolling...", table: "CompanionApp") : String(localized: "Enroll Certificate", table: "CompanionApp"), systemImage: "person.badge.key.fill")
                         }
                         .disabled(busy || username.isEmpty || password.isEmpty || endpoint == nil)
                     } else {
-                        SecureField("Certificate Password", text: $p12Password)
+                        SecureField(String(localized: "Certificate Password", table: "CompanionApp"), text: $p12Password)
                         Button {
                             showImporter = true
                         } label: {
-                            Label("Import .p12", systemImage: "square.and.arrow.down")
+                            Label(String(localized: "Import .p12", table: "CompanionApp"), systemImage: "square.and.arrow.down")
                         }
                         .disabled(busy || endpoint == nil)
                     }
-                    LabeledContent("Certificate", value: certificateStatus)
+                    LabeledContent(String(localized: "Certificate", table: "CompanionApp"), value: certificateStatus)
                 } header: {
-                    Text("Authentication")
+                    Text("Authentication", tableName: "CompanionApp")
                 } footer: {
                     if settingsLocked {
-                        Label("Disable server to edit", systemImage: "lock.fill")
+                        Label(String(localized: "Disable server to edit", table: "CompanionApp"), systemImage: "lock.fill")
                     }
                 }
                 .disabled(settingsLocked)
@@ -420,25 +420,25 @@ private struct CompanionServerEditor: View {
                     )
                 }
             }
-            .navigationTitle(original == nil ? "Add Server" : "Edit Server")
+            .navigationTitle(original == nil ? String(localized: "Add Server", table: "CompanionApp") : String(localized: "Edit Server", table: "CompanionApp"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "Cancel", table: "CompanionApp")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(String(localized: "Save", table: "CompanionApp")) { save() }
                         .disabled(endpoint == nil || busy)
                 }
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.data]) { result in
                 importFile(result)
             }
-            .alert("Server settings", isPresented: Binding(
+            .alert(String(localized: "Server settings", table: "CompanionApp"), isPresented: Binding(
                 get: { connectionError != nil },
                 set: { if !$0 { connectionError = nil } }
             )) {
-                Button("OK", role: .cancel) { connectionError = nil }
+                Button(String(localized: "OK", table: "CompanionApp"), role: .cancel) { connectionError = nil }
             } message: {
                 Text(connectionError ?? "")
             }
@@ -472,14 +472,16 @@ private struct CompanionServerEditor: View {
 
     private func refreshCertificate() {
         certificateReady = false
-        guard let endpoint else { certificateStatus = "Not configured"; return }
+        guard let endpoint else { certificateStatus = String(localized: "Not configured", table: "CompanionApp"); return }
         trustedCA = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(endpoint.key)")
         do {
-            guard let stored = try (pendingIdentity ?? CertificateStore.read(endpoint: endpoint.key)) else { certificateStatus = "Not configured"; return }
+            guard let stored = try (pendingIdentity ?? CertificateStore.read(endpoint: endpoint.key)) else { certificateStatus = String(localized: "Not configured", table: "CompanionApp"); return }
             let identity = try CertificateStore.resolve(stored)
             certificateReady = true
-            certificateStatus = "Expires " + identity.expires.formatted(date: .abbreviated, time: .omitted)
-            if identity.expires.timeIntervalSinceNow < 3 * 86_400 { certificateStatus += " - renew soon" }
+            let expires = identity.expires.formatted(date: .abbreviated, time: .omitted)
+            certificateStatus = identity.expires.timeIntervalSinceNow < 3 * 86_400
+                ? String(localized: "Expires \(expires) - renew soon", table: "CompanionApp")
+                : String(localized: "Expires \(expires)", table: "CompanionApp")
         } catch { certificateStatus = error.localizedDescription }
     }
 
@@ -488,7 +490,7 @@ private struct CompanionServerEditor: View {
         do { try validateUnique(endpoint) }
         catch { certificateStatus = error.localizedDescription; return }
         busy = true
-        certificateStatus = "Enrolling"
+        certificateStatus = String(localized: "Enrolling", table: "CompanionApp")
         let enrollmentUsername = username
         let enrollmentPassword = password
         enrollmentTask = Task {
@@ -507,7 +509,7 @@ private struct CompanionServerEditor: View {
                 }
                 refreshCertificate()
             } catch is CancellationError {
-                certificateStatus = "Enrollment cancelled"
+                certificateStatus = String(localized: "Enrollment cancelled", table: "CompanionApp")
             } catch { certificateStatus = error.localizedDescription }
         }
     }
@@ -518,9 +520,9 @@ private struct CompanionServerEditor: View {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard size > 0, size <= 1_048_576 else { throw CompanionFailure.message("Choose a certificate file smaller than 1 MB.") }
+            guard size > 0, size <= 1_048_576 else { throw CompanionFailure.message(String(localized: "Choose a certificate file smaller than 1 MB.", table: "CompanionApp")) }
             let data = try Data(contentsOf: url)
-            guard let endpoint else { throw CompanionFailure.message("Configure the server first.") }
+            guard let endpoint else { throw CompanionFailure.message(String(localized: "Configure the server first.", table: "CompanionApp")) }
             try validateUnique(endpoint)
             let stored = try CertificateStore.importP12(data, password: p12Password)
             if let pendingIdentity { CertificateStore.discardUncommitted(pendingIdentity) }
@@ -548,7 +550,7 @@ private struct CompanionServerEditor: View {
         do {
             try validateUnique(endpoint)
             if let pendingIdentity {
-                guard pendingEndpointKey == endpoint.key else { throw CompanionFailure.message("Enroll or import for this server again.") }
+                guard pendingEndpointKey == endpoint.key else { throw CompanionFailure.message(String(localized: "Enroll or import for this server again.", table: "CompanionApp")) }
                 try CertificateStore.save(pendingIdentity, endpoint: endpoint.key)
             }
             let current = bridge.servers.first { $0.id == serverID }
@@ -568,7 +570,7 @@ private struct TLSApprovalSection: View {
 
     var body: some View {
         if let error = bridge.tlsDiscoveryError {
-            Section("Certificate discovery") {
+            Section(String(localized: "Certificate discovery", table: "CompanionApp")) {
                 Text(error).foregroundStyle(.orange)
             }
         }
@@ -596,7 +598,7 @@ private struct CompanionSitxView: View {
             NavigationLink {
                 CompanionSitxAddressView(sitx: sitx)
             } label: {
-                LabeledContent("Address", value: sitx.host.isEmpty ? "Not set" : SitxAPI.displayHost(sitx.host))
+                LabeledContent(String(localized: "Address", table: "CompanionApp"), value: sitx.host.isEmpty ? String(localized: "Not set", table: "CompanionApp") : SitxAPI.displayHost(sitx.host))
             }
             NavigationLink {
                 List(sitx.groups) { group in
@@ -610,27 +612,27 @@ private struct CompanionSitxView: View {
                         }
                     }
                 }
-                .navigationTitle("Group")
+                .navigationTitle(String(localized: "Group", table: "CompanionApp"))
                 .refreshable { sitx.refreshGroups() }
             } label: {
-                LabeledContent("Group", value: sitx.selectedGroupName ?? "Not selected")
+                LabeledContent(String(localized: "Group", table: "CompanionApp"), value: sitx.selectedGroupName ?? String(localized: "Not selected", table: "CompanionApp"))
             }
             .disabled(sitx.groups.isEmpty || !sitx.enabled)
-            LabeledContent("Sit(x) State") {
+            LabeledContent(String(localized: "Sit(x) State", table: "CompanionApp")) {
                 Text(sitx.state.detail).multilineTextAlignment(.trailing)
             }
             Button {
                 sitx.reauthorize()
             } label: {
-                Label("Re-auth", systemImage: "arrow.clockwise")
+                Label(String(localized: "Re-auth", table: "CompanionApp"), systemImage: "arrow.clockwise")
             }
             .disabled(!sitx.enabled || sitx.host.isEmpty)
-            Button("Remove Sit(x) connection", role: .destructive) { confirmRemoval = true }
+            Button(String(localized: "Remove Sit(x) connection", table: "CompanionApp"), role: .destructive) { confirmRemoval = true }
                 .disabled(removing)
         }
         .navigationTitle("Sit(x) TAK")
-        .confirmationDialog("Remove Sit(x) connection and all saved authorization, address and groups?", isPresented: $confirmRemoval) {
-            Button("Remove Sit(x) connection", role: .destructive) {
+        .confirmationDialog(String(localized: "Remove Sit(x) connection and all saved authorization, address and groups?", table: "CompanionApp"), isPresented: $confirmRemoval) {
+            Button(String(localized: "Remove Sit(x) connection", table: "CompanionApp"), role: .destructive) {
                 removing = true
                 Task {
                     await sitx.removeConnection()
@@ -647,25 +649,25 @@ private struct CompanionSitxView: View {
         .sheet(isPresented: $showAuthorization) {
             NavigationStack {
                 List {
-                    LabeledContent("Auth Code") {
+                    LabeledContent(String(localized: "Auth Code", table: "CompanionApp")) {
                         Text(sitx.authorizationCode).font(.title3.monospaced()).textSelection(.enabled)
                     }
                     Button {
                         UIPasteboard.general.string = sitx.authorizationCode
                     } label: {
-                        Label("Copy Code", systemImage: "doc.on.doc")
+                        Label(String(localized: "Copy Code", table: "CompanionApp"), systemImage: "doc.on.doc")
                     }
                     if let url = URL(string: sitx.verificationURL), !sitx.verificationURL.isEmpty {
                         Link(destination: url) {
-                            Label("Authorize", systemImage: "arrow.up.right.square")
+                            Label(String(localized: "Authorize", table: "CompanionApp"), systemImage: "arrow.up.right.square")
                         }
                     }
                     Text(sitx.state.detail).foregroundStyle(.secondary)
                 }
-                .navigationTitle("Authorization")
+                .navigationTitle(String(localized: "Authorization", table: "CompanionApp"))
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Back") { showAuthorization = false }
+                        Button(String(localized: "Back", table: "CompanionApp")) { showAuthorization = false }
                     }
                 }
             }
@@ -686,7 +688,7 @@ private struct CompanionSitxAddressView: View {
 
     var body: some View {
         List {
-            TextField("Organization", text: $address)
+            TextField(String(localized: "Organization", table: "CompanionApp"), text: $address)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .onSubmit(saveAddress)
@@ -694,11 +696,11 @@ private struct CompanionSitxAddressView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button(action: saveAddress) {
-                Label("Save", systemImage: "checkmark")
+                Label(String(localized: "Save", table: "CompanionApp"), systemImage: "checkmark")
             }
             .disabled(SitxAPI.normalizedHost(address) == nil)
         }
-        .navigationTitle("Address")
+        .navigationTitle(String(localized: "Address", table: "CompanionApp"))
     }
 
     private func saveAddress() {

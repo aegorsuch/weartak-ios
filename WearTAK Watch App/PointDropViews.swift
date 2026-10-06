@@ -5,6 +5,7 @@ struct PointTypePickerView: View {
     @ObservedObject var model: WatchSessionModel
     let onDrop: (MarkerKind) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var showTools = false
     @State private var dropDraft: PointDropDraft?
 
@@ -16,17 +17,7 @@ struct PointTypePickerView: View {
                 sector(.neutral, angle: -180, diameter: diameter)
                 sector(.friendly, angle: 0, diameter: diameter)
                 sector(.unknown, angle: 90, diameter: diameter)
-                let caption = Array("Hold for more")
-                ForEach(caption.indices, id: \.self) { index in
-                    let angle = -160.0 + 140.0 * Double(index) / Double(caption.count - 1)
-                    Text(String(caption[index]))
-                        .font(.system(size: 11))
-                        .rotationEffect(.degrees(angle + 90))
-                        .position(x: diameter * (0.5 + 0.20 * cos(angle * .pi / 180)),
-                                  y: diameter * (0.5 + 0.20 * sin(angle * .pi / 180)))
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
+                holdHint(diameter: diameter)
                 Image(systemName: "xmark")
                     .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(.black)
@@ -39,10 +30,10 @@ struct PointTypePickerView: View {
                         case .second: dismiss()
                         }
                     })
-                    .accessibilityLabel("Cancel point drop")
+                    .accessibilityLabel(String(localized: "Cancel point drop", table: "PointDrop"))
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { dismiss() }
-                    .accessibilityAction(named: "Marker options") { showTools = true }
+                    .accessibilityAction(named: Text(String(localized: "Marker options", table: "PointDrop"))) { showTools = true }
             }
             .frame(width: diameter, height: diameter)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -75,6 +66,45 @@ struct PointTypePickerView: View {
         }
     }
 
+    @ViewBuilder
+    private func holdHint(diameter: CGFloat) -> some View {
+        let hint = String(localized: "Hold for more", table: "PointDrop", comment: "Hint above the cancel button; long-press for marker options. Drawn along a curve, one character at a time, in left-to-right languages")
+        // Per-character placement breaks RTL ordering and Arabic letter joining, so RTL text is drawn as one run.
+        if layoutDirection == .rightToLeft || Self.containsRightToLeftScript(hint) {
+            Text(hint)
+                .font(.system(size: 11))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(width: diameter * 0.34)
+                .position(x: diameter * 0.5, y: diameter * (0.5 - 0.19))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            let caption = Array(hint)
+            ForEach(caption.indices, id: \.self) { index in
+                let angle = -160.0 + 140.0 * Double(index) / Double(max(caption.count - 1, 1))
+                Text(String(caption[index]))
+                    .font(.system(size: 11))
+                    .rotationEffect(.degrees(angle + 90))
+                    .position(x: diameter * (0.5 + 0.20 * cos(angle * .pi / 180)),
+                              y: diameter * (0.5 + 0.20 * sin(angle * .pi / 180)))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private static func containsRightToLeftScript(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF, 0x10800...0x10FFF, 0x1E800...0x1EFFF:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     private func sector(_ kind: MarkerKind, angle: Double, diameter: CGFloat) -> some View {
         let shape = PointTypeSector(start: .degrees(angle - 43), end: .degrees(angle + 43))
         return Button {
@@ -86,7 +116,7 @@ struct PointTypePickerView: View {
                     VStack(spacing: 2) {
                         MapPointSymbol(kind: kind)
                             .frame(width: 24, height: 24)
-                        Text(kind.rawValue).font(.system(size: 12)).lineLimit(1).minimumScaleFactor(0.75)
+                        Text(kind.pointDropLabel).font(.system(size: 12)).lineLimit(1).minimumScaleFactor(0.75)
                     }
                     .frame(width: diameter * 0.37, height: 40)
                     .position(x: diameter * (0.5 + 0.34 * cos(angle * .pi / 180)),
@@ -94,7 +124,19 @@ struct PointTypePickerView: View {
                 }
                 .contentShape(shape)
         }
-        .accessibilityLabel("Drop \(kind.rawValue) point")
+        .accessibilityLabel(String(localized: "Drop \(kind.pointDropLabel) point", table: "PointDrop", comment: "Accessibility label; %@ is the localized marker type (Friendly, Neutral, Unknown, Hostile)"))
+    }
+}
+
+private extension MarkerKind {
+    /// Localized display name; `rawValue` stays unchanged for persistence and network use.
+    var pointDropLabel: String {
+        switch self {
+        case .friendly: return String(localized: "Friendly", table: "PointDrop", comment: "Marker type label")
+        case .neutral: return String(localized: "Neutral", table: "PointDrop", comment: "Marker type label")
+        case .unknown: return String(localized: "Unknown", table: "PointDrop", comment: "Marker type label")
+        case .hostile: return String(localized: "Hostile", table: "PointDrop", comment: "Marker type label")
+        }
     }
 }
 
@@ -120,9 +162,9 @@ struct PointDropConfirmationView: View {
                 Text(WatchSessionModel.markerStoredMessage)
                     .font(.caption)
             }
-            TextField("Title (optional)", text: $title)
-            TextField("Remark (optional)", text: $remark)
-            Button("Drop") {
+            TextField(String(localized: "Title (optional)", table: "PointDrop"), text: $title)
+            TextField(String(localized: "Remark (optional)", table: "PointDrop"), text: $remark)
+            Button(String(localized: "Drop", table: "PointDrop", comment: "Button that places the point")) {
                 guard !isDropping else { return }
                 isDropping = true
                 let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -140,13 +182,13 @@ struct PointDropConfirmationView: View {
                 dismiss()
             }
             .disabled(isDropping)
-            Button("Cancel", role: .cancel) { dismiss() }
+            Button(String(localized: "Cancel", table: "PointDrop"), role: .cancel) { dismiss() }
         }
-        .navigationTitle("Drop \(draft.kind.rawValue)")
-        .alert("Unable to store marker", isPresented: $locationUnavailable) {
-            Button("OK", role: .cancel) {}
+        .navigationTitle(String(localized: "Drop \(draft.kind.pointDropLabel)", table: "PointDrop", comment: "Screen title; %@ is the localized marker type (Friendly, Neutral, Unknown, Hostile)"))
+        .alert(String(localized: "Unable to store marker", table: "PointDrop"), isPresented: $locationUnavailable) {
+            Button(String(localized: "OK", table: "PointDrop"), role: .cancel) {}
         } message: {
-            Text(model.offlineNotice ?? "Unable to store marker details.")
+            Text(model.offlineNotice ?? String(localized: "Unable to store marker details.", table: "PointDrop"))
         }
     }
 }
@@ -180,7 +222,7 @@ private struct PointToolsView: View {
             VStack {
                 Spacer(minLength: 4)
                 Button { showMarkers = true } label: {
-                    Text("Dropped Markers")
+                    Text(String(localized: "Dropped Markers", table: "PointDrop"))
                         .font(.system(size: 14, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: geometry.size.height * 0.2)
@@ -194,10 +236,10 @@ private struct PointToolsView: View {
                         .frame(width: min(58, geometry.size.height * 0.3), height: min(58, geometry.size.height * 0.3))
                         .background(Color(white: 0.8), in: Circle())
                 }
-                .accessibilityLabel("Back to point types")
+                .accessibilityLabel(String(localized: "Back to point types", table: "PointDrop"))
                 Spacer(minLength: 4)
                 Button { confirmDelete = true } label: {
-                    Text("Clear Last Marker")
+                    Text(String(localized: "Clear Last Marker", table: "PointDrop"))
                         .font(.system(size: 14, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: geometry.size.height * 0.2)
@@ -214,8 +256,8 @@ private struct PointToolsView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .navigationDestination(isPresented: $showMarkers) { PointListView(model: model) }
-        .confirmationDialog("Clear last marker?", isPresented: $confirmDelete) {
-            Button("Clear Last Marker", role: .destructive) {
+        .confirmationDialog(String(localized: "Clear last marker?", table: "PointDrop"), isPresented: $confirmDelete) {
+            Button(String(localized: "Clear Last Marker", table: "PointDrop"), role: .destructive) {
                 if let marker = model.markers.first { model.deleteMarker(id: marker.id) }
             }
         }

@@ -475,7 +475,8 @@ final class SitxClient: ObservableObject, TAKTransport {
         case .neutral: affiliation = "n"
         case .unknown: affiliation = "u"
         }
-        let detail = "<contact callsign=\"\(SitxCoT.escape(marker.displayTitle))\"/><remarks>\(SitxCoT.escape(marker.remark ?? ""))</remarks><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/>"
+        let callSign = marker.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(marker.kind.rawValue) 2525D point"
+        let detail = "<contact callsign=\"\(SitxCoT.escape(callSign))\"/><remarks>\(SitxCoT.escape(marker.remark ?? ""))</remarks><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/>"
         return SitxCoT.event(uid: marker.id.uuidString, type: "a-\(affiliation)-G", coordinate: marker.coordinate,
                             detail: detail, lifetime: 86_400)
     }

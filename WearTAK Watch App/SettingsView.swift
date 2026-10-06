@@ -20,32 +20,32 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            NavigationLink("Callsign and Device Preferences") {
+            NavigationLink(String(localized: "Callsign and Device Preferences", table: "WatchSettings")) {
                 DevicePreferencesView(settings: settings)
             }
-            NavigationLink("Network Preferences") {
+            NavigationLink(String(localized: "Network Preferences", table: "WatchSettings")) {
                 NetworkPreferencesView(model: model, settings: settings, sitxClient: sitxClient)
             }
-            NavigationLink("Alerting Preferences") {
+            NavigationLink(String(localized: "Alerting Preferences", table: "WatchSettings")) {
                 AlertingPreferencesView(settings: settings)
             }
-            NavigationLink("Tool Preferences") {
+            NavigationLink(String(localized: "Tool Preferences", table: "WatchSettings")) {
                 ToolPreferencesView(model: model, settings: settings)
             }
             Button {
                 showDeveloperModeEnabled = settings.registerVersionTap()
             } label: {
-                Text("Version \(versionLabel)")
+                Text(String(localized: "Version \(versionLabel)", table: "WatchSettings"))
                     .foregroundStyle(.secondary)
             }
             if settings.developerMode {
-                Toggle("Developer mode", isOn: $settings.developerMode)
+                Toggle(String(localized: "Developer mode", table: "WatchSettings"), isOn: $settings.developerMode)
             }
         }
-        .navigationTitle("Settings")
+        .navigationTitle(String(localized: "Settings", table: "WatchSettings"))
         .onDisappear { settings.resetVersionTaps() }
-        .alert("Developer mode enabled", isPresented: $showDeveloperModeEnabled) {
-            Button("OK", role: .cancel) {}
+        .alert(String(localized: "Developer mode enabled", table: "WatchSettings"), isPresented: $showDeveloperModeEnabled) {
+            Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) {}
         }
     }
 }
@@ -60,8 +60,8 @@ private struct DevicePreferencesView: View {
                     MyCallsignView(settings: settings)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("My Callsign")
-                        Text(settings.callSign.isEmpty ? "Not Set" : settings.callSign)
+                        Text(String(localized: "My Callsign", table: "WatchSettings"))
+                        Text(settings.callSign.isEmpty ? String(localized: "Not Set", table: "WatchSettings") : settings.callSign)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -71,8 +71,8 @@ private struct DevicePreferencesView: View {
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("My Team")
-                            Text(settings.teamColor.rawValue)
+                            Text(String(localized: "My Team", table: "WatchSettings"))
+                            Text(settings.teamColor.localizedName)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -87,13 +87,13 @@ private struct DevicePreferencesView: View {
                     MyRoleView(settings: settings)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("My Role")
-                        Text(settings.roleGroup.map { "\($0.rawValue) · \(settings.role)" } ?? "Not Set")
+                        Text(String(localized: "My Role", table: "WatchSettings"))
+                        Text(settings.roleGroup.map { "\($0.localizedName) · \(AppSettings.localizedOption(settings.role))" } ?? String(localized: "Not Set", table: "WatchSettings"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
-                NavigationLink("My User Metrics") {
+                NavigationLink(String(localized: "My User Metrics", table: "WatchSettings")) {
                     UserMetricsView(settings: settings)
                 }
             }
@@ -102,8 +102,8 @@ private struct DevicePreferencesView: View {
                     ReportingStrategyView(settings: settings)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Reporting Strategy")
-                        Text(settings.reportingStrategy.rawValue)
+                        Text(String(localized: "Reporting Strategy", table: "WatchSettings"))
+                        Text(settings.reportingStrategy.localizedName)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -112,16 +112,16 @@ private struct DevicePreferencesView: View {
                     WiFiBatteryPreferencesView(settings: settings)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Save Battery on WiFi")
-                        Text(settings.wifiBatteryPolicy.rawValue)
+                        Text(String(localized: "Save Battery on WiFi", table: "WatchSettings"))
+                        Text(settings.wifiBatteryPolicy.localizedName)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
-                Toggle("Physiological Monitoring", isOn: $settings.physiologicalMonitoringEnabled)
+                Toggle(String(localized: "Physiological Monitoring", table: "WatchSettings"), isOn: $settings.physiologicalMonitoringEnabled)
             }
         }
-        .navigationTitle("Callsign and Device Preferences")
+        .navigationTitle(String(localized: "Callsign and Device Preferences", table: "WatchSettings"))
     }
 }
 
@@ -135,7 +135,7 @@ private struct WiFiBatteryPreferencesView: View {
                     settings.wifiBatteryPolicy = policy
                 } label: {
                     HStack {
-                        Text(policy.rawValue)
+                        Text(policy.localizedName)
                         Spacer()
                         if settings.wifiBatteryPolicy == policy {
                             Image(systemName: "checkmark")
@@ -143,10 +143,10 @@ private struct WiFiBatteryPreferencesView: View {
                     }
                 }
                 .disabled(policy == .some)
-                .accessibilityHint(policy == .some ? "WiFi network names are unavailable on watchOS" : "")
+                .accessibilityHint(policy == .some ? String(localized: "WiFi network names are unavailable on watchOS", table: "WatchSettings") : "")
             }
         }
-        .navigationTitle("Save Battery on WiFi")
+        .navigationTitle(String(localized: "Save Battery on WiFi", table: "WatchSettings"))
     }
 }
 
@@ -157,13 +157,13 @@ struct ReportingStrategyView: View {
 
     var body: some View {
         List {
-            Section("Strategy") {
+            Section(String(localized: "Strategy", table: "WatchSettings")) {
                 ForEach(ReportingStrategy.allCases) { strategy in
                     Button {
                         settings.reportingStrategy = strategy
                     } label: {
                         HStack {
-                            Text(strategy.rawValue)
+                            Text(strategy.localizedName)
                             Spacer()
                             if settings.reportingStrategy == strategy {
                                 Image(systemName: "checkmark")
@@ -174,19 +174,19 @@ struct ReportingStrategyView: View {
             }
 
             if settings.reportingStrategy == .dynamic {
-                Section("Dynamic Intervals") {
-                    intervalRow("Stationary Reporting Interval", value: $settings.stationaryReportingInterval)
-                    intervalRow("On Foot Reporting Interval", value: $settings.onFootReportingInterval)
-                    intervalRow("Vehicle Reporting Interval", value: $settings.vehicleReportingInterval)
-                    intervalRow("While Alerting Reporting Interval", value: $settings.alertingReportingInterval)
+                Section(String(localized: "Dynamic Intervals", table: "WatchSettings")) {
+                    intervalRow(String(localized: "Stationary Reporting Interval", table: "WatchSettings"), value: $settings.stationaryReportingInterval)
+                    intervalRow(String(localized: "On Foot Reporting Interval", table: "WatchSettings"), value: $settings.onFootReportingInterval)
+                    intervalRow(String(localized: "Vehicle Reporting Interval", table: "WatchSettings"), value: $settings.vehicleReportingInterval)
+                    intervalRow(String(localized: "While Alerting Reporting Interval", table: "WatchSettings"), value: $settings.alertingReportingInterval)
                 }
             } else {
-                Section("Constant Interval") {
-                    intervalRow("Reporting Interval", value: $settings.constantReportingInterval)
+                Section(String(localized: "Constant Interval", table: "WatchSettings")) {
+                    intervalRow(String(localized: "Reporting Interval", table: "WatchSettings"), value: $settings.constantReportingInterval)
                 }
             }
         }
-        .navigationTitle("Reporting Strategy")
+        .navigationTitle(String(localized: "Reporting Strategy", table: "WatchSettings"))
     }
 
     private func intervalRow(_ title: String, value: Binding<Int>) -> some View {
@@ -195,10 +195,10 @@ struct ReportingStrategyView: View {
                 title: title,
                 selection: value,
                 values: commonIntervals,
-                valueLabel: { "\($0) seconds" }
+                valueLabel: { String(localized: "\($0) seconds", table: "WatchSettings") }
             )
         } label: {
-            LabeledContent(title, value: "\(value.wrappedValue) seconds")
+            LabeledContent(title, value: String(localized: "\(value.wrappedValue) seconds", table: "WatchSettings"))
         }
     }
 }
@@ -208,11 +208,11 @@ private struct MyCallsignView: View {
 
     var body: some View {
         List {
-            TextField("Callsign", text: $settings.callSign)
+            TextField(String(localized: "Callsign", table: "WatchSettings"), text: $settings.callSign)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
         }
-        .navigationTitle("My Callsign")
+        .navigationTitle(String(localized: "My Callsign", table: "WatchSettings"))
     }
 }
 
@@ -231,7 +231,7 @@ private struct MyTeamView: View {
                         .fill(color.swatchColor)
                         .frame(width: 16, height: 16)
                         .overlay(Circle().stroke(.gray.opacity(0.7), lineWidth: 1))
-                    Text(color.rawValue)
+                    Text(color.localizedName)
                     Spacer()
                     if settings.teamColor == color {
                         Image(systemName: "checkmark")
@@ -239,7 +239,7 @@ private struct MyTeamView: View {
                 }
             }
         }
-        .navigationTitle("My Team")
+        .navigationTitle(String(localized: "My Team", table: "WatchSettings"))
     }
 }
 
@@ -271,13 +271,13 @@ private struct MyRoleView: View {
 
     var body: some View {
         List {
-            Section("Role Group") {
+            Section(String(localized: "Role Group", table: "WatchSettings")) {
                 ForEach(UserRoleGroup.allCases) { group in
                     Button {
                         selectedGroup = group
                     } label: {
                         HStack {
-                            Text(group.rawValue)
+                            Text(group.localizedName)
                             Spacer()
                             if selectedGroup == group || settings.roleGroup == group {
                                 Image(systemName: "checkmark")
@@ -287,7 +287,7 @@ private struct MyRoleView: View {
                 }
             }
             if let selectedGroup {
-                Section(selectedGroup.rawValue) {
+                Section(selectedGroup.localizedName) {
                     ForEach(selectedGroup.roles, id: \.self) { role in
                         Button {
                             settings.roleGroup = selectedGroup
@@ -295,7 +295,7 @@ private struct MyRoleView: View {
                             dismiss()
                         } label: {
                             HStack {
-                                Text(role)
+                                Text(AppSettings.localizedOption(role))
                                 Spacer()
                                 if settings.roleGroup == selectedGroup && settings.role == role {
                                     Image(systemName: "checkmark")
@@ -306,7 +306,7 @@ private struct MyRoleView: View {
                 }
             }
         }
-        .navigationTitle("My Role")
+        .navigationTitle(String(localized: "My Role", table: "WatchSettings"))
         .onAppear { selectedGroup = settings.roleGroup }
     }
 }
@@ -316,14 +316,14 @@ private struct UserMetricsView: View {
 
     var body: some View {
         List {
-            NavigationLink("Medical Profile (BATDOK)") {
+            NavigationLink(String(localized: "Medical Profile (BATDOK)", table: "WatchSettings")) {
                 MedicalProfileView(settings: settings)
             }
-            NavigationLink("Gait Tracking") {
+            NavigationLink(String(localized: "Gait Tracking", table: "WatchSettings")) {
                 GaitTrackingView(settings: settings)
             }
         }
-        .navigationTitle("My User Metrics")
+        .navigationTitle(String(localized: "My User Metrics", table: "WatchSettings"))
     }
 }
 
@@ -334,53 +334,53 @@ private struct MedicalProfileView: View {
         List {
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Birth Year", selection: $settings.birthYear,
+                    title: String(localized: "Birth Year", table: "WatchSettings"), selection: $settings.birthYear,
                     values: Array(1920...Calendar.current.component(.year, from: Date())),
                     valueLabel: { "\($0)" }
                 )
             } label: {
-                LabeledContent("Birth Year", value: "\(settings.birthYear)")
+                LabeledContent(String(localized: "Birth Year", table: "WatchSettings"), value: "\(settings.birthYear)")
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Height", selection: $settings.heightInches,
+                    title: String(localized: "Height", table: "WatchSettings"), selection: $settings.heightInches,
                     values: Array(48...84),
                     valueLabel: { "\($0 / 12)' \($0 % 12)\u{22}" }
                 )
             } label: {
-                LabeledContent("Height", value: "\(settings.heightInches / 12)' \(settings.heightInches % 12)\u{22}")
+                LabeledContent(String(localized: "Height", table: "WatchSettings"), value: "\(settings.heightInches / 12)' \(settings.heightInches % 12)\u{22}")
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Weight", selection: $settings.weightPounds,
+                    title: String(localized: "Weight", table: "WatchSettings"), selection: $settings.weightPounds,
                     values: Array(stride(from: 80, through: 320, by: 5)),
-                    valueLabel: { "\($0) lb" }
+                    valueLabel: { String(localized: "\($0) lb", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Weight", value: "\(settings.weightPounds) lb")
+                LabeledContent(String(localized: "Weight", table: "WatchSettings"), value: String(localized: "\(settings.weightPounds) lb", table: "WatchSettings"))
             }
             NavigationLink {
-                ProfileStringPickerView(title: "Sex", selection: $settings.sex, values: AppSettings.sexOptions)
+                ProfileStringPickerView(title: String(localized: "Sex", table: "WatchSettings"), selection: $settings.sex, values: AppSettings.sexOptions)
             } label: {
-                LabeledContent("Sex", value: settings.sex)
+                LabeledContent(String(localized: "Sex", table: "WatchSettings"), value: AppSettings.localizedOption(settings.sex))
             }
             NavigationLink {
-                ProfileStringPickerView(title: "Blood Type", selection: $settings.bloodType, values: AppSettings.bloodTypeOptions)
+                ProfileStringPickerView(title: String(localized: "Blood Type", table: "WatchSettings"), selection: $settings.bloodType, values: AppSettings.bloodTypeOptions)
             } label: {
-                LabeledContent("Blood Type", value: settings.bloodType)
+                LabeledContent(String(localized: "Blood Type", table: "WatchSettings"), value: AppSettings.localizedOption(settings.bloodType))
             }
             NavigationLink {
                 AllergiesView(settings: settings)
             } label: {
-                LabeledContent("Allergies", value: settings.allergies.joined(separator: ", "))
+                LabeledContent(String(localized: "Allergies", table: "WatchSettings"), value: settings.allergies.map(AppSettings.localizedOption).joined(separator: ", "))
             }
             NavigationLink {
-                ProfileStringPickerView(title: "User Type", selection: $settings.userType, values: AppSettings.userTypeOptions)
+                ProfileStringPickerView(title: String(localized: "User Type", table: "WatchSettings"), selection: $settings.userType, values: AppSettings.userTypeOptions)
             } label: {
-                LabeledContent("User Type", value: settings.userType)
+                LabeledContent(String(localized: "User Type", table: "WatchSettings"), value: AppSettings.localizedOption(settings.userType))
             }
         }
-        .navigationTitle("Medical Profile (BATDOK)")
+        .navigationTitle(String(localized: "Medical Profile (BATDOK)", table: "WatchSettings"))
     }
 }
 
@@ -423,7 +423,7 @@ private struct ProfileStringPickerView: View {
                 dismiss()
             } label: {
                 HStack {
-                    Text(value)
+                    Text(AppSettings.localizedOption(value))
                     Spacer()
                     if selection == value {
                         Image(systemName: "checkmark")
@@ -444,7 +444,7 @@ private struct AllergiesView: View {
                 settings.toggleAllergy(allergy)
             } label: {
                 HStack {
-                    Text(allergy)
+                    Text(AppSettings.localizedOption(allergy))
                     Spacer()
                     if settings.allergies.contains(allergy) {
                         Image(systemName: "checkmark")
@@ -452,7 +452,7 @@ private struct AllergiesView: View {
                 }
             }
         }
-        .navigationTitle("Allergies")
+        .navigationTitle(String(localized: "Allergies", table: "WatchSettings"))
     }
 }
 
@@ -463,39 +463,39 @@ private struct GaitTrackingView: View {
         List {
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Uniform Waist Size", selection: $settings.uniformWaistSize,
-                    values: Array(24...60), valueLabel: { "\($0) in" }
+                    title: String(localized: "Uniform Waist Size", table: "WatchSettings"), selection: $settings.uniformWaistSize,
+                    values: Array(24...60), valueLabel: { String(localized: "\($0) in", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Uniform Waist Size", value: "\(settings.uniformWaistSize) in")
+                LabeledContent(String(localized: "Uniform Waist Size", table: "WatchSettings"), value: String(localized: "\(settings.uniformWaistSize) in", table: "WatchSettings"))
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Stride Length", selection: $settings.strideLength,
-                    values: Array(20...45), valueLabel: { "\($0) in" }
+                    title: String(localized: "Stride Length", table: "WatchSettings"), selection: $settings.strideLength,
+                    values: Array(20...45), valueLabel: { String(localized: "\($0) in", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Stride Length", value: "\(settings.strideLength) in")
+                LabeledContent(String(localized: "Stride Length", table: "WatchSettings"), value: String(localized: "\(settings.strideLength) in", table: "WatchSettings"))
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Uniform Pants Length", selection: $settings.uniformPantsLength,
-                    values: Array(24...60), valueLabel: { "\($0) in" }
+                    title: String(localized: "Uniform Pants Length", table: "WatchSettings"), selection: $settings.uniformPantsLength,
+                    values: Array(24...60), valueLabel: { String(localized: "\($0) in", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Uniform Pants Length", value: "\(settings.uniformPantsLength) in")
+                LabeledContent(String(localized: "Uniform Pants Length", table: "WatchSettings"), value: String(localized: "\(settings.uniformPantsLength) in", table: "WatchSettings"))
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Loadout Weight", selection: $settings.loadoutWeight,
+                    title: String(localized: "Loadout Weight", table: "WatchSettings"), selection: $settings.loadoutWeight,
                     values: Array(stride(from: 10, through: 150, by: 5)),
-                    valueLabel: { "\($0) lbs" }
+                    valueLabel: { String(localized: "\($0) lbs", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Loadout Weight", value: "\(settings.loadoutWeight) lbs")
+                LabeledContent(String(localized: "Loadout Weight", table: "WatchSettings"), value: String(localized: "\(settings.loadoutWeight) lbs", table: "WatchSettings"))
             }
         }
-        .navigationTitle("Gait Tracking")
+        .navigationTitle(String(localized: "Gait Tracking", table: "WatchSettings"))
     }
 }
 
@@ -510,7 +510,7 @@ struct NetworkPreferencesView: View {
                 RelayProviderView(model: model, settings: settings)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("TAK Relay (\(settings.relayProvider.rawValue))")
+                    Text(String(localized: "TAK Relay (\(settings.relayProvider.localizedName))", table: "WatchSettings", comment: "Settings row. The argument is the selected relay provider name."))
                     if settings.relayProvider == .companion {
                         CompanionLinkCaption(client: model.companionClient)
                     }
@@ -521,7 +521,7 @@ struct NetworkPreferencesView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("TAK SA Multicast")
-                    Text(settings.multicastEnabled ? "Enabled" : "Disabled")
+                    Text(settings.multicastEnabled ? String(localized: "Enabled", table: "WatchSettings") : String(localized: "Disabled", table: "WatchSettings"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -531,13 +531,13 @@ struct NetworkPreferencesView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Sit(x) TAK")
-                    Text(sitxClient.status)
+                    Text(WatchSettingsStatusText.sitx(sitxClient.status))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .navigationTitle("Network Preferences")
+        .navigationTitle(String(localized: "Network Preferences", table: "WatchSettings"))
     }
 }
 
@@ -565,9 +565,9 @@ private struct MulticastPreferencesView: View {
             NavigationLink {
                 MulticastAddressView(settings: settings)
             } label: {
-                LabeledContent("Address", value: settings.multicastAddress)
+                LabeledContent(String(localized: "Address", table: "WatchSettings"), value: settings.multicastAddress)
             }
-            Picker("Output Protocol", selection: $settings.multicastOutputProtocol) {
+            Picker(String(localized: "Output Protocol", table: "WatchSettings"), selection: $settings.multicastOutputProtocol) {
                 ForEach(MulticastOutputProtocol.allCases) { output in
                     Text(output.rawValue).tag(output)
                 }
@@ -575,25 +575,25 @@ private struct MulticastPreferencesView: View {
             NavigationLink {
                 MulticastPortView(settings: settings)
             } label: {
-                LabeledContent("Port", value: "\(settings.multicastPort)")
+                LabeledContent(String(localized: "Port", table: "WatchSettings"), value: "\(settings.multicastPort)")
             }
             Button { dismiss() } label: {
-                Label("Back", systemImage: "arrow.left")
+                Label(String(localized: "Back", table: "WatchSettings"), systemImage: "arrow.left")
             }
             if settings.developerMode {
-                Section("Runtime Status") {
-                    Text(client.status)
+                Section(String(localized: "Runtime Status", table: "WatchSettings")) {
+                    Text(WatchSettingsStatusText.multicast(client.status))
                         .foregroundStyle(client.isReady ? .green : .orange)
-                    LabeledContent("Datagrams sent", value: "\(client.sentDatagrams)")
-                    LabeledContent("Datagrams received", value: "\(client.receivedDatagrams)")
+                    LabeledContent(String(localized: "Datagrams sent", table: "WatchSettings"), value: "\(client.sentDatagrams)")
+                    LabeledContent(String(localized: "Datagrams received", table: "WatchSettings"), value: "\(client.receivedDatagrams)")
                     if let date = client.lastSentAt {
-                        LabeledContent("Last local send") { Text(date, style: .time) }
+                        LabeledContent(String(localized: "Last local send", table: "WatchSettings")) { Text(date, style: .time) }
                     }
                     if let error = client.lastSendError {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
-                    LabeledContent("Stored events", value: "\(model.queuedEventCount)")
-                    Toggle("Developer mode", isOn: $settings.developerMode)
+                    LabeledContent(String(localized: "Stored events", table: "WatchSettings"), value: "\(model.queuedEventCount)")
+                    Toggle(String(localized: "Developer mode", table: "WatchSettings"), isOn: $settings.developerMode)
                 }
             }
         }
@@ -614,14 +614,14 @@ private struct MulticastAddressView: View {
 
     var body: some View {
         List {
-            TextField("Multicast IPv4", text: $address)
+            TextField(String(localized: "Multicast IPv4", table: "WatchSettings"), text: $address)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .onSubmit(save)
-            Button(action: save) { Label("Save", systemImage: "checkmark") }
+            Button(action: save) { Label(String(localized: "Save", table: "WatchSettings"), systemImage: "checkmark") }
                 .disabled(!AppSettings.isMulticastAddress(address))
         }
-        .navigationTitle("Address")
+        .navigationTitle(String(localized: "Address", table: "WatchSettings"))
     }
 
     private func save() {
@@ -643,11 +643,11 @@ private struct MulticastPortView: View {
 
     var body: some View {
         List {
-            TextField("Port", text: $port).onSubmit(save)
-            Button(action: save) { Label("Save", systemImage: "checkmark") }
+            TextField(String(localized: "Port", table: "WatchSettings"), text: $port).onSubmit(save)
+            Button(action: save) { Label(String(localized: "Save", table: "WatchSettings"), systemImage: "checkmark") }
                 .disabled(Int(port).map { !(1...65535).contains($0) } ?? true)
         }
-        .navigationTitle("Port")
+        .navigationTitle(String(localized: "Port", table: "WatchSettings"))
     }
 
     private func save() {
@@ -672,15 +672,15 @@ private struct RelayProviderView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(provider.rawValue)
+                                Text(provider.localizedName)
                                 if provider == .itak || provider == .takAwareRelay {
-                                    Text("Teaming")
+                                    Text(String(localized: "Teaming", table: "WatchSettings"))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
                             }
                             if provider == .companion && !model.companionServerConfigured {
-                                Text("Configure on phone")
+                                Text(String(localized: "Configure on phone", table: "WatchSettings"))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
@@ -711,10 +711,10 @@ private struct SitxDeviceAPIView: View {
             if let phone = client.phoneManagedSettings {
                 Toggle("Sit(x) TAK", isOn: .constant(phone.enabled))
                     .disabled(true)
-                LabeledContent("Address", value: phone.host.replacingOccurrences(of: "https://", with: ""))
-                LabeledContent("Group", value: phone.groupName ?? "Not selected")
-                LabeledContent("Sit(x) State", value: client.canReachPhone ? phone.status : "Needs iPhone")
-                Text("Managed in Companion")
+                LabeledContent(String(localized: "Address", table: "WatchSettings"), value: phone.host.replacingOccurrences(of: "https://", with: ""))
+                LabeledContent(String(localized: "Group", table: "WatchSettings"), value: phone.groupName ?? String(localized: "Not selected", table: "WatchSettings"))
+                LabeledContent(String(localized: "Sit(x) State", table: "WatchSettings"), value: client.canReachPhone ? WatchSettingsStatusText.sitx(phone.status) : String(localized: "Needs iPhone", table: "WatchSettings"))
+                Text(String(localized: "Managed in Companion", table: "WatchSettings"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {
@@ -723,9 +723,9 @@ private struct SitxDeviceAPIView: View {
             Button {
                 dismiss()
             } label: {
-                Label("Back", systemImage: "arrow.left")
+                Label(String(localized: "Back", table: "WatchSettings"), systemImage: "arrow.left")
             }
-            Button("Remove Sit(x) connection", role: .destructive) { confirmRemoval = true }
+            Button(String(localized: "Remove Sit(x) connection", table: "WatchSettings"), role: .destructive) { confirmRemoval = true }
         }
     }
 
@@ -739,8 +739,8 @@ private struct SitxDeviceAPIView: View {
                 SitxAddressView(settings: settings, client: client)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Address")
-                    Text(settings.sitxApiHost.isEmpty ? "Not set" : settings.sitxApiHost.replacingOccurrences(of: "https://", with: ""))
+                    Text(String(localized: "Address", table: "WatchSettings"))
+                    Text(settings.sitxApiHost.isEmpty ? String(localized: "Not set", table: "WatchSettings") : settings.sitxApiHost.replacingOccurrences(of: "https://", with: ""))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -759,21 +759,21 @@ private struct SitxDeviceAPIView: View {
                         }
                     }
                 }
-                .navigationTitle("Group")
+                .navigationTitle(String(localized: "Group", table: "WatchSettings"))
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Group")
-                    Text(client.groups.first { $0.id == client.selectedGroupID }?.name ?? "Not selected")
+                    Text(String(localized: "Group", table: "WatchSettings"))
+                    Text(client.groups.first { $0.id == client.selectedGroupID }?.name ?? String(localized: "Not selected", table: "WatchSettings"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
             .disabled(client.groups.isEmpty || !settings.sitxEnabled)
-            LabeledContent("Sit(x) State", value: client.status)
+            LabeledContent(String(localized: "Sit(x) State", table: "WatchSettings"), value: WatchSettingsStatusText.sitx(client.status))
             Button {
                 client.refreshAuthorizationCode()
             } label: {
-                Label("Re-auth", systemImage: "arrow.clockwise")
+                Label(String(localized: "Re-auth", table: "WatchSettings"), systemImage: "arrow.clockwise")
             }
             .disabled(!settings.sitxEnabled || settings.sitxApiHost.isEmpty)
         }
@@ -783,8 +783,8 @@ private struct SitxDeviceAPIView: View {
         settingsList
         .navigationTitle("Sit(x) TAK")
         .disabled(removing)
-        .confirmationDialog("Remove Sit(x) connection and all saved authorization, address and groups?", isPresented: $confirmRemoval) {
-            Button("Remove Sit(x) connection", role: .destructive) {
+        .confirmationDialog(String(localized: "Remove Sit(x) connection and all saved authorization, address and groups?", table: "WatchSettings"), isPresented: $confirmRemoval) {
+            Button(String(localized: "Remove Sit(x) connection", table: "WatchSettings"), role: .destructive) {
                 removing = true
                 Task {
                     defer { removing = false }
@@ -793,10 +793,10 @@ private struct SitxDeviceAPIView: View {
                 }
             }
         }
-        .alert("Sit(x) removal failed", isPresented: Binding(
+        .alert(String(localized: "Sit(x) removal failed", table: "WatchSettings"), isPresented: Binding(
             get: { removalError != nil }, set: { if !$0 { removalError = nil } }
         )) {
-            Button("OK", role: .cancel) { removalError = nil }
+            Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) { removalError = nil }
         } message: { Text(removalError ?? "") }
         .navigationBarBackButtonHidden(true)
         .onAppear { showAuthorization = !client.authorizationCode.isEmpty }
@@ -806,20 +806,20 @@ private struct SitxDeviceAPIView: View {
         .sheet(isPresented: $showAuthorization) {
             NavigationStack {
                 List {
-                    LabeledContent("Auth Code", value: client.authorizationCode)
+                    LabeledContent(String(localized: "Auth Code", table: "WatchSettings"), value: client.authorizationCode)
                     if let url = URL(string: client.verificationURL), !client.verificationURL.isEmpty {
                         Link(destination: url) {
-                            Label("Authorize", systemImage: "arrow.up.right.square")
+                            Label(String(localized: "Authorize", table: "WatchSettings"), systemImage: "arrow.up.right.square")
                         }
                     }
-                    Text(client.status)
+                    Text(WatchSettingsStatusText.sitx(client.status))
                     Button {
                         showAuthorization = false
                     } label: {
-                        Label("Back", systemImage: "arrow.left")
+                        Label(String(localized: "Back", table: "WatchSettings"), systemImage: "arrow.left")
                     }
                 }
-                .navigationTitle("Authorization")
+                .navigationTitle(String(localized: "Authorization", table: "WatchSettings"))
             }
         }
     }
@@ -841,7 +841,7 @@ private struct SitxAddressView: View {
 
     var body: some View {
         List {
-            TextField("Organization", text: $address)
+            TextField(String(localized: "Organization", table: "WatchSettings"), text: $address)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .onSubmit(saveAddress)
@@ -849,11 +849,11 @@ private struct SitxAddressView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Button(action: saveAddress) {
-                Label("Save", systemImage: "checkmark")
+                Label(String(localized: "Save", table: "WatchSettings"), systemImage: "checkmark")
             }
             .disabled(SitxClient.normalizedHost(address) == nil)
         }
-        .navigationTitle("Address")
+        .navigationTitle(String(localized: "Address", table: "WatchSettings"))
     }
 
     private func saveAddress() {
@@ -870,22 +870,22 @@ private struct AlertingPreferencesView: View {
 
     var body: some View {
         List {
-            NavigationLink("Physiological Alerts") {
+            NavigationLink(String(localized: "Physiological Alerts", table: "WatchSettings")) {
                 PhysiologicalAlertsView(settings: settings)
             }
-            NavigationLink("Environmental Alerts") {
+            NavigationLink(String(localized: "Environmental Alerts", table: "WatchSettings")) {
                 EnvironmentalAlertsView(settings: settings)
             }
             Toggle(isOn: $settings.batteryAlertsEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Battery Alerts")
-                    Text(settings.batteryAlertsEnabled ? "On (50%, 25%)" : "Off")
+                    Text(String(localized: "Battery Alerts", table: "WatchSettings"))
+                    Text(settings.batteryAlertsEnabled ? String(localized: "On (\(50)%, \(25)%)", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .navigationTitle("Alerting Preferences")
+        .navigationTitle(String(localized: "Alerting Preferences", table: "WatchSettings"))
     }
 }
 
@@ -894,15 +894,15 @@ private struct PhysiologicalAlertsView: View {
 
     var body: some View {
         List {
-            Toggle("Physiological Alerts", isOn: $settings.physiologicalAlertsEnabled)
-            NavigationLink("Resting Heart Rate Alerts") {
+            Toggle(String(localized: "Physiological Alerts", table: "WatchSettings"), isOn: $settings.physiologicalAlertsEnabled)
+            NavigationLink(String(localized: "Resting Heart Rate Alerts", table: "WatchSettings")) {
                 RestingHeartRateAlertsView(settings: settings)
             }
-            NavigationLink("Exertion Alerts") {
+            NavigationLink(String(localized: "Exertion Alerts", table: "WatchSettings")) {
                 ExertionAlertsView(settings: settings)
             }
         }
-        .navigationTitle("Physiological Alerts")
+        .navigationTitle(String(localized: "Physiological Alerts", table: "WatchSettings"))
     }
 }
 
@@ -911,60 +911,60 @@ private struct RestingHeartRateAlertsView: View {
 
     var body: some View {
         List {
-            Section("High Resting Heart Rate") {
+            Section(String(localized: "High Resting Heart Rate", table: "WatchSettings")) {
                 NavigationLink {
                     ProfileNumberPickerView(
-                        title: "High HR Threshold", selection: $settings.highRestingHeartRate,
-                        values: Array(stride(from: 80, through: 200, by: 5)), valueLabel: { "\($0) bpm" }
+                        title: String(localized: "High HR Threshold", table: "WatchSettings"), selection: $settings.highRestingHeartRate,
+                        values: Array(stride(from: 80, through: 200, by: 5)), valueLabel: { String(localized: "\($0) bpm", table: "WatchSettings") }
                     )
                 } label: {
-                    LabeledContent("High HR Threshold", value: "\(settings.highRestingHeartRate) bpm")
+                    LabeledContent(String(localized: "High HR Threshold", table: "WatchSettings"), value: String(localized: "\(settings.highRestingHeartRate) bpm", table: "WatchSettings"))
                 }
                 NavigationLink {
                     ProfileNumberPickerView(
-                        title: "Warning Length", selection: $settings.highRestingWarningMinutes,
-                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                        title: String(localized: "Warning Length", table: "WatchSettings"), selection: $settings.highRestingWarningMinutes,
+                        values: Array(1...60), valueLabel: { String(localized: "\($0) minutes", table: "WatchSettings") }
                     )
                 } label: {
-                    LabeledContent("Warning Length", value: "\(settings.highRestingWarningMinutes) minutes")
+                    LabeledContent(String(localized: "Warning Length", table: "WatchSettings"), value: String(localized: "\(settings.highRestingWarningMinutes) minutes", table: "WatchSettings"))
                 }
                 NavigationLink {
                     ProfileNumberPickerView(
-                        title: "Alert Length", selection: $settings.highRestingAlertMinutes,
-                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                        title: String(localized: "Alert Length", table: "WatchSettings"), selection: $settings.highRestingAlertMinutes,
+                        values: Array(1...60), valueLabel: { String(localized: "\($0) minutes", table: "WatchSettings") }
                     )
                 } label: {
-                    LabeledContent("Alert Length", value: "\(settings.highRestingAlertMinutes) minutes")
+                    LabeledContent(String(localized: "Alert Length", table: "WatchSettings"), value: String(localized: "\(settings.highRestingAlertMinutes) minutes", table: "WatchSettings"))
                 }
             }
-            Section("Low Resting Heart Rate") {
+            Section(String(localized: "Low Resting Heart Rate", table: "WatchSettings")) {
                 NavigationLink {
                     ProfileNumberPickerView(
-                        title: "Low HR Threshold", selection: $settings.lowRestingHeartRate,
-                        values: Array(stride(from: 25, through: 100, by: 5)), valueLabel: { "\($0) bpm" }
+                        title: String(localized: "Low HR Threshold", table: "WatchSettings"), selection: $settings.lowRestingHeartRate,
+                        values: Array(stride(from: 25, through: 100, by: 5)), valueLabel: { String(localized: "\($0) bpm", table: "WatchSettings") }
                     )
                 } label: {
-                    LabeledContent("Low HR Threshold", value: "\(settings.lowRestingHeartRate) bpm")
+                    LabeledContent(String(localized: "Low HR Threshold", table: "WatchSettings"), value: String(localized: "\(settings.lowRestingHeartRate) bpm", table: "WatchSettings"))
                 }
                 NavigationLink {
                     ProfileNumberPickerView(
-                        title: "Warning Length", selection: $settings.lowRestingWarningMinutes,
-                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                        title: String(localized: "Warning Length", table: "WatchSettings"), selection: $settings.lowRestingWarningMinutes,
+                        values: Array(1...60), valueLabel: { String(localized: "\($0) minutes", table: "WatchSettings") }
                     )
                 } label: {
-                    LabeledContent("Warning Length", value: "\(settings.lowRestingWarningMinutes) minutes")
+                    LabeledContent(String(localized: "Warning Length", table: "WatchSettings"), value: String(localized: "\(settings.lowRestingWarningMinutes) minutes", table: "WatchSettings"))
                 }
                 NavigationLink {
                     ProfileNumberPickerView(
-                        title: "Alert Length", selection: $settings.lowRestingAlertMinutes,
-                        values: Array(1...60), valueLabel: { "\($0) minutes" }
+                        title: String(localized: "Alert Length", table: "WatchSettings"), selection: $settings.lowRestingAlertMinutes,
+                        values: Array(1...60), valueLabel: { String(localized: "\($0) minutes", table: "WatchSettings") }
                     )
                 } label: {
-                    LabeledContent("Alert Length", value: "\(settings.lowRestingAlertMinutes) minutes")
+                    LabeledContent(String(localized: "Alert Length", table: "WatchSettings"), value: String(localized: "\(settings.lowRestingAlertMinutes) minutes", table: "WatchSettings"))
                 }
             }
         }
-        .navigationTitle("Resting Heart Rate Alerts")
+        .navigationTitle(String(localized: "Resting Heart Rate Alerts", table: "WatchSettings"))
     }
 }
 
@@ -975,38 +975,38 @@ private struct ExertionAlertsView: View {
         List {
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Warning Threshold", selection: $settings.exertionWarningThreshold,
+                    title: String(localized: "Warning Threshold", table: "WatchSettings"), selection: $settings.exertionWarningThreshold,
                     values: Array(stride(from: 50, through: 100, by: 5)), valueLabel: { "\($0)%" }
                 )
             } label: {
-                LabeledContent("Warning Threshold", value: "\(settings.exertionWarningThreshold)%")
+                LabeledContent(String(localized: "Warning Threshold", table: "WatchSettings"), value: "\(settings.exertionWarningThreshold)%")
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Warning Length", selection: $settings.exertionWarningLengthSeconds,
-                    values: Array(stride(from: 30, through: 600, by: 30)), valueLabel: { "\($0) seconds" }
+                    title: String(localized: "Warning Length", table: "WatchSettings"), selection: $settings.exertionWarningLengthSeconds,
+                    values: Array(stride(from: 30, through: 600, by: 30)), valueLabel: { String(localized: "\($0) seconds", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Warning Length", value: "\(settings.exertionWarningLengthSeconds) seconds")
+                LabeledContent(String(localized: "Warning Length", table: "WatchSettings"), value: String(localized: "\(settings.exertionWarningLengthSeconds) seconds", table: "WatchSettings"))
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Alert Threshold", selection: $settings.exertionAlertThreshold,
+                    title: String(localized: "Alert Threshold", table: "WatchSettings"), selection: $settings.exertionAlertThreshold,
                     values: Array(stride(from: 50, through: 100, by: 5)), valueLabel: { "\($0)%" }
                 )
             } label: {
-                LabeledContent("Alert Threshold", value: "\(settings.exertionAlertThreshold)%")
+                LabeledContent(String(localized: "Alert Threshold", table: "WatchSettings"), value: "\(settings.exertionAlertThreshold)%")
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Alert Length", selection: $settings.exertionAlertLengthSeconds,
-                    values: Array(stride(from: 30, through: 600, by: 30)), valueLabel: { "\($0) seconds" }
+                    title: String(localized: "Alert Length", table: "WatchSettings"), selection: $settings.exertionAlertLengthSeconds,
+                    values: Array(stride(from: 30, through: 600, by: 30)), valueLabel: { String(localized: "\($0) seconds", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Alert Length", value: "\(settings.exertionAlertLengthSeconds) seconds")
+                LabeledContent(String(localized: "Alert Length", table: "WatchSettings"), value: String(localized: "\(settings.exertionAlertLengthSeconds) seconds", table: "WatchSettings"))
             }
         }
-        .navigationTitle("Exertion Alerts")
+        .navigationTitle(String(localized: "Exertion Alerts", table: "WatchSettings"))
     }
 }
 
@@ -1017,17 +1017,17 @@ private struct EnvironmentalAlertsView: View {
         List {
             Toggle(isOn: $settings.immersionAlertsEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Immersion Alerts")
-                    Text(settings.immersionAlertsEnabled ? "On" : "Off")
+                    Text(String(localized: "Immersion Alerts", table: "WatchSettings"))
+                    Text(settings.immersionAlertsEnabled ? String(localized: "On", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
-            NavigationLink("Atm Pressure Alerts") {
+            NavigationLink(String(localized: "Atm Pressure Alerts", table: "WatchSettings")) {
                 AtmosphericPressureAlertsView(settings: settings)
             }
         }
-        .navigationTitle("Environmental Alerts")
+        .navigationTitle(String(localized: "Environmental Alerts", table: "WatchSettings"))
     }
 }
 
@@ -1038,38 +1038,38 @@ private struct AtmosphericPressureAlertsView: View {
         List {
             Toggle(isOn: $settings.lowPressureAlertsEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Low Pressure Alert")
-                    Text(settings.lowPressureAlertsEnabled ? "On" : "Off")
+                    Text(String(localized: "Low Pressure Alert", table: "WatchSettings"))
+                    Text(settings.lowPressureAlertsEnabled ? String(localized: "On", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Pressure Threshold", selection: $settings.lowPressureThreshold,
+                    title: String(localized: "Pressure Threshold", table: "WatchSettings"), selection: $settings.lowPressureThreshold,
                     values: Array(stride(from: 800, through: 1100, by: 5)), valueLabel: { "\($0) hPa" }
                 )
             } label: {
-                LabeledContent("Pressure Threshold", value: "\(settings.lowPressureThreshold) hPa")
+                LabeledContent(String(localized: "Pressure Threshold", table: "WatchSettings"), value: "\(settings.lowPressureThreshold) hPa")
             }
             Toggle(isOn: $settings.highPressureAlertsEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("High Pressure Alert")
-                    Text(settings.highPressureAlertsEnabled ? "On" : "Off")
+                    Text(String(localized: "High Pressure Alert", table: "WatchSettings"))
+                    Text(settings.highPressureAlertsEnabled ? String(localized: "On", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Pressure Threshold", selection: $settings.highPressureThreshold,
+                    title: String(localized: "Pressure Threshold", table: "WatchSettings"), selection: $settings.highPressureThreshold,
                     values: Array(stride(from: 1000, through: 1100, by: 5)), valueLabel: { "\($0) hPa" }
                 )
             } label: {
-                LabeledContent("Pressure Threshold", value: "\(settings.highPressureThreshold) hPa")
+                LabeledContent(String(localized: "Pressure Threshold", table: "WatchSettings"), value: "\(settings.highPressureThreshold) hPa")
             }
         }
-        .navigationTitle("Atm Pressure Alerts")
+        .navigationTitle(String(localized: "Atm Pressure Alerts", table: "WatchSettings"))
     }
 }
 
@@ -1082,11 +1082,11 @@ private struct ToolPreferencesView: View {
             NavigationLink("Bloodhound") {
                 BloodhoundPreferencesView(settings: settings)
             }
-            NavigationLink("Plugins") {
+            NavigationLink(String(localized: "Plugins", table: "WatchSettings")) {
                 PluginsView(model: model, settings: settings)
             }
         }
-        .navigationTitle("Tool Preferences")
+        .navigationTitle(String(localized: "Tool Preferences", table: "WatchSettings"))
     }
 }
 
@@ -1102,7 +1102,7 @@ private struct PluginsView: View {
                 Label("DataSync", systemImage: "arrow.triangle.2.circlepath")
             }
         }
-        .navigationTitle("Plugins")
+        .navigationTitle(String(localized: "Plugins", table: "WatchSettings"))
     }
 }
 
@@ -1113,27 +1113,27 @@ private struct BloodhoundPreferencesView: View {
         List {
             Toggle(isOn: $settings.bloodhoundProximityVibrationEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Bloodhound Proximity Vibration")
-                    Text(settings.bloodhoundProximityVibrationEnabled ? "On" : "Off")
+                    Text(String(localized: "Bloodhound Proximity Vibration", table: "WatchSettings"))
+                    Text(settings.bloodhoundProximityVibrationEnabled ? String(localized: "On", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
             NavigationLink {
                 ProfileNumberPickerView(
-                    title: "Bloodhound Proximity Radius", selection: $settings.bloodhoundProximityRadius,
-                    values: Array(stride(from: 10, through: 200, by: 10)), valueLabel: { "\($0) meters" }
+                    title: String(localized: "Bloodhound Proximity Radius", table: "WatchSettings"), selection: $settings.bloodhoundProximityRadius,
+                    values: Array(stride(from: 10, through: 200, by: 10)), valueLabel: { String(localized: "\($0) meters", table: "WatchSettings") }
                 )
             } label: {
-                LabeledContent("Bloodhound Proximity Radius", value: "\(settings.bloodhoundProximityRadius) meters")
+                LabeledContent(String(localized: "Bloodhound Proximity Radius", table: "WatchSettings"), value: String(localized: "\(settings.bloodhoundProximityRadius) meters", table: "WatchSettings"))
             }
             NavigationLink {
                 ProfileStringPickerView(
-                    title: "Bloodhound Proximity Intensity", selection: $settings.bloodhoundProximityIntensity,
+                    title: String(localized: "Bloodhound Proximity Intensity", table: "WatchSettings"), selection: $settings.bloodhoundProximityIntensity,
                     values: AppSettings.bloodhoundProximityIntensityOptions
                 )
             } label: {
-                LabeledContent("Bloodhound Proximity Intensity", value: settings.bloodhoundProximityIntensity)
+                LabeledContent(String(localized: "Bloodhound Proximity Intensity", table: "WatchSettings"), value: AppSettings.localizedOption(settings.bloodhoundProximityIntensity))
             }
         }
         .navigationTitle("Bloodhound")

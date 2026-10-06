@@ -50,10 +50,10 @@ struct WatchMarker: Identifiable, Codable {
     // Matches Garmin's "<Type> 2525D point" default label.
     private var defaultLabel: String {
         switch kind {
-        case .friendly: return "Friendly 2525D point"
-        case .neutral: return "Neutral 2525D point"
-        case .unknown: return "Unknown 2525D point"
-        case .hostile: return "Hostile 2525D point"
+        case .friendly: return String(localized: "Friendly 2525D point", table: "WatchStatus")
+        case .neutral: return String(localized: "Neutral 2525D point", table: "WatchStatus")
+        case .unknown: return String(localized: "Unknown 2525D point", table: "WatchStatus")
+        case .hostile: return String(localized: "Hostile 2525D point", table: "WatchStatus")
         }
     }
 }
@@ -181,7 +181,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published var offlineNotice: String?
     @Published var offlineExpiryNotice: String?
     @Published private(set) var queuedEventCount = 0
-    static let markerStoredMessage = "Marker details stored and will be sent when connected and/or location is updated"
+    static var markerStoredMessage: String {
+        String(localized: "Marker details stored and will be sent when connected and/or location is updated", table: "WatchStatus")
+    }
 
     private struct OfflineOperation: Codable {
         enum Kind: String, Codable { case marker, delete, alert, chat }
@@ -623,7 +625,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @discardableResult
     func storeMarker(at coordinate: CLLocationCoordinate2D?, kind: MarkerKind, title: String, remark: String) -> Bool {
         if let coordinate, !CLLocationCoordinate2DIsValid(coordinate) {
-            offlineNotice = "Invalid marker coordinates."
+            offlineNotice = String(localized: "Invalid marker coordinates.", table: "WatchStatus")
             return false
         }
         selectedMarkerKind = kind
@@ -683,7 +685,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
         guard storeOffline(OfflineOperation(kind: .delete, scope: offlineScope,
                                             xml: sitxClient.deleteMarkerXML(uid: id.uuidString)),
-                           key: "marker-\(id)", notice: "Marker deletion stored and will be sent when connected") else { return }
+                           key: "marker-\(id)", notice: String(localized: "Marker deletion stored and will be sent when connected", table: "WatchStatus")) else { return }
         markers.remove(at: index)
         if bloodhoundTargetID == id {
             bloodhoundTargetID = nil
@@ -702,7 +704,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 guard operation.kind == .marker, operation.marker == nil, let id = operation.markerID else { continue }
                 _ = storeOffline(OfflineOperation(kind: .delete, scope: operation.scope,
                                                    xml: sitxClient.deleteMarkerXML(uid: id.uuidString)),
-                                  key: entry.key, notice: "Marker deletion stored and will be sent when connected")
+                                  key: entry.key, notice: String(localized: "Marker deletion stored and will be sent when connected", table: "WatchStatus"))
             } catch { reportOfflineError(error) }
         }
     }
@@ -815,7 +817,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let route = sender?.chatRoute ?? item.chatRoute
         guard storeOffline(OfflineOperation(kind: .chat, scope: offlineScope, xml: xml,
                                             route: route, recipientUID: senderUID),
-                           key: "chat-\(UUID())", notice: "Chat stored and will be sent when connected") else {
+                           key: "chat-\(UUID())", notice: String(localized: "Chat stored and will be sent when connected", table: "WatchStatus")) else {
             throw ContactChatFailure.message(offlineNotice ?? "Unable to store reply.")
         }
         if let route, let message = TAKChatMessage.parse(xml, ownUID: ownUID) { recordChat(message, route: route) }
@@ -849,7 +851,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         guard storeOffline(OfflineOperation(kind: .chat, scope: offlineScope, xml: xml,
                                             route: route, recipientUID: uid),
-                           key: "chat-\(message.id)", notice: "Chat stored and will be sent when connected") else {
+                           key: "chat-\(message.id)", notice: String(localized: "Chat stored and will be sent when connected", table: "WatchStatus")) else {
             throw ContactChatFailure.message(offlineNotice ?? "Unable to store chat.")
         }
         recordChat(message, route: route)
@@ -1424,7 +1426,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let offlineOutbox else { return }
         do {
             if try offlineOutbox.expire() > 0 {
-                offlineExpiryNotice = "Unsent events expired after 24 hours."
+                offlineExpiryNotice = String(localized: "Unsent events expired after 24 hours.", table: "WatchStatus")
                 chatLogger.warning("Unsent offline events expired after 24 hours")
             }
             queuedEventCount = offlineOutbox.entries.count
@@ -1453,9 +1455,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     private func storeAlert(state: EmergencyState, type: String) -> Bool {
         let xml = usableMarkerCoordinate != nil || state == .cancel ? sitxClient.emergencyXML(state: state, type: type) : nil
+        let notice = state == .cancel
+            ? String(localized: "Cancel alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
+            : String(localized: "Alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
         return storeOffline(OfflineOperation(kind: .alert, scope: offlineScope, alertState: state,
                                              alertType: type, xml: xml),
-                            key: "alert-\(type)", notice: "\(state == .cancel ? "Cancel alert" : "Alert") stored and will be sent when connected and/or location is updated")
+                            key: "alert-\(type)", notice: notice)
     }
 
     private func routeReady(_ route: ContactChatRoute) -> Bool {
@@ -1485,7 +1490,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 do {
                     var operation = try JSONDecoder().decode(OfflineOperation.self, from: entry.payload)
                     guard operation.scope == offlineScope else {
-                        offlineNotice = "Stored events are waiting for their original network configuration."
+                        offlineNotice = String(localized: "Stored events are waiting for their original network configuration.", table: "WatchStatus")
                         continue
                     }
                     if operation.xml == nil, operation.kind == .marker,
@@ -1524,7 +1529,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                         try await sitxClient.sendQueuedEvent(xml)
                     }
                     try offlineOutbox.acknowledge(id: entry.id)
-                    offlineNotice = "Accepted by transport; recipient delivery is not confirmed."
+                    offlineNotice = String(localized: "Accepted by transport; recipient delivery is not confirmed.", table: "WatchStatus")
                 } catch {
                     reportOfflineError(error)
                     // Keep the original payload/ID for retry. Other destinations can still make progress.

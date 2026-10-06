@@ -1,0 +1,1332 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "CFBundleDisplayName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK"
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK"
+          }
+        }
+      }
+    },
+    "NSHealthShareUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يقرأ WearTAK معدل ضربات القلب لعرض بياناتك الفسيولوجية وتقييم التنبيهات التي وافقت على تفعيلها."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK чете пулса, за да показва физиологични данни и да оценява избраните от вас сигнали."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK čita broj otkucaja srca radi prikaza fizioloških podataka i procjene upozorenja koja ste uključili."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK čte tepovou frekvenci, aby zobrazil fyziologické údaje a vyhodnocoval upozornění, která jste povolili."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK læser din puls for at vise fysiologiske data og vurdere de alarmer, du har tilvalgt."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK leest je hartslag om fysiologische gegevens weer te geven en waarschuwingen waarvoor je hebt gekozen te beoordelen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK reads heart rate to show physiology and evaluate opted-in alerts."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK loeb pulssi, et kuvada füsioloogilisi andmeid ja hinnata sinu lubatud hoiatusi."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK lukee sykkeesi näyttääkseen fysiologisia tietoja ja arvioidakseen käyttöön ottamiasi hälytyksiä."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK lit votre fréquence cardiaque pour afficher vos données physiologiques et évaluer les alertes que vous avez activées."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK liest deine Herzfrequenz aus, um physiologische Daten anzuzeigen und von dir aktivierte Warnungen auszuwerten."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Το WearTAK διαβάζει τους καρδιακούς παλμούς για να εμφανίζει φυσιολογικά δεδομένα και να αξιολογεί τις ειδοποιήσεις που έχετε επιλέξει."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK קוראת את קצב הלב כדי להציג נתונים פיזיולוגיים ולהעריך התראות שהפעלת."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A WearTAK kiolvassa a pulzust, hogy élettani adatokat jelenítsen meg és kiértékelje az engedélyezett riasztásokat."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK membaca detak jantung untuk menampilkan data fisiologis dan mengevaluasi peringatan yang Anda aktifkan."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK legge la frequenza cardiaca per mostrare i dati fisiologici e valutare gli avvisi che hai attivato."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAKは心拍数を読み取り、生理データを表示し、オプトインしたアラートを評価します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK은 심박수를 읽어 생리 데이터를 표시하고 사용자가 동의한 알림을 평가합니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK nolasa sirdsdarbības ātrumu, lai rādītu fizioloģiskos datus un izvērtētu jūsu ieslēgtos brīdinājumus."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK nuskaito širdies ritmą, kad rodytų fiziologinius duomenis ir įvertintų jūsų įjungtus įspėjimus."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK leser pulsen for å vise fysiologiske data og vurdere varslene du har valgt å motta."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK odczytuje tętno, aby wyświetlać dane fizjologiczne i oceniać włączone alerty."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O WearTAK lê a frequência cardíaca para apresentar dados fisiológicos e avaliar os alertas ativados."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK citește ritmul cardiac pentru a afișa date fiziologice și a evalua alertele activate de dvs."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK считывает частоту сердечного ритма, чтобы показывать физиологические данные и оценивать включённые вами оповещения."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK číta srdcovú frekvenciu, aby zobrazoval fyziologické údaje a vyhodnocoval upozornenia, ktoré ste povolili."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bere srčni utrip za prikaz fizioloških podatkov in ocenjevanje vklopljenih opozoril."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK lee la frecuencia cardiaca para mostrar datos fisiológicos y evaluar las alertas que hayas activado."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK läser av pulsen för att visa fysiologiska data och utvärdera de aviseringar du har valt att aktivera."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK อ่านอัตราการเต้นของหัวใจเพื่อแสดงข้อมูลทางสรีรวิทยาและประเมินการแจ้งเตือนที่คุณเลือกเปิดใช้"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK, fizyolojik verileri göstermek ve etkinleştirdiğiniz uyarıları değerlendirmek için kalp atış hızınızı okur."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK зчитує частоту серцевих скорочень, щоб показувати фізіологічні дані й оцінювати ввімкнені вами сповіщення."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK đọc nhịp tim để hiển thị dữ liệu sinh lý và đánh giá các cảnh báo bạn đã bật."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK membaca kadar denyutan jantung untuk memaparkan data fisiologi dan menilai amaran yang anda aktifkan."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 会读取心率以显示生理数据，并评估你选择启用的提醒。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 會讀取心率以顯示生理資料，並評估您選擇啟用的提示。"
+          }
+        }
+      }
+    },
+    "NSHealthUpdateUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يستخدم WearTAK إطار HealthKit لمراقبة معدل ضربات القلب والتنبيهات الفسيولوجية التي تفعّلها. لا يحفظ هذا الإصدار بياناتك الصحية ولا يعدّلها."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK използва HealthKit за следене на пулса и физиологичните сигнали, които включите. Тази версия не записва и не променя здравните ви данни."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK upotrebljava HealthKit za praćenje otkucaja srca i fiziološka upozorenja koja uključite. Ova verzija ne sprema niti mijenja vaše zdravstvene podatke."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK používá HealthKit ke sledování tepové frekvence a fyziologických upozornění, která zapnete. Tato verze vaše zdravotní údaje neukládá ani nemění."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bruger HealthKit til pulsmåling og de fysiologiske alarmer, du aktiverer. Denne version gemmer eller ændrer ikke dine sundhedsdata."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK gebruikt HealthKit voor hartslagmeting en de fysiologische waarschuwingen die je inschakelt. Deze versie slaat je gezondheidsgegevens niet op en wijzigt ze niet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK uses HealthKit for heart-rate monitoring and physiological alerts you enable. This version does not save or modify your Health data."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK kasutab HealthKiti pulsi jälgimiseks ja sinu lubatud füsioloogiliste hoiatuste jaoks. See versioon ei salvesta ega muuda sinu terviseandmeid."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK käyttää HealthKitiä sykkeen seurantaan ja käyttöön ottamiisi fysiologisiin hälytyksiin. Tämä versio ei tallenna eikä muuta terveystietojasi."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK utilise HealthKit pour surveiller votre fréquence cardiaque et gérer les alertes physiologiques que vous activez. Cette version n’enregistre ni ne modifie vos données de santé."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK verwendet HealthKit zur Überwachung der Herzfrequenz und für die von dir aktivierten physiologischen Warnungen. Diese Version speichert oder verändert deine Gesundheitsdaten nicht."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Το WearTAK χρησιμοποιεί το HealthKit για την παρακολούθηση καρδιακών παλμών και τις φυσιολογικές ειδοποιήσεις που ενεργοποιείτε. Αυτή η έκδοση δεν αποθηκεύει ούτε τροποποιεί τα δεδομένα υγείας σας."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK משתמשת ב‑HealthKit לניטור קצב הלב ולהתראות הפיזיולוגיות שתפעיל. גרסה זו אינה שומרת או משנה את נתוני הבריאות שלך."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A WearTAK a HealthKitet használja a pulzus figyelésére és az általad bekapcsolt élettani riasztásokhoz. Ez a verzió nem menti és nem módosítja az egészségügyi adataidat."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK menggunakan HealthKit untuk memantau detak jantung dan peringatan fisiologis yang Anda aktifkan. Versi ini tidak menyimpan atau mengubah data Kesehatan Anda."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK usa HealthKit per monitorare la frequenza cardiaca e gestire gli avvisi fisiologici che attivi. Questa versione non salva né modifica i tuoi dati Salute."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAKはHealthKitを心拍数のモニタリングと有効にした生理アラートに使用します。このバージョンはヘルスケアデータを保存または変更しません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK은 심박수 모니터링과 사용자가 켠 생리 알림에 HealthKit을 사용합니다. 이 버전은 건강 데이터를 저장하거나 수정하지 않습니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK izmanto HealthKit sirdsdarbības uzraudzībai un jūsu ieslēgtajiem fizioloģiskajiem brīdinājumiem. Šī versija nesaglabā un nemaina jūsu veselības datus."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK naudoja „HealthKit“ širdies ritmui stebėti ir jūsų įjungtiems fiziologiniams įspėjimams. Ši versija neišsaugo ir nekeičia jūsų sveikatos duomenų."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bruker HealthKit til pulsmåling og fysiologiske varsler du aktiverer. Denne versjonen lagrer eller endrer ikke helsedataene dine."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK używa HealthKit do monitorowania tętna i obsługi włączonych alertów fizjologicznych. Ta wersja nie zapisuje ani nie modyfikuje danych zdrowotnych."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O WearTAK usa o HealthKit para monitorizar a frequência cardíaca e os alertas fisiológicos que ativar. Esta versão não guarda nem modifica os seus dados de Saúde."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK folosește HealthKit pentru monitorizarea ritmului cardiac și alertele fiziologice pe care le activați. Această versiune nu salvează și nu modifică datele dvs. de sănătate."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK использует HealthKit для отслеживания частоты сердечного ритма и включённых вами физиологических оповещений. Эта версия не сохраняет и не изменяет данные приложения «Здоровье»."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK používa HealthKit na monitorovanie srdcovej frekvencie a fyziologické upozornenia, ktoré zapnete. Táto verzia vaše zdravotné údaje neukladá ani nemení."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK uporablja HealthKit za spremljanje srčnega utripa in fiziološka opozorila, ki jih vklopite. Ta različica vaših zdravstvenih podatkov ne shranjuje ali spreminja."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK usa HealthKit para monitorizar la frecuencia cardiaca y las alertas fisiológicas que actives. Esta versión no guarda ni modifica tus datos de Salud."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK använder HealthKit för pulsmätning och de fysiologiska aviseringar du aktiverar. Den här versionen sparar eller ändrar inte dina hälsodata."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK ใช้ HealthKit เพื่อติดตามอัตราการเต้นของหัวใจและการแจ้งเตือนทางสรีรวิทยาที่คุณเปิดใช้ เวอร์ชันนี้จะไม่บันทึกหรือแก้ไขข้อมูลสุขภาพของคุณ"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK, kalp atış hızı takibi ve etkinleştirdiğiniz fizyolojik uyarılar için HealthKit'i kullanır. Bu sürüm Sağlık verilerinizi kaydetmez veya değiştirmez."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK використовує HealthKit для моніторингу частоти серцевих скорочень і ввімкнених вами фізіологічних сповіщень. Ця версія не зберігає та не змінює дані програми «Здоров’я»."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK sử dụng HealthKit để theo dõi nhịp tim và hỗ trợ các cảnh báo sinh lý bạn bật. Phiên bản này không lưu hoặc sửa đổi dữ liệu Sức khỏe của bạn."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK menggunakan HealthKit untuk memantau kadar denyutan jantung dan amaran fisiologi yang anda aktifkan. Versi ini tidak menyimpan atau mengubah data Kesihatan anda."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 使用 HealthKit 监测心率并处理你启用的生理提醒。此版本不会保存或修改你的健康数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 使用 HealthKit 監測心率及處理您啟用的生理提示。此版本不會儲存或修改您的健康資料。"
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يشارك WearTAK المواقع التكتيكية والتنبيهات والنقاط مع أجهزة TAK على شبكة Wi‑Fi المحلية."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK споделя тактически позиции, сигнали и точки с TAK устройства във вашата локална Wi‑Fi мрежа."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK dijeli taktičke položaje, upozorenja i točke s TAK uređajima na vašoj lokalnoj Wi‑Fi mreži."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK sdílí taktické pozice, upozornění a body se zařízeními TAK ve vaší místní síti Wi‑Fi."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK deler taktiske positioner, alarmer og punkter med TAK-enheder på dit lokale Wi‑Fi-netværk."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK deelt tactische posities, waarschuwingen en punten met TAK-apparaten op je lokale wifi-netwerk."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK shares tactical positions, alerts, and points with TAK devices on your local WiFi network."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK jagab taktikalisi asukohti, hoiatusi ja punkte sinu kohaliku Wi‑Fi võrgu TAK-seadmetega."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK jakaa taktisia sijainteja, hälytyksiä ja pisteitä paikallisverkkosi TAK-laitteiden kanssa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK partage des positions tactiques, des alertes et des points avec les appareils TAK de votre réseau Wi‑Fi local."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK teilt taktische Positionen, Warnungen und Punkte mit TAK-Geräten in deinem lokalen WLAN."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Το WearTAK κοινοποιεί τακτικές θέσεις, ειδοποιήσεις και σημεία σε συσκευές TAK στο τοπικό σας δίκτυο Wi‑Fi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK משתפת מיקומים טקטיים, התראות ונקודות עם מכשירי TAK ברשת ה‑Wi‑Fi המקומית שלך."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A WearTAK taktikai pozíciókat, riasztásokat és pontokat oszt meg a helyi Wi‑Fi-hálózatod TAK-eszközeivel."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK membagikan posisi taktis, peringatan, dan titik dengan perangkat TAK di jaringan Wi‑Fi lokal Anda."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK condivide posizioni tattiche, avvisi e punti con i dispositivi TAK sulla tua rete Wi‑Fi locale."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAKはローカルWi‑Fiネットワーク上のTAKデバイスと戦術位置、アラート、ポイントを共有します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK은 로컬 Wi‑Fi 네트워크의 TAK 기기와 전술 위치, 알림 및 지점을 공유합니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK kopīgo taktiskās pozīcijas, brīdinājumus un punktus ar TAK ierīcēm jūsu vietējā Wi‑Fi tīklā."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bendrina taktines padėtis, įspėjimus ir taškus su TAK įrenginiais jūsų vietiniame „Wi‑Fi“ tinkle."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK deler taktiske posisjoner, varsler og punkter med TAK-enheter på det lokale Wi‑Fi-nettverket ditt."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK udostępnia pozycje taktyczne, alerty i punkty urządzeniom TAK w lokalnej sieci Wi‑Fi."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O WearTAK partilha posições táticas, alertas e pontos com dispositivos TAK na sua rede Wi‑Fi local."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK partajează poziții tactice, alerte și puncte cu dispozitive TAK din rețeaua dvs. Wi‑Fi locală."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK передаёт тактические позиции, оповещения и точки устройствам TAK в вашей локальной сети Wi‑Fi."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK zdieľa taktické pozície, upozornenia a body so zariadeniami TAK vo vašej lokálnej sieti Wi‑Fi."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK deli taktične položaje, opozorila in točke z napravami TAK v vašem lokalnem omrežju Wi‑Fi."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK comparte posiciones tácticas, alertas y puntos con dispositivos TAK en tu red Wi‑Fi local."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK delar taktiska positioner, aviseringar och punkter med TAK-enheter i ditt lokala Wi‑Fi-nätverk."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK แชร์ตำแหน่งทางยุทธวิธี การแจ้งเตือน และจุดกับอุปกรณ์ TAK บนเครือข่าย Wi‑Fi ในพื้นที่ของคุณ"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK, taktik konumları, uyarıları ve noktaları yerel Wi‑Fi ağınızdaki TAK aygıtlarıyla paylaşır."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK передає тактичні позиції, сповіщення й точки пристроям TAK у вашій локальній мережі Wi‑Fi."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK chia sẻ vị trí chiến thuật, cảnh báo và điểm với các thiết bị TAK trên mạng Wi‑Fi cục bộ của bạn."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK berkongsi kedudukan taktikal, amaran dan titik dengan peranti TAK pada rangkaian Wi‑Fi setempat anda."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 会与本地 Wi‑Fi 网络上的 TAK 设备共享战术位置、提醒和点位。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 會與本機 Wi‑Fi 網路上的 TAK 裝置分享戰術位置、提示和點位。"
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يستخدم WearTAK موقعك لإرسال موقعك ووضع العلامات."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK използва местоположението ви, за да изпраща позицията ви и да поставя маркери."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK upotrebljava vašu lokaciju za slanje vašeg položaja i postavljanje oznaka."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK používá vaši polohu k odesílání vaší pozice a umisťování značek."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bruger din lokalitet til at sende din position og placere markører."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK gebruikt je locatie om je positie te versturen en markeringen te plaatsen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK uses your location to send your position and place markers."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK kasutab sinu asukohta sinu positsiooni saatmiseks ja markerite paigutamiseks."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK käyttää sijaintiasi sijaintisi lähettämiseen ja merkkien asettamiseen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK utilise votre position pour envoyer vos coordonnées et placer des marqueurs."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK verwendet deinen Standort, um deine Position zu senden und Markierungen zu setzen."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Το WearTAK χρησιμοποιεί την τοποθεσία σας για να στέλνει τη θέση σας και να τοποθετεί δείκτες."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK משתמשת במיקום שלך כדי לשלוח את המיקום שלך ולהציב סמנים."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A WearTAK a helyzetedet használja a pozíciód elküldésére és jelölők elhelyezésére."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK menggunakan lokasi Anda untuk mengirim posisi dan menempatkan penanda."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK usa la tua posizione per inviare le tue coordinate e inserire marcatori."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAKは位置情報を使用して現在位置を送信し、マーカーを配置します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK은 사용자의 위치를 사용해 위치를 전송하고 마커를 표시합니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK izmanto jūsu atrašanās vietu, lai nosūtītu jūsu pozīciju un izvietotu marķierus."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK naudoja jūsų buvimo vietą padėčiai siųsti ir žymekliams dėti."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bruker posisjonen din til å sende posisjonen din og plassere markører."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK używa Twojego położenia, aby wysyłać Twoją pozycję i umieszczać znaczniki."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O WearTAK usa a sua localização para enviar a sua posição e colocar marcadores."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK folosește localizarea dvs. pentru a vă trimite poziția și a plasa marcaje."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK использует ваше местоположение, чтобы отправлять вашу позицию и размещать маркеры."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK používa vašu polohu na odoslanie vašej pozície a umiestnenie značiek."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK uporablja vašo lokacijo za pošiljanje položaja in postavljanje oznak."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK usa tu ubicación para enviar tu posición y colocar marcadores."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK använder din plats för att skicka din position och placera markörer."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK ใช้ตำแหน่งที่ตั้งของคุณเพื่อส่งตำแหน่งและวางเครื่องหมาย"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK, konumunuzu göndermek ve işaretçiler yerleştirmek için konumunuzu kullanır."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK використовує ваше місце перебування, щоб надсилати вашу позицію та розміщувати маркери."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK sử dụng vị trí của bạn để gửi vị trí và đặt điểm đánh dấu."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK menggunakan lokasi anda untuk menghantar kedudukan anda dan meletakkan penanda."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 使用你的位置来发送你的坐标并放置标记。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 使用您的位置來傳送您的座標並放置標記。"
+          }
+        }
+      }
+    },
+    "NSMotionUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "يستخدم WearTAK نشاط الخطوات للتمييز بين تنبيهات معدل ضربات القلب أثناء الراحة والتنبيهات الناتجة عن الجهد."
+          }
+        },
+        "bg": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK използва активността от стъпките, за да различава сигналите за пулс в покой от тези при физическо натоварване."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK upotrebljava aktivnost koraka za razlikovanje upozorenja za puls u mirovanju od upozorenja zbog napora."
+          }
+        },
+        "cs": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK používá aktivitu kroků k rozlišení upozornění na tepovou frekvenci v klidu od upozornění při námaze."
+          }
+        },
+        "da": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bruger skridtaktivitet til at skelne mellem alarmer om hvilepuls og alarmer ved anstrengelse."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK gebruikt je stappentelling om waarschuwingen voor een hartslag in rust te onderscheiden van waarschuwingen bij inspanning."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WearTAK uses step activity to distinguish resting heart-rate alerts from exertion."
+          }
+        },
+        "et": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK kasutab sammude aktiivsust, et eristada puhkeoleku pulsihäireid pingutusest tingitud häiretest."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK käyttää askelaktiivisuutta erottaakseen leposykettä koskevat hälytykset rasituksesta johtuvista hälytyksistä."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK utilise l’activité liée aux pas pour distinguer les alertes de fréquence cardiaque au repos de celles dues à l’effort."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK verwendet deine Schrittaktivität, um Warnungen zur Ruheherzfrequenz von Warnungen bei Anstrengung zu unterscheiden."
+          }
+        },
+        "el": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Το WearTAK χρησιμοποιεί τη δραστηριότητα βημάτων για να διακρίνει τις ειδοποιήσεις καρδιακού ρυθμού ηρεμίας από εκείνες λόγω άσκησης."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK משתמשת בפעילות הצעדים כדי להבחין בין התראות על דופק במנוחה לבין התראות עקב מאמץ."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A WearTAK lépésaktivitást használ a nyugalmi pulzusra vonatkozó riasztások és a terhelés miatti riasztások megkülönböztetésére."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK menggunakan aktivitas langkah untuk membedakan peringatan detak jantung saat istirahat dari peringatan akibat aktivitas fisik."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK usa l’attività dei passi per distinguere gli avvisi sulla frequenza cardiaca a riposo da quelli dovuti allo sforzo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAKは歩数アクティビティを使用して、安静時心拍数のアラートと運動によるアラートを区別します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK은 걸음 활동을 사용해 안정 시 심박수 알림과 운동으로 인한 알림을 구분합니다."
+          }
+        },
+        "lv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK izmanto soļu aktivitāti, lai atšķirtu brīdinājumus par pulsu miera stāvoklī no brīdinājumiem slodzes laikā."
+          }
+        },
+        "lt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK naudoja žingsnių aktyvumą, kad atskirtų įspėjimus apie ramybės pulso dažnį nuo įspėjimų dėl fizinio krūvio."
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK bruker skrittaktivitet til å skille varsler om hvilepuls fra varsler som skyldes anstrengelse."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK wykorzystuje aktywność kroków, aby odróżniać alerty dotyczące tętna spoczynkowego od alertów związanych z wysiłkiem."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O WearTAK usa a atividade de passos para distinguir alertas de frequência cardíaca em repouso dos alertas de esforço físico."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK folosește activitatea pașilor pentru a distinge alertele privind ritmul cardiac în repaus de cele provocate de efort."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK использует данные о шагах, чтобы отличать оповещения о пульсе в покое от оповещений при физической нагрузке."
+          }
+        },
+        "sk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK používa aktivitu krokov na rozlíšenie upozornení na pokojový tep od upozornení pri námahe."
+          }
+        },
+        "sl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK uporablja dejavnost korakov za razlikovanje med opozorili o srčnem utripu v mirovanju in opozorili zaradi napora."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK usa la actividad de pasos para distinguir las alertas de frecuencia cardiaca en reposo de las debidas al esfuerzo."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK använder stegräkning för att skilja aviseringar om vilopuls från aviseringar vid ansträngning."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK ใช้กิจกรรมการก้าวเดินเพื่อแยกการแจ้งเตือนอัตราการเต้นของหัวใจขณะพักออกจากการแจ้งเตือนที่เกิดจากการออกแรง"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK, dinlenme hâlindeki kalp atış hızı uyarılarını efor kaynaklı uyarılardan ayırt etmek için adım etkinliğini kullanır."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK використовує дані про кроки, щоб відрізняти сповіщення про пульс у спокої від сповіщень під час навантаження."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK sử dụng hoạt động bước chân để phân biệt cảnh báo nhịp tim lúc nghỉ với cảnh báo do gắng sức."
+          }
+        },
+        "ms": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK menggunakan aktiviti langkah untuk membezakan amaran kadar denyutan jantung rehat daripada amaran akibat senaman."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 使用步数活动来区分静息心率提醒和因运动而产生的提醒。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "WearTAK 使用步數活動來區分靜止心率提示和因運動而產生的提示。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

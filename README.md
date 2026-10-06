@@ -597,8 +597,21 @@ badge to the dashboard Compass button; opening Compass clears it. Compass lists
 incoming points with affiliation and range. Data Sync mission items are not
 listed, notified or counted here; they stay on the map. Tapping one offers **RGR** (start
 Bloodhound and send "Roger, bloodhounding to TITLE"), **Remove** (hide the point
-on this watch) or **Cancel**. During that Bloodhound, **nPos** stops navigation,
+on this watch) or **Cancel**. **Remove All** at the top of the list hides all
+listed points on this watch. During that Bloodhound, **nPos** stops navigation,
 removes the point and sends "In Position at TITLE".
+
+The Watch app and WearTAK Companion localize their interface, common status
+messages and permission descriptions in Arabic, Bulgarian, Croatian, Czech,
+Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hebrew,
+Hungarian, Indonesian, Italian, Japanese, Korean, Latvian, Lithuanian, Malay,
+Norwegian Bokmål, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian,
+Spanish, Swedish, Thai, Turkish, Ukrainian, Vietnamese, Simplified Chinese and
+Traditional Chinese. The app follows the device's preferred language.
+
+The translations are drafts marked for review and are intended for TestFlight
+feedback. User-entered and server-provided content, TAK protocol values, and
+some system or server error details remain in their original language.
 
 A point the sender deliberately sends again (a newer CoT `time` on a
 human-entered `how="h-…"` point) notifies again, even if it is already listed
