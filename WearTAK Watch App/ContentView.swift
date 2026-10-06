@@ -1675,6 +1675,7 @@ private struct BloodhoundView: View {
     @ObservedObject var model: WatchSessionModel
     @State private var responseError: String?
     @State private var selectedPoint: IncomingMapEntity?
+    @State private var confirmingRemoveAllPoints = false
 
     private func pointTitle(_ item: IncomingMapEntity) -> String {
         item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id
@@ -1729,6 +1730,11 @@ private struct BloodhoundView: View {
                 }
             } else {
                 List {
+                    if !model.bloodhoundOrderPoints.isEmpty {
+                        Button("Remove All", role: .destructive) {
+                            confirmingRemoveAllPoints = true
+                        }
+                    }
                     if model.bloodhoundOrderPoints.isEmpty {
                         Text("No incoming points")
                             .foregroundStyle(.secondary)
@@ -1768,6 +1774,17 @@ private struct BloodhoundView: View {
             Button("Cancel", role: .cancel) { selectedPoint = nil }
         } message: { item in
             Text(pointDetail(item))
+        }
+        .confirmationDialog("Remove all incoming points?", isPresented: $confirmingRemoveAllPoints,
+                            titleVisibility: .visible) {
+            Button("Remove All", role: .destructive) {
+                for item in model.bloodhoundOrderPoints {
+                    model.removeIncomingPoint(item.id)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This hides all incoming points from the compass list.")
         }
         .navigationTitle(model.bloodhoundTarget == nil ? "Compass" : "Navigation")
         .onAppear { model.markIncomingPointsSeen() }
