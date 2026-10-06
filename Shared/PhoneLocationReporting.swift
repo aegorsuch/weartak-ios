@@ -227,6 +227,35 @@ enum PhoneAuthorization: Equatable {
     case notDetermined, whenInUse, always, denied, restricted
 }
 
+/// Explains what the user must change so Companion keeps TAK connected while the phone is locked.
+/// iOS only lets Companion hold TAK streams in the background while phone location reporting runs.
+enum PhoneBackgroundAdvice {
+    static func message(hasServers: Bool, authorization: PhoneAuthorization, preciseLocation: Bool,
+                        servicesEnabled: Bool) -> String? {
+        guard hasServers else { return nil }
+        guard servicesEnabled else { return "Turn on Location Services so the watch stays connected to TAK while this phone is locked." }
+        switch authorization {
+        case .always:
+            return preciseLocation ? nil
+                : "Turn on Precise Location so the watch stays connected to TAK while this phone is locked."
+        case .restricted:
+            return "Location access is restricted, so the watch will lose TAK when this phone is locked."
+        case .notDetermined, .whenInUse, .denied:
+            return "Set Location to Always (with Precise Location on) so the watch stays connected to TAK while this phone is locked or in your pocket."
+        }
+    }
+
+    /// Short form shown on the watch.
+    static func watchReason(authorization: PhoneAuthorization, preciseLocation: Bool, servicesEnabled: Bool) -> String? {
+        guard servicesEnabled else { return "turn on Location Services" }
+        switch authorization {
+        case .always: return preciseLocation ? nil : "turn on Precise Location"
+        case .restricted: return "location restricted"
+        case .notDetermined, .whenInUse, .denied: return "set Location to Always"
+        }
+    }
+}
+
 /// Pure decision for whether phone location reporting may run, so lifecycle guards are testable.
 enum PhoneReportingGate {
     enum Decision: Equatable {

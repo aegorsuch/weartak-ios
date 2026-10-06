@@ -2,6 +2,64 @@ import Foundation
 
 @main
 struct CompanionMapChecks {
+    static func checkMissionPaging() throws {
+        // 1,200 items in a line north of the origin: nearest keeps the first 999 by distance, not document order.
+        let items = (0..<1_200).reversed().map {
+            TAKMissionItem(uid: "item-\($0)", type: "a-u-G", callsign: "Point \($0)", lat: Double($0) * 0.001, lon: 0,
+                           stale: nil, remark: String(repeating: "r", count: 160))
+        }
+        let nearest = TAKMissionAPI.nearest(items, limit: TAKMissionAPI.maximumItemsPerMission, latitude: 0, longitude: 0)
+        precondition(nearest.count == 999 && Set(nearest.map(\.uid)) == Set((0..<999).map { "item-\($0)" }))
+        precondition(TAKMissionAPI.nearest(items, limit: 999, latitude: nil, longitude: nil).first?.uid == "item-1199")
+        precondition(TAKMissionAPI.nearest(Array(items.prefix(278)), limit: 999, latitude: 0, longitude: 0).count == 278)
+        let wrap = [TAKMissionItem(uid: "east", type: "a-u-G", lat: 0, lon: 179.9),
+                    TAKMissionItem(uid: "mid", type: "a-u-G", lat: 0, lon: 90)]
+        precondition(TAKMissionAPI.nearest(wrap, limit: 1, latitude: 0, longitude: -179.9).first?.uid == "east")
+
+        // A full page of large items is trimmed to fit, and the pages together cover all 999 items.
+        var offset = 0
+        var pages = 0
+        while offset < nearest.count {
+            var page = BridgeWire.Message(kind: .missions, serverID: UUID())
+            page.missionName = "Mission"
+            page.missionItemOffset = offset
+            var slice = Array(nearest[offset...].prefix(TAKMissionAPI.maximumItemsPerMission))
+            page.missionItems = slice
+            while (try? page.encoded()) == nil, slice.count > 1 {
+                slice.removeLast((slice.count + 1) / 2)
+                page.missionItems = slice
+            }
+            let decoded = try BridgeWire.Message.decode(page.encoded())
+            precondition(decoded.missionItems?.count == slice.count && decoded.missionItemOffset == offset)
+            offset += slice.count
+            pages += 1
+        }
+        precondition(offset == 999 && pages > 1 && pages < 20)
+
+        var invalid = BridgeWire.Message(kind: .missions, serverID: UUID())
+        invalid.missionName = "Mission"
+        invalid.missionItemOffset = TAKMissionAPI.maximumItemsTotal
+        precondition((try? BridgeWire.Message.decode(JSONEncoder().encode(invalid))) == nil)
+        invalid.missionItemOffset = 0
+        invalid.serverID = nil
+        precondition((try? BridgeWire.Message.decode(JSONEncoder().encode(invalid))) == nil)
+        var located = BridgeWire.Message(kind: .missions, missionSync: true)
+        located.latitude = 35.7
+        located.longitude = -78.6
+        precondition((try? BridgeWire.Message.decode(located.encoded())) != nil)
+        located.latitude = 95
+        precondition((try? BridgeWire.Message.decode(JSONEncoder().encode(located))) == nil)
+        located.latitude = 35.7
+        located.longitude = nil
+        precondition((try? BridgeWire.Message.decode(JSONEncoder().encode(located))) == nil)
+
+        struct HTTPFailure: LocalizedError { let errorDescription: String? }
+        precondition(TAKMissionAPI.isNotFound(HTTPFailure(errorDescription: "Data Sync API x: HTTP 404.")))
+        precondition(TAKMissionAPI.isNotFound(HTTPFailure(errorDescription: "HTTP 404: not found")))
+        precondition(!TAKMissionAPI.isNotFound(HTTPFailure(errorDescription: "HTTP 500.")))
+        precondition(!TAKMissionAPI.isNotFound(URLError(.timedOut)))
+        print("PASS: Data Sync nearest-999 selection, \(pages) message-sized item pages, page/location validation and 404 detection")
+    }
     @MainActor
     static func main() async throws {
         var writes = 0
@@ -33,6 +91,7 @@ struct CompanionMapChecks {
         try await Task.sleep(for: .milliseconds(80))
         precondition(writes == 3)
         print("PASS: 500 updates coalesced, latest-state persistence, inactive flush, cancellation and rescheduling")
+        try checkMissionPaging()
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let server = UUID()
         let formatter = ISO8601DateFormatter()

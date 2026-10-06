@@ -120,7 +120,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `9`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `10`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -157,7 +157,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `9`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `10`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -525,6 +525,22 @@ Streams stop when the background task expires and can reconnect on a subsequent
 watch request. This short refresh task is separate from phone location
 reporting and does not grant continuous background execution.
 
+The watch's phone-link status rides out short drops. After a healthy reply, a
+lost WatchConnectivity connection (phone locked, set down or switching
+Bluetooth/Wi-Fi) shows an amber **Reconnecting…** badge for up to 45 seconds
+instead of red; sends still require a fresh confirmation. On wrist raise the
+watch checks immediately and shows **Checking…** for up to 10 seconds. When
+Companion is backgrounded without phone location reporting, it tells the watch
+the relay is paused and the watch shows **Phone paused – open Companion** with
+the reporting reason. Turning on phone location reporting (Always permission)
+keeps TAK streams running while the phone is locked. The status appears on the
+dashboard TAK badge and under TAK Relay in Network Preferences.
+
+Companion shows a **Keep watch connected** warning with an **Open Settings**
+button whenever a TAK server is set up but Location isn't **Always** with
+**Precise Location** on (or Location Services are off). The watch's paused
+message names the same fix, for example "on iPhone, set Location to Always".
+
 Both apps cache up to 50 incoming Companion events, with a conservative
 256 KiB encoded-storage budget. Large XML details reduce how many events fit;
 the oldest events are evicted first. This prevents watchOS from aborting the
@@ -578,7 +594,8 @@ The contact panel omits team, role and last-seen text; contact expiry still appl
 
 Each newly received live (non-user) point plays a haptic and adds a red count
 badge to the dashboard Compass button; opening Compass clears it. Compass lists
-incoming points with affiliation and range. Tapping one offers **RGR** (start
+incoming points with affiliation and range. Data Sync mission items are not
+listed, notified or counted here; they stay on the map. Tapping one offers **RGR** (start
 Bloodhound and send "Roger, bloodhounding to TITLE"), **Remove** (hide the point
 on this watch) or **Cancel**. During that Bloodhound, **nPos** stops navigation,
 removes the point and sends "In Position at TITLE".
@@ -694,10 +711,24 @@ CoT stale time (like ATAK). Without this, older mission events would disappear
 right away under the 5-minute live-contact rule. Items are refreshed quietly
 at most once every 60 seconds after a map refresh. That refresh adds new items,
 removes deleted ones and drops missions that were unsubscribed or deleted. The
-watch shows up to 40 missions per server, 100 items per mission and 200 items
-in total. Items are trimmed to fit the 60 KB phone-to-watch message, and the
-mission row notes when items were omitted. Password-protected missions are
-listed but can't be subscribed.
+watch keeps up to 40 missions per server and 999 items per mission and in total.
+When a mission has more, Companion keeps the 999 nearest the watch's position
+(it parses up to 5,000) and the mission row says "Showing nearest 999 of N
+items". Items that don't fit in the first 60 KB phone-to-watch message are paged
+in afterwards (`missionItemOffset`), roughly 200–300 items per page. Mission
+items are saved in a file (`DataSyncMissions.json` in Application Support)
+rather than UserDefaults, so they don't push the watch toward the ~1 MB
+UserDefaults limit. The map draws only the 99 items nearest you, plus a
+Bloodhound target. That set refreshes when the map opens, after you move 100 m
+and when mission items change. Password-protected missions are listed but
+can't be subscribed.
+
+Joined missions persist across restarts of both apps: Companion saves each
+server's subscribed mission names and the watch saves the items. On each sync,
+Companion checks the watch UID's subscription and quietly re-subscribes if the
+server dropped it, for example after a reconnect. A joined mission missing from
+one mission listing keeps its saved items; it's forgotten only when the server
+returns HTTP 404 for that mission.
 
 Tap a DataSync item on the map to open the same Point Details as a dropped
 marker: title, type, time, a Mission field naming its DataSync mission, remark, bearing, distance and coordinates.
@@ -714,7 +745,7 @@ CoT detail on the original item (custom icons, colors, links) isn't preserved.
 Delete Marker removes the item from the mission for every subscriber
 (`DELETE .../missions/<name>/contents?uid=`). Other received points open the
 same screen with Bloodhound and Delete Marker, which hides them on this watch only.
-Mission items also show "Mission: <name>" in the Compass incoming points list. Mission invitations and change notifications
+Mission items also show "Mission: <name>" in point details. Mission invitations and change notifications
 aren't handled yet. Subscribe and mission items were verified live on TAK
 Server; Sit(x) listing works, but its subscribe and items requests haven't been
 verified because the test account has no missions.
@@ -1037,8 +1068,8 @@ by the cache byte budget. It does not identify every reported physical crash.
 
 Data Sync checks cover mission list filtering and bounds, single-segment
 mission name encoding, mission CoT parsing (wrapped or bare events, nested
-points, dedupe, limits, DTD rejection), mission bridge validation and the
-200-item message budget:
+points, dedupe, limits, DTD rejection), mission bridge validation, nearest-999
+selection and message-sized item paging (`CompanionMapChecks`):
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \

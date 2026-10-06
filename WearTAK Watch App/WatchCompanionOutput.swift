@@ -1,4 +1,5 @@
 import Combine
+import CoreLocation
 import Foundation
 import WatchConnectivity
 
@@ -20,6 +21,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     @Published private(set) var phoneReportingStatus: String?
     @Published private(set) var phoneLocationEnabled = false
     @Published private(set) var identitySyncError: String?
+    /// Display state for the phone link; `isReady` stays strict for sending.
+    @Published private(set) var linkState: CompanionLinkState = .disconnected
+    private var lastHealthy: Date?
+    private var checkingSince: Date?
+    private var pauseReason: String?
     var onStateChange: (() -> Void)?
     var onCoT: ((BridgeWire.Message) -> Void)?
     var onSourceRefresh: ((UUID, Int) -> Void)?
@@ -27,6 +33,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     var onMapSnapshot: (([CompanionMapEvent], [UUID]) -> Void)?
     /// A server's mission list loaded; its subscribed missions carry their current map items.
     var onMissions: ((TAKMissionServer) -> Void)?
+    /// The watch position sent with Data Sync requests so oversized missions keep their nearest items.
+    var currentCoordinate: (() -> CLLocationCoordinate2D?)?
     private var missionRequestInFlight = false
     private var lastMissionRemovalError: String?
     private var lastMissionSync: Date?
@@ -101,9 +109,22 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     func setActive(_ active: Bool) {
         let resumed = active && !self.active
         self.active = active
-        if resumed { mapLastChecked = nil }
-        if !active { invalidate() }
+        if resumed { mapLastChecked = nil; checkingSince = Date() }
+        if !active { checkingSince = nil; invalidate() }
         else { publishIdentity(); refresh() }
+    }
+
+    private func updateLinkState() {
+        guard active, usesCompanion else {
+            lastHealthy = nil
+            checkingSince = nil
+            pauseReason = nil
+            if linkState != .disconnected { linkState = .disconnected }
+            return
+        }
+        let state = CompanionLinkState.resolve(ready: isReady, pauseReason: pauseReason,
+            lastHealthy: lastHealthy, checkingSince: checkingSince)
+        if linkState != state { linkState = state }
     }
 
     func setAlertActive(_ active: Bool) {
@@ -157,6 +178,13 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
               WCSession.default.isReachable else {
             if active, usesCompanion {
                 mapRefreshError = "Phone unavailable. Showing cached positions."
+                // Brief reachability drops (phone locked or set down) keep state during the grace period.
+                if let lastHealthy, Date().timeIntervalSince(lastHealthy) < CompanionLinkState.graceSeconds {
+                    status = "Reconnecting to phone…"
+                    onStateChange?()
+                    updateLinkState()
+                    return
+                }
             }
             invalidate()
             return
@@ -166,6 +194,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             phoneLocationEnabled = false
             onStateChange?()
         }
+        updateLinkState()
         guard !handshakeInFlight else { return }
         handshakeInFlight = true
         Task {
@@ -180,7 +209,15 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
                 }
             } catch {
                 mapRefreshError = "Phone unavailable: \(error.localizedDescription)"
-                invalidate()
+                checkingSince = nil
+                if let lastHealthy, Date().timeIntervalSince(lastHealthy) < CompanionLinkState.graceSeconds {
+                    serverReady = false
+                    status = "Reconnecting to phone…"
+                    onStateChange?()
+                    updateLinkState()
+                } else {
+                    invalidate()
+                }
             }
         }
     }
@@ -224,8 +261,13 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         if let sitxStatus = message.sitxStatus { sitxRelayStatus = sitxStatus }
         if let settings = message.sitxSettings { sitxSettings = settings }
         lastConfirmation = Date()
+        pauseReason = serverReady ? nil : message.relayPaused
+        checkingSince = nil
+        if serverReady { lastHealthy = lastConfirmation }
+        else if pauseReason == nil { lastHealthy = nil }
         status = message.detail ?? (serverReady ? "Connected" : "Not connected")
         onStateChange?()
+        updateLinkState()
         for event in message.chatEvents ?? [] {
             onCoT?(BridgeWire.Message(kind: .cot, xml: event.xml, sourceServerID: event.sourceServerID,
                 sourceGeneration: event.sourceGeneration, sessionID: message.sessionID))
@@ -270,6 +312,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         pending = [:]
         for continuation in waiting { continuation.resume(throwing: TAKTransportError.notConfigured) }
         onStateChange?()
+        updateLinkState()
     }
 
     func send(_ xml: String) async throws {
@@ -359,6 +402,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     /// Returns an error description when the request could not run or failed; nil on success.
     @discardableResult
     private func missionRequest(_ message: BridgeWire.Message, quiet: Bool = false) async -> String? {
+        var message = message
+        if let coordinate = currentCoordinate?() {
+            message.latitude = coordinate.latitude
+            message.longitude = coordinate.longitude
+        }
         lastMissionRemovalError = nil
         guard !missionRequestInFlight else { return "Data Sync is busy. Try again." }
         guard isReady else {
@@ -377,10 +425,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         }
         do {
             let reply = try await request(message, timeoutSeconds: 65)
-            guard reply.kind == .missions, let servers = reply.missionServers else {
+            guard reply.kind == .missions, var servers = reply.missionServers else {
                 throw CompanionRefreshFailure.message(reply.detail ?? "Update both WearTAK apps to use Data Sync.")
             }
             applySession(reply)
+            await pageMissionItems(into: &servers)
             lastMissionSync = Date()
             let previous = Dictionary(uniqueKeysWithValues: missionServers.map { ($0.id, $0) })
             missionServers = servers.map { server in
@@ -398,6 +447,29 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             let text = "Data Sync request failed: \(error.localizedDescription)"
             if !quiet { missionError = text }
             return text
+        }
+    }
+
+    /// Fetches mission items that did not fit in the mission reply, one message-sized page at a time.
+    private func pageMissionItems(into servers: inout [TAKMissionServer]) async {
+        for s in servers.indices where servers[s].isLoaded {
+            for m in servers[s].missions.indices {
+                guard var items = servers[s].missions[m].items, let total = servers[s].missions[m].itemTotal,
+                      items.count < total else { continue }
+                var page = BridgeWire.Message(kind: .missions, serverID: servers[s].id)
+                page.missionName = servers[s].missions[m].name
+                while items.count < total {
+                    page.id = UUID()
+                    page.missionItemOffset = items.count
+                    guard let reply = try? await request(page, timeoutSeconds: 20),
+                          reply.missionItemOffset == items.count, let next = reply.missionItems, !next.isEmpty else { break }
+                    items += next.prefix(total - items.count)
+                }
+                if items.count < total {
+                    servers[s].missions[m].error = "Loaded \(items.count) of \(total) items; the rest load on the next sync."
+                }
+                servers[s].missions[m].items = items
+            }
         }
     }
 
@@ -503,13 +575,19 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
         let configured = context["WearTAKCompanion.serverConfigured"] as? Bool
         let unavailable = context["WearTAKCompanion.serverReady"] as? Bool == false
+        let paused = context["WearTAKCompanion.relayPaused"] as? String
         let sitxSetUp = context["WearTAKCompanion.sitxSetUp"] as? Bool ?? false
         Task { @MainActor [weak self] in
             guard let self else { return }
             if let configured { self.configured = configured }
             self.applySitxSettingsContext(context)
             self.phoneSitxSetUp = sitxSetUp
-            if unavailable && !self.handshakeInFlight && !self.mapRefreshing { self.invalidate() }
+            if unavailable && !self.handshakeInFlight && !self.mapRefreshing {
+                self.pauseReason = paused.map { String($0.prefix(200)) }
+                if paused == nil { self.lastHealthy = nil }
+                self.invalidate()
+                if self.pauseReason != nil { self.status = "Phone paused in background" }
+            }
             else { self.refresh() }
         }
     }

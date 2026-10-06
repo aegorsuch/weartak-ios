@@ -236,6 +236,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     var chatConversations: [ContactConversation] { chatInbox.conversations }
     var incomingMapPoints: [IncomingMapEntity] { incomingEntities.filter { !$0.isUser } }
+    /// Points offered in the Bloodhound order list; Data Sync items stay on the map only.
+    var bloodhoundOrderPoints: [IncomingMapEntity] { incomingEntities.filter { !$0.isUser && $0.missionName == nil } }
 
     func chatTitle(for conversation: ContactConversation) -> String {
         if let sender = contactMessages[conversation]?.last(where: { $0.senderUID == conversation.uid }) {
@@ -437,12 +439,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
             pointSendTimes = stored.mapValues { Date(timeIntervalSince1970: $0) }
                 .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         }
-        if let data = UserDefaults.standard.data(forKey: Self.missionItemsKey),
-           let stored = try? JSONDecoder().decode([StoredMission].self, from: data) {
+        if let stored = Self.loadStoredMissions() {
             storedMissions = stored
             for serverID in Set(stored.map(\.serverID)) { installMissionItems(serverID: serverID) }
         }
         companionClient.onMissions = { [weak self] server in self?.applyMissions(server) }
+        companionClient.currentCoordinate = { [weak self] in self?.lastLocation?.coordinate }
         if let data = UserDefaults.standard.data(forKey: Self.companionCacheKey) {
             do {
                 companionMapCache = try JSONDecoder().decode(CompanionMapCache.self, from: data)
@@ -941,7 +943,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             incomingEntities.append(entity)
             isNew = true
         }
-        if !entity.isUser {
+        if !entity.isUser, entity.missionName == nil {
             // Only live traffic notifies; cache restores and snapshots repopulate silently.
             let shouldNotify = isNew ? (payload.sentAt == nil || isNewerSend) : isResend
             if notifyNewPoint, shouldNotify, expiresAt.map({ $0 > Date() }) ?? true {
@@ -982,7 +984,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         companionMapCache.prune(now: now)
         if !unseenIncomingPointIDs.isEmpty {
-            let current = Set(incomingEntities.lazy.filter { !$0.isUser }.map(\.id))
+            let current = Set(bloodhoundOrderPoints.map(\.id))
             unseenIncomingPointIDs.formIntersection(current)
         }
         if let uid = bloodhoundContactID, !incomingEntities.contains(where: { $0.id == uid }) {
@@ -1052,7 +1054,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let m = storedMissions.firstIndex(where: { $0.serverID == detail.serverID && $0.name == detail.mission }),
               let i = storedMissions[m].items.firstIndex(where: { $0.uid == id }) else { return }
         storedMissions[m].items[i] = item
-        UserDefaults.standard.set(try? JSONEncoder().encode(storedMissions), forKey: Self.missionItemsKey)
+        saveStoredMissions()
         if let e = incomingEntities.firstIndex(where: { $0.id == id }) {
             let old = incomingEntities[e]
             incomingEntities[e] = IncomingMapEntity(
@@ -1076,7 +1078,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         if let m = storedMissions.firstIndex(where: { $0.serverID == detail.serverID && $0.name == detail.mission }) {
             storedMissions[m].items.removeAll { $0.uid == id }
-            UserDefaults.standard.set(try? JSONEncoder().encode(storedMissions), forKey: Self.missionItemsKey)
+            saveStoredMissions()
         }
         incomingEntities.removeAll { $0.id == id && !$0.isUser }
         unseenIncomingPointIDs.remove(id)
@@ -1088,12 +1090,69 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     @Published private(set) var storedMissions: [StoredMission] = []
 
+    /// Mission items live in a file: up to 999 items can outgrow the ~1 MB watchOS UserDefaults limit.
+    private static var missionItemsFileURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("DataSyncMissions.json")
+    }
+
+    private func saveStoredMissions() {
+        do {
+            let url = Self.missionItemsFileURL
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(storedMissions).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        } catch {
+            chatLogger.error("Unable to save Data Sync items: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private static func loadStoredMissions() -> [StoredMission]? {
+        if let data = try? Data(contentsOf: missionItemsFileURL) {
+            return try? JSONDecoder().decode([StoredMission].self, from: data)
+        }
+        // Builds before 10 kept mission items in UserDefaults; move them to the file once.
+        guard let data = UserDefaults.standard.data(forKey: missionItemsKey) else { return nil }
+        UserDefaults.standard.removeObject(forKey: missionItemsKey)
+        guard let stored = try? JSONDecoder().decode([StoredMission].self, from: data) else { return nil }
+        try? FileManager.default.createDirectory(at: missionItemsFileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: missionItemsFileURL, options: .atomic)
+        return stored
+    }
+
+    /// Data Sync items drawn on the map: the nearest `maximumDrawnMissionItems`, refreshed when the map opens,
+    /// after moving `drawnMissionRefreshDistance`, and when mission items change.
+    static let maximumDrawnMissionItems = 99
+    private static let drawnMissionRefreshDistance: CLLocationDistance = 100
+    @Published private(set) var drawnMissionItemIDs: Set<String> = []
+    private var drawnMissionAnchor: CLLocation?
+
+    var mapEntities: [IncomingMapEntity] {
+        incomingEntities.filter { $0.missionName == nil || drawnMissionItemIDs.contains($0.id) || $0.id == bloodhoundMapItemID }
+    }
+
+    func refreshDrawnMissionItems() {
+        let missionItems = incomingEntities.filter { $0.missionName != nil }
+        let ids: Set<String>
+        if missionItems.count <= Self.maximumDrawnMissionItems {
+            ids = Set(missionItems.map(\.id))
+        } else if let location = lastLocation {
+            ids = Set(missionItems
+                .map { ($0.id, location.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))) }
+                .sorted { $0.1 < $1.1 }.prefix(Self.maximumDrawnMissionItems).map(\.0))
+        } else {
+            ids = Set(missionItems.prefix(Self.maximumDrawnMissionItems).map(\.id))
+        }
+        drawnMissionAnchor = lastLocation
+        if ids != drawnMissionItemIDs { drawnMissionItemIDs = ids }
+    }
+
     /// Replaces a server's mission items with its loaded subscriptions. A mission whose items failed to load keeps
     /// its previous items; unsubscribed or deleted missions leave the map.
     func applyMissions(_ server: TAKMissionServer) {
         guard server.isLoaded else { return }
         let previous = storedMissions.filter { $0.serverID == server.id }
         var updated = storedMissions.filter { $0.serverID != server.id }
+        let otherItems = updated.reduce(0) { $0 + $1.items.count }
         for mission in server.missions where mission.subscribed {
             let kept = previous.first { $0.name == mission.name }
             if let items = mission.items {
@@ -1104,8 +1163,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 updated.append(kept)
             }
         }
+        // Across servers the watch keeps at most `maximumItemsTotal` items; this server's missions absorb the excess.
+        var allowance = max(0, TAKMissionAPI.maximumItemsTotal - otherItems)
+        for i in updated.indices where updated[i].serverID == server.id {
+            if updated[i].items.count > allowance { updated[i].items = Array(updated[i].items.prefix(allowance)) }
+            allowance -= updated[i].items.count
+        }
         storedMissions = updated
-        UserDefaults.standard.set(try? JSONEncoder().encode(updated), forKey: Self.missionItemsKey)
+        saveStoredMissions()
         UserDefaults.standard.set(server.missions.contains { $0.subscribed } || updated.contains { $0.serverID != server.id },
                                   forKey: Self.missionSubscriptionsFlagKey)
         installMissionItems(serverID: server.id)
@@ -1134,7 +1199,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 expiresAt: nil, isUser: old?.isUser ?? SitxCoT.isUser(type: item.type),
                 sourceTransport: old?.sourceTransport, missionName: entry.mission)
             if let existing { incomingEntities[existing] = entity } else { incomingEntities.append(entity) }
+            unseenIncomingPointIDs.remove(uid)
         }
+        refreshDrawnMissionItems()
     }
 
     private func refreshSource(_ id: UUID, generation: Int) {
@@ -1488,6 +1555,9 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         lastLocation = location
         sitxClient.currentLocation = location
+        if drawnMissionAnchor.map({ location.distance(from: $0) > Self.drawnMissionRefreshDistance }) ?? true {
+            refreshDrawnMissionItems()
+        }
         lastOfflineAttempt = nil
         forwardOfflineEvents()
         checkBloodhoundProximity(at: location)

@@ -23,6 +23,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var tlsDiscoveryTasks: [String: Task<Void, Never>] = [:]
     private var failedTLSDiscoveries = Set<String>()
     @Published private(set) var phoneReporting = PhoneReportingStatus()
+    /// Non-nil when location settings will let the watch's TAK link drop while the phone is locked.
+    @Published private(set) var backgroundAdvice: String?
 
     struct ServerState {
         var configured = false
@@ -54,6 +56,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var refreshInFlight = false
     private var mapCache = CompanionMapCache()
     private lazy var mapCacheWrites = MapCacheWriteBatcher { [weak self] in self?.saveMapCache() }
+    /// Last loaded items per subscribed mission (key: server ID + name), paged to the watch after a mission reply.
+    fileprivate var missionItemPages: [String: [TAKMissionItem]] = [:]
     private var chatBuffer = CompanionChatBuffer()
     private var lastMapEventReceivedAt: Date?
     private static let mapStorageKey = "WearTAK.companion.mapCache"
@@ -369,7 +373,18 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         BridgeWire.Message(kind: .status, id: id, ready: canRelay && connected, configured: configured, detail: status,
                    sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary,
                    phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
-                   sitxSettings: sitx.settingsSnapshot)
+                   sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason)
+    }
+
+    /// Non-nil while Companion is backgrounded without phone location reporting: iOS then only grants short
+    /// windows per watch request, so the watch shows why its TAK link keeps dropping.
+    private var relayPauseReason: String? {
+        guard !active, !reporter.isRunning, configured else { return nil }
+        if let fix = PhoneBackgroundAdvice.watchReason(authorization: reporter.authorization,
+            preciseLocation: reporter.preciseLocation, servicesEnabled: reporter.servicesEnabled) {
+            return "on iPhone, \(fix)"
+        }
+        return String((phoneReporting.detail ?? "Phone location reporting is off").prefix(200))
     }
 
     private var phoneReportingSummary: String {
@@ -423,6 +438,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         }
         phoneReporting.running = reporter.isRunning
         phoneReporting.permission = reporter.permissionSummary
+        let advice = PhoneBackgroundAdvice.message(hasServers: enabledConfigured > 0,
+            authorization: reporter.authorization, preciseLocation: reporter.preciseLocation,
+            servicesEnabled: reporter.servicesEnabled)
+        if backgroundAdvice != advice { backgroundAdvice = advice }
         if case .success(let identity) = watchIdentity {
             phoneReporting.identity = "\(identity.resolvedCallSign) - \(identity.team) - \(identity.resolvedRole) (UID \(identity.uid.prefix(8)))"
         } else { phoneReporting.identity = nil }
@@ -559,6 +578,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             "WearTAKCompanion.serverReady": canRelay && connected,
             "WearTAKCompanion.sitxSetUp": sitx.isSetUp
         ]
+        if let reason = relayPauseReason { context["WearTAKCompanion.relayPaused"] = reason }
         do {
             context[SitxSettingsSnapshot.contextKey] = try JSONEncoder().encode(sitx.settingsSnapshot)
             try session.updateApplicationContext(context)
@@ -668,6 +688,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                     replyHandler((try? reply.encoded()) ?? Data())
                     return
                 }
+                if message.kind == .missions, message.missionItemOffset != nil {
+                    replyHandler(try self.missionItemPageReply(to: message).encoded())
+                    return
+                }
                 if message.kind == .missions || message.kind == .missionUpdate {
                     replyHandler(try await self.missionReply(to: message).encoded())
                     return
@@ -756,7 +780,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             configured: configured, detail: status, sessionID: bridgeSessionID,
             enabledServerIDs: Array(enabledSourceIDs), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"),
             phoneReporting: phoneReportingSummary, phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
-            sitxSettings: sitx.settingsSnapshot)
+            sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason)
         return try mapCache.filling(reply)
     }
 
@@ -864,24 +888,50 @@ extension PhoneBridgeModel {
                 }
                 var missions = try TAKMissionAPI.parseList(await request("/missions", "GET", []))
                 let listed = Set(missions.map(\.name))
-                if !names.isSubset(of: listed) {
-                    names.formIntersection(listed)
-                    setSubscribedMissions(names, for: id)
+                // A joined mission missing from one listing is kept (its watch items stay) unless the server
+                // confirms it no longer exists, so a partial or transient listing cannot drop subscriptions.
+                for name in names.subtracting(listed).sorted() {
+                    guard let path = TAKMissionAPI.path(name) else { names.remove(name); continue }
+                    do {
+                        _ = try await request(path, "GET", [])
+                    } catch where TAKMissionAPI.isNotFound(error) {
+                        names.remove(name)
+                        missionLogger.notice("Data Sync dropped a deleted mission on \(snapshots[index].name, privacy: .public)")
+                        continue
+                    } catch {}
+                    missions.append(TAKMission(name: name, error: "Mission not listed by the server; keeping saved items."))
                 }
+                setSubscribedMissions(names, for: id)
                 for i in missions.indices where names.contains(missions[i].name) {
                     missions[i].subscribed = true
+                    guard missions[i].error == nil else { continue }
                     if let uid = message.clientUID, !uid.isEmpty, let path = TAKMissionAPI.path(missions[i].name, "/subscription") {
-                        missions[i].canEdit = (try? await request(path, "GET", [URLQueryItem(name: "uid", value: uid)]))
-                            .flatMap(TAKMissionAPI.parseCanEdit)
+                        let query = [URLQueryItem(name: "uid", value: uid)]
+                        var role = try? await request(path, "GET", query)
+                        if role == nil, (try? await request(path, "PUT", query)) != nil {
+                            // The server lost this UID's subscription (for example after a reconnect); restore it.
+                            missionLogger.notice("Data Sync restored a mission subscription on \(snapshots[index].name, privacy: .public)")
+                            role = try? await request(path, "GET", query)
+                        }
+                        missions[i].canEdit = role.flatMap(TAKMissionAPI.parseCanEdit)
                     }
                     guard budget > 0, let path = TAKMissionAPI.path(missions[i].name, "/cot") else {
                         missions[i].error = "Watch item limit reached."
                         continue
                     }
                     do {
-                        let items = TAKMissionAPI.parseItems(try await request(path, "GET", []),
-                                                             limit: min(budget, TAKMissionAPI.maximumItemsPerMission))
+                        let limit = min(budget, TAKMissionAPI.maximumItemsPerMission)
+                        var items = TAKMissionAPI.parseItems(try await request(path, "GET", []),
+                                                             limit: TAKMissionAPI.maximumParsedItems)
+                        let available = items.count
+                        items = TAKMissionAPI.nearest(items, limit: limit, latitude: message.latitude, longitude: message.longitude)
                         missions[i].items = items
+                        missions[i].itemTotal = items.count
+                        missionItemPages[Self.missionPageKey(id, missions[i].name)] = items
+                        if available > items.count {
+                            let scope = message.latitude == nil ? "first" : "nearest"
+                            missions[i].error = "Showing \(scope) \(items.count) of \(available) items (watch limit)."
+                        }
                         budget -= items.count
                     } catch { missions[i].error = error.localizedDescription }
                 }
@@ -899,14 +949,36 @@ extension PhoneBridgeModel {
         reply.missionServers = snapshots
         reply.missionSync = message.missionSync
         reply.detail = removalError
+        // Items that do not fit stay counted in `itemTotal`; the watch pages them in with `missionItemOffset`.
         while (try? reply.encoded()) == nil {
             guard var servers = reply.missionServers,
                   let s = servers.indices.last(where: { servers[$0].missions.contains { !($0.items ?? []).isEmpty } }),
                   let m = servers[s].missions.indices.last(where: { !(servers[s].missions[$0].items ?? []).isEmpty }),
                   let count = servers[s].missions[m].items?.count else { break }
-            servers[s].missions[m].items?.removeLast(max(1, count / 4))
-            servers[s].missions[m].error = "Some items were omitted to fit the watch message size."
+            servers[s].missions[m].items?.removeLast(max(1, (count + 1) / 2))
             reply.missionServers = servers
+        }
+        return reply
+    }
+
+    private static func missionPageKey(_ serverID: UUID, _ name: String) -> String { serverID.uuidString + "\n" + name }
+
+    /// One page of a mission's last loaded items, as large as fits in a watch message.
+    fileprivate func missionItemPageReply(to message: BridgeWire.Message) -> BridgeWire.Message {
+        var reply = BridgeWire.Message(kind: .missions, id: message.id, sessionID: bridgeSessionID)
+        guard let serverID = message.serverID, let name = message.missionName, let offset = message.missionItemOffset,
+              let items = missionItemPages[Self.missionPageKey(serverID, name)], offset < items.count else {
+            reply.detail = "Mission items changed. Reload Data Sync."
+            return reply
+        }
+        reply.serverID = serverID
+        reply.missionName = name
+        reply.missionItemOffset = offset
+        var page = Array(items[offset...].prefix(TAKMissionAPI.maximumItemsPerMission))
+        reply.missionItems = page
+        while (try? reply.encoded()) == nil, page.count > 1 {
+            page.removeLast((page.count + 1) / 2)
+            reply.missionItems = page
         }
         return reply
     }

@@ -342,6 +342,32 @@ struct SitxProtocolChecks {
         precondition(pendingRelay.indicatorLabel == "TAK server not connected")
         precondition(bothOutputs.usesServerIcon && bothOutputs.isServerConnected)
         precondition(bleRelay.indicatorLabel == "TAK server connected")
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        precondition(CompanionLinkState.resolve(ready: true, pauseReason: "x", lastHealthy: nil,
+            checkingSince: t0, now: t0) == .connected)
+        precondition(CompanionLinkState.resolve(ready: false, pauseReason: nil, lastHealthy: t0,
+            checkingSince: nil, now: t0.addingTimeInterval(44)) == .reconnecting)
+        precondition(CompanionLinkState.resolve(ready: false, pauseReason: nil, lastHealthy: t0,
+            checkingSince: nil, now: t0.addingTimeInterval(45)) == .disconnected)
+        precondition(CompanionLinkState.resolve(ready: false, pauseReason: nil, lastHealthy: nil,
+            checkingSince: t0, now: t0.addingTimeInterval(9)) == .checking)
+        precondition(CompanionLinkState.resolve(ready: false, pauseReason: nil, lastHealthy: nil,
+            checkingSince: t0, now: t0.addingTimeInterval(10)) == .disconnected)
+        let paused = CompanionLinkState.resolve(ready: false, pauseReason: "Location permission denied",
+            lastHealthy: t0, checkingSince: nil, now: t0)
+        precondition(paused == .paused("Location permission denied"))
+        precondition(paused.label == "Phone paused – open Companion (Location permission denied)")
+        precondition(DashboardServerBadge.resolve(status: bleRelay, phoneLink: .disconnected) == .connected)
+        precondition(DashboardServerBadge.resolve(status: pendingRelay, phoneLink: .reconnecting) == .pending)
+        precondition(DashboardServerBadge.resolve(status: pendingRelay, phoneLink: .checking) == .pending)
+        precondition(DashboardServerBadge.resolve(status: pendingRelay, phoneLink: paused) == .paused)
+        precondition(DashboardServerBadge.resolve(status: pendingRelay, phoneLink: nil) == .disconnected)
+        let pausedWire = try! BridgeWire.Message.decode(BridgeWire.Message(kind: .status, ready: false,
+            relayPaused: "Off").encoded())
+        precondition(pausedWire.relayPaused == "Off")
+        precondition((try? BridgeWire.Message.decode(BridgeWire.Message(kind: .status,
+            relayPaused: String(repeating: "x", count: 513)).encoded())) == nil)
+        print("PASS: phone link grace, checking and paused states")
         precondition(DashboardLocationStatus.resolve(watchEnabled: false, phoneEnabled: false) == .disabled)
         precondition(DashboardLocationStatus.resolve(watchEnabled: true, phoneEnabled: false) == .watch)
         precondition(DashboardLocationStatus.resolve(watchEnabled: false, phoneEnabled: true) == .phone)

@@ -61,6 +61,68 @@ enum DashboardTAKTransport: String, Hashable {
     }
 }
 
+/// What the watch shows for its phone link. Short WatchConnectivity drops (phone locked, set down, Bluetooth
+/// hand-off) stay "reconnecting" for a grace period instead of flashing disconnected.
+enum CompanionLinkState: Equatable {
+    case connected, checking, reconnecting, paused(String), disconnected
+
+    static let graceSeconds: TimeInterval = 45
+    static let checkingSeconds: TimeInterval = 10
+
+    var isPending: Bool { self == .checking || self == .reconnecting }
+
+    var label: String {
+        switch self {
+        case .connected: return "Connected"
+        case .checking: return "Checking…"
+        case .reconnecting: return "Reconnecting…"
+        case .paused(let reason): return "Phone paused – open Companion" + (reason.isEmpty ? "" : " (\(reason))")
+        case .disconnected: return "Not connected"
+        }
+    }
+
+    static func resolve(ready: Bool, pauseReason: String?, lastHealthy: Date?, checkingSince: Date?,
+                        now: Date = Date()) -> Self {
+        if ready { return .connected }
+        if let checkingSince, now.timeIntervalSince(checkingSince) < checkingSeconds { return .checking }
+        if let pauseReason { return .paused(pauseReason) }
+        if let lastHealthy, now.timeIntervalSince(lastHealthy) < graceSeconds { return .reconnecting }
+        return .disconnected
+    }
+}
+
+enum DashboardServerBadge: Equatable {
+    case connected, pending, paused, disconnected
+
+    var symbol: String {
+        switch self {
+        case .connected: return "checkmark.circle.fill"
+        case .pending: return "arrow.triangle.2.circlepath.circle.fill"
+        case .paused: return "pause.circle.fill"
+        case .disconnected: return "xmark.circle.fill"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .connected: return "TAK server connected"
+        case .pending: return "TAK server reconnecting"
+        case .paused: return "TAK server paused on phone"
+        case .disconnected: return "TAK server not connected"
+        }
+    }
+
+    /// The phone link state only matters when nothing else connects the watch to a TAK server.
+    static func resolve(status: DashboardTAKStatus, phoneLink: CompanionLinkState?) -> Self {
+        if status.isServerConnected { return .connected }
+        switch phoneLink {
+        case .checking?, .reconnecting?: return .pending
+        case .paused?: return .paused
+        default: return .disconnected
+        }
+    }
+}
+
 struct DashboardTAKStatus: Equatable {
     let active: [DashboardTAKTransport]
     let configured: [DashboardTAKTransport]

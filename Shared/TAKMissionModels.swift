@@ -26,6 +26,8 @@ struct TAKMission: Codable, Equatable, Identifiable {
     var error: String?
     /// Subscribed missions only: whether the watch's mission role allows edits; nil when the role is unknown.
     var canEdit: Bool?
+    /// Number of loaded items; when more than `items` holds, the watch pages in the rest.
+    var itemTotal: Int?
     var id: String { name }
 }
 
@@ -45,8 +47,29 @@ struct TAKMissionServer: Codable, Equatable, Identifiable {
 /// TAK Server Mission (Data Sync) API: `/Marti/api/missions` on TAK Server, `/api/v1/missions` on Sit(x).
 enum TAKMissionAPI {
     static let maximumMissions = 40
-    static let maximumItemsPerMission = 100
-    static let maximumItemsTotal = 200
+    static let maximumItemsPerMission = 999
+    static let maximumItemsTotal = 999
+    /// Items parsed from one mission before the nearest `maximumItemsPerMission` are kept.
+    static let maximumParsedItems = 5_000
+
+    /// True for an HTTP 404 from TAK Server or Sit(x): the mission no longer exists.
+    static func isNotFound(_ error: Error) -> Bool {
+        error.localizedDescription.contains("HTTP 404")
+    }
+
+    /// The `limit` items nearest the given position (document order when there is no position).
+    static func nearest(_ items: [TAKMissionItem], limit: Int, latitude: Double?, longitude: Double?) -> [TAKMissionItem] {
+        guard items.count > limit else { return items }
+        guard limit > 0, let latitude, let longitude else { return Array(items.prefix(max(0, limit))) }
+        let cosLatitude = cos(latitude * .pi / 180)
+        func distance(_ item: TAKMissionItem) -> Double {
+            var dLon = abs(item.lon - longitude)
+            if dLon > 180 { dLon = 360 - dLon }
+            let x = dLon * cosLatitude, y = item.lat - latitude
+            return x * x + y * y
+        }
+        return Array(items.map { ($0, distance($0)) }.sorted { $0.1 < $1.1 }.prefix(limit).map(\.0))
+    }
 
     enum Failure: LocalizedError, Equatable {
         case invalidResponse, invalidName, passwordProtected

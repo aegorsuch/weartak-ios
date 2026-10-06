@@ -43,6 +43,15 @@ enum BridgeWire {
         var missionRemoveUID: String?
         /// Reload subscribed missions on every server that has them, without a server selection.
         var missionSync: Bool?
+        /// Data Sync paging: request (and reply with) `missionName`'s loaded items starting at this offset.
+        var missionItemOffset: Int?
+        var missionItems: [TAKMissionItem]?
+        /// The watch's position, so Companion keeps the nearest items when a mission exceeds the watch limit.
+        var latitude: Double?
+        var longitude: Double?
+        /// Set when Companion is in the background without phone location reporting, so iOS only lets it
+        /// hold TAK connections briefly per watch request. Carries the reason reporting is off.
+        var relayPaused: String?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -67,6 +76,17 @@ enum BridgeWire {
                       removeUID.map({ !$0.isEmpty && $0.count <= 256 }) ?? true,
                       let name = message.missionName, TAKMissionAPI.isValidName(name) else { throw Failure.invalidMission }
             }
+            if let offset = message.missionItemOffset {
+                guard message.kind == .missions, message.serverID != nil,
+                      (0..<TAKMissionAPI.maximumItemsTotal).contains(offset),
+                      (message.missionItems?.count ?? 0) <= TAKMissionAPI.maximumItemsPerMission,
+                      let name = message.missionName, TAKMissionAPI.isValidName(name) else { throw Failure.invalidMission }
+            }
+            if message.latitude != nil || message.longitude != nil {
+                guard let latitude = message.latitude, let longitude = message.longitude,
+                      (-90...90).contains(latitude), (-180...180).contains(longitude) else { throw Failure.invalidMission }
+            }
+            if let paused = message.relayPaused, paused.count > 512 { throw Failure.tooLarge }
             if message.kind == .sitxConfig {
                 guard let config = message.sitxConfig, config.isValid else { throw Failure.invalidSitxConfig }
             }

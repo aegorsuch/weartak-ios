@@ -605,6 +605,8 @@ private struct DashboardTAKIndicator: View {
             sitxEnabled: settings.sitxEnabled,
             relaySelected: settings.relayProvider != .notSet
         )
+        let badge = DashboardServerBadge.resolve(status: state,
+            phoneLink: settings.relayProvider == .companion ? companion.linkState : nil)
         NavigationLink {
             NetworkPreferencesView(model: model, settings: settings, sitxClient: sitx)
         } label: {
@@ -614,9 +616,9 @@ private struct DashboardTAKIndicator: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 18, height: 18)
-                    Image(systemName: state.isServerConnected ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    Image(systemName: badge.symbol)
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(state.isServerConnected ? .green : .red)
+                        .foregroundStyle(badge == .connected ? .green : badge == .disconnected ? .red : .orange)
                         .background(.black, in: Circle())
                         .offset(x: 3, y: 2)
                 } else {
@@ -627,7 +629,7 @@ private struct DashboardTAKIndicator: View {
                 }
             }
         }
-        .accessibilityLabel(state.indicatorLabel + ". Network preferences")
+        .accessibilityLabel((state.usesServerIcon ? badge.label : state.indicatorLabel) + ". Network preferences")
     }
 }
 
@@ -939,6 +941,7 @@ private struct TacticalMapView: View {
             bloodhoundPanel
         }
         .onAppear {
+            model.refreshDrawnMissionItems()
             #if DEBUG
             showChannelsMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-channels")
             showLayersMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-filters") ||
@@ -1026,7 +1029,7 @@ private struct TacticalMapView: View {
             }
             .tag(MapPointSelection.marker(marker.id))
         }
-        ForEach(model.incomingEntities) { entity in
+        ForEach(model.mapEntities) { entity in
             if entity.isUser {
                 if settings.isMapUserVisible(team: entity.team, role: entity.role) {
                     Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
@@ -1726,12 +1729,12 @@ private struct BloodhoundView: View {
                 }
             } else {
                 List {
-                    if model.incomingMapPoints.isEmpty {
+                    if model.bloodhoundOrderPoints.isEmpty {
                         Text("No incoming points")
                             .foregroundStyle(.secondary)
                     } else {
                         Section("Incoming Points") {
-                            ForEach(model.incomingMapPoints) { item in
+                            ForEach(model.bloodhoundOrderPoints) { item in
                                 Button { selectedPoint = item } label: {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)

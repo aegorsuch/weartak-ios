@@ -36,6 +36,23 @@ struct CompanionSetupView: View {
         NavigationStack {
             List {
                 TLSApprovalSection(bridge: bridge)
+                if let advice = bridge.backgroundAdvice {
+                    Section {
+                        Label {
+                            Text(advice)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        }
+                        .font(.callout)
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                    } header: {
+                        Text("Keep watch connected")
+                    }
+                }
                 Section {
                     LabeledContent("Watch status", value: bridge.isWatchPaired ? "Paired" : "Not paired")
                     if let error = bridge.watchSetupError {

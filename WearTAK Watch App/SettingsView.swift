@@ -509,7 +509,12 @@ struct NetworkPreferencesView: View {
             NavigationLink {
                 RelayProviderView(model: model, settings: settings)
             } label: {
-                Text("TAK Relay (\(settings.relayProvider.rawValue))")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TAK Relay (\(settings.relayProvider.rawValue))")
+                    if settings.relayProvider == .companion {
+                        CompanionLinkCaption(client: model.companionClient)
+                    }
+                }
             }
             NavigationLink {
                 MulticastPreferencesView(settings: settings, client: model.multicastClient, model: model)
@@ -533,6 +538,17 @@ struct NetworkPreferencesView: View {
             }
         }
         .navigationTitle("Network Preferences")
+    }
+}
+
+private struct CompanionLinkCaption: View {
+    @ObservedObject var client: WatchCompanionOutput
+
+    var body: some View {
+        Text(client.linkState.label)
+            .font(.caption2)
+            .foregroundStyle(client.linkState == .connected ? Color.secondary
+                : client.linkState == .disconnected ? Color.red : Color.orange)
     }
 }
 

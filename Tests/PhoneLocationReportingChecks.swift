@@ -135,8 +135,8 @@ struct PhoneLocationReportingChecks {
         // Watch biometrics: WearOS-compatible remarks and <biometrics>; stale or missing vitals become N/A.
         precondition(!xml.contains("<biometrics"))
         let vitals = WatchBiometrics(heartRate: 72, exertion: 38, measuredAt: now.addingTimeInterval(-60))
-        let decoded = WatchBiometrics.decode(contextValue: try vitals.contextValue())
-        precondition(decoded == vitals)
+        let decodedVitals = WatchBiometrics.decode(contextValue: try vitals.contextValue())
+        precondition(decodedVitals == vitals)
         let bio = PhonePLI.event(identity: identity, fix: fix, interval: 30, appVersion: "1", osVersion: "iOS",
                                  biometrics: vitals, now: now)
         precondition(bio.contains("<remarks>Exert:38%;HR:72</remarks>"), bio)
@@ -195,6 +195,23 @@ struct PhoneLocationReportingChecks {
         precondition(gate(active: false, running: true) == .run)
         precondition(gate(auth: .always, active: false) == .run)
         print("PASS: watch identity guards, alert override and cancellation, legacy identity compatibility, bounded intervals, fix accuracy/time guards, PLI shape/timestamps, duplicate PLI suppression and start/stop gating")
+        precondition(PhoneBackgroundAdvice.message(hasServers: false, authorization: .whenInUse,
+            preciseLocation: true, servicesEnabled: true) == nil)
+        precondition(PhoneBackgroundAdvice.message(hasServers: true, authorization: .always,
+            preciseLocation: true, servicesEnabled: true) == nil)
+        for auth in [PhoneAuthorization.whenInUse, .notDetermined, .denied] {
+            precondition(PhoneBackgroundAdvice.message(hasServers: true, authorization: auth,
+                preciseLocation: true, servicesEnabled: true)?.contains("Always") == true)
+            precondition(PhoneBackgroundAdvice.watchReason(authorization: auth, preciseLocation: true,
+                servicesEnabled: true) == "set Location to Always")
+        }
+        precondition(PhoneBackgroundAdvice.message(hasServers: true, authorization: .always,
+            preciseLocation: false, servicesEnabled: true)?.contains("Precise") == true)
+        precondition(PhoneBackgroundAdvice.message(hasServers: true, authorization: .always,
+            preciseLocation: true, servicesEnabled: false)?.contains("Location Services") == true)
+        precondition(PhoneBackgroundAdvice.watchReason(authorization: .always, preciseLocation: true,
+            servicesEnabled: true) == nil)
+        print("PASS: Always-location advice for keeping the watch connected while the phone is locked")
     }
 
     private static func expect(_ failure: WatchReportingIdentity.Failure, _ body: () throws -> Void) {

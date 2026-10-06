@@ -77,7 +77,8 @@ struct DataSyncChecks {
         }
         var remove = BridgeWire.Message(kind: .missionUpdate, serverID: serverID, clientUID: "watch-uid", missionName: "Op North")
         remove.missionRemoveUID = "item-1"
-        precondition(try BridgeWire.Message.decode(remove.encoded()).missionRemoveUID == "item-1")
+        let decodedRemove = try BridgeWire.Message.decode(remove.encoded())
+        precondition(decodedRemove.missionRemoveUID == "item-1")
         remove.missionSubscribe = true
         do {
             _ = try BridgeWire.Message.decode(remove.encoded())
@@ -94,18 +95,20 @@ struct DataSyncChecks {
         server.state = TAKMissionServer.emptyState
         precondition(server.isLoaded)
         server.state = TAKMissionServer.readyState
+        let firstPage = 200
         server.missions = [TAKMission(name: "Op North", subscribed: true,
-            items: (0..<TAKMissionAPI.maximumItemsTotal).map {
+            items: (0..<firstPage).map {
                 TAKMissionItem(uid: "uid-\($0)-\(UUID().uuidString)", type: "a-h-G", callsign: "Item \($0)",
                                lat: 38.5, lon: -77.1, stale: Date())
-            })]
+            }, itemTotal: TAKMissionAPI.maximumItemsTotal)]
         var reply = BridgeWire.Message(kind: .missions, sessionID: UUID())
         reply.missionServers = [server]
         let encoded = try reply.encoded()
         let roundTrip = try BridgeWire.Message.decode(encoded)
-        precondition(roundTrip.missionServers?.first?.missions.first?.items?.count == TAKMissionAPI.maximumItemsTotal,
-                     "The full item budget must fit one watch message")
-        print("PASS: Data Sync bridge messages validate and the item budget fits (\(encoded.count) bytes)")
+        precondition(roundTrip.missionServers?.first?.missions.first?.items?.count == firstPage &&
+                     roundTrip.missionServers?.first?.missions.first?.itemTotal == TAKMissionAPI.maximumItemsTotal,
+                     "A 200-item first page fits one watch message; the rest are paged by itemTotal")
+        print("PASS: Data Sync bridge messages validate and a 200-item first page fits (\(encoded.count) bytes)")
 
         func role(_ json: String) -> Bool? { TAKMissionAPI.parseCanEdit(Data(json.utf8)) }
         precondition(role(#"{"data":{"role":{"type":"MISSION_SUBSCRIBER","permissions":["MISSION_READ","MISSION_WRITE"]}}}"#) == true)
