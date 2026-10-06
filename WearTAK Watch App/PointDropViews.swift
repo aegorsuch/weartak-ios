@@ -256,7 +256,7 @@ private struct PointToolsView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .navigationDestination(isPresented: $showMarkers) { PointListView(model: model) }
-        .confirmationDialog(String(localized: "Clear last marker?", table: "PointDrop"), isPresented: $confirmDelete) {
+        .confirmationDialog(String(localized: "clear-last-marker-confirmation", defaultValue: "Clear last marker?", table: "PointDrop"), isPresented: $confirmDelete) {
             Button(String(localized: "Clear Last Marker", table: "PointDrop"), role: .destructive) {
                 if let marker = model.markers.first { model.deleteMarker(id: marker.id) }
             }

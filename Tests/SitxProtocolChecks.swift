@@ -5,16 +5,18 @@ import Foundation
 enum PLIReportingRoute { case phoneRelay, standaloneSitx }
 enum TAKTransportError: Error { case notConfigured }
 enum EmergencyState: String, Codable { case alert = "ALERT", cancel = "CANCEL" }
-enum MarkerKind { case friendly, hostile, neutral, unknown }
+enum MarkerKind: String {
+    case friendly = "Friendly", hostile = "Hostile", neutral = "Neutral", unknown = "Unknown"
+}
 
 struct WatchMarker {
     let id: UUID
     let kind: MarkerKind
     let latitude: Double
     let longitude: Double
-    let title: String
+    let title: String?
     let remark: String?
-    var displayTitle: String { title }
+    var displayTitle: String { title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(kind.rawValue) 2525D point" }
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
@@ -566,6 +568,14 @@ struct SitxProtocolChecks {
         precondition(deletion.attributes["event"]?.first?["type"] == "t-x-d-d")
         precondition(deletion.attributes["link"]?.first?["uid"] == marker.id.uuidString)
         precondition(deletion.attributes["__forcedelete"] != nil)
+        let defaultMarkerTitles: [String?] = [nil, ""]
+        for title in defaultMarkerTitles {
+            let defaultMarker = WatchMarker(id: UUID(), kind: .friendly, latitude: 38.1, longitude: -77.1,
+                                            title: title, remark: nil)
+            try? await client.sendMarker(defaultMarker)
+            let defaultFields = try fields(client.pendingEvents[defaultMarker.id.uuidString]!)
+            precondition(defaultFields.attributes["contact"]?.first?["callsign"] == "Friendly 2525D point")
+        }
         let expired = SitxCoT.event(uid: "expired", type: "a-f-G-U-C", coordinate: marker.coordinate,
                                     detail: "", lifetime: 0, now: Date(timeIntervalSince1970: 0))
         precondition(SitxCoT.parse(Data(expired.utf8), excluding: "self").isEmpty)

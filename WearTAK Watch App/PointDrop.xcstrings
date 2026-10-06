@@ -885,7 +885,7 @@
         }
       }
     },
-    "Clear last marker?" : {
+    "clear-last-marker-confirmation" : {
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
