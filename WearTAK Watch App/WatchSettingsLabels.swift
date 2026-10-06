@@ -62,6 +62,15 @@ extension WiFiBatteryPolicy {
 }
 
 extension AppSettings {
+    static func localizedMapRole(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let roles = UserRoleGroup.allCases.flatMap { $0.roles }
+        guard let role = roles.first(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+            return value
+        }
+        return localizedOption(role)
+    }
+
     /// Display label for a persisted role or medical/tool option value; unknown values are returned unchanged.
     nonisolated static func localizedOption(_ value: String) -> String {
         switch value {

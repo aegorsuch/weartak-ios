@@ -17,19 +17,31 @@ struct CompanionServerStatus: Equatable {
     init(enabled: Bool, connected: Bool, detail: String, connectedSince: Date?, now: Date = Date()) {
         if !enabled {
             level = .off
-            summary = "Disabled"
+            summary = String(localized: "Disabled", table: "PhoneBridgeStatus")
             self.detail = nil
         } else if connected {
             level = .connected
-            summary = connectedSince.map { "Connected " + Self.duration(now.timeIntervalSince($0)) } ?? "Connected"
+            if let connectedSince {
+                let elapsed = max(0, now.timeIntervalSince(connectedSince))
+                summary = elapsed < 60
+                    ? String(localized: "Connected just now", table: "PhoneServerStatus")
+                    : String(localized: "Connected", table: "PhoneBridgeStatus") + " · " + Self.duration(elapsed)
+            } else {
+                summary = String(localized: "Connected", table: "PhoneBridgeStatus")
+            }
             self.detail = nil
         } else if detail == "Connecting" {
             level = .connecting
-            summary = "Connecting…"
+            summary = String(localized: "Connecting…", table: "PhoneServerStatus")
             self.detail = nil
-        } else if detail == "Paused in background" || detail == "Disabled" {
+        } else if detail == "Paused in background" || detail == "Disabled"
+                    || detail == String(localized: "Paused in background", table: "PhoneBridgeStatus")
+                    || detail == String(localized: "Disabled", table: "PhoneBridgeStatus") {
             level = .off
-            summary = detail
+            summary = detail == "Disabled"
+                ? String(localized: "Disabled", table: "PhoneBridgeStatus")
+                : detail == "Paused in background"
+                    ? String(localized: "Paused in background", table: "PhoneBridgeStatus") : detail
             self.detail = nil
         } else {
             level = .failed
@@ -43,11 +55,20 @@ struct CompanionServerStatus: Equatable {
     static func duration(_ seconds: TimeInterval) -> String {
         let minutes = max(0, Int(seconds / 60))
         if minutes < 1 { return "just now" }
-        if minutes < 60 { return "\(minutes) min" }
-        let hours = minutes / 60
-        if hours < 24 { return minutes % 60 == 0 ? "\(hours) hr" : "\(hours) hr \(minutes % 60) min" }
-        let days = hours / 24
-        return days == 1 ? "1 day" : "\(days) days"
+        let formatter = DateComponentsFormatter()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")
+        formatter.calendar = calendar
+        formatter.unitsStyle = .short
+        formatter.allowedUnits = minutes >= 1_440 ? [.day] : [.hour, .minute]
+        formatter.zeroFormattingBehavior = .dropAll
+        let components = minutes >= 1_440
+            ? DateComponents(day: minutes / 1_440)
+            : DateComponents(hour: minutes / 60, minute: minutes % 60)
+        guard let duration = formatter.string(from: components) else {
+            preconditionFailure("Cannot format a valid connection duration")
+        }
+        return duration
     }
 
     /// Maps connection and certificate errors to wording a field user can act on.
@@ -79,15 +100,30 @@ struct CompanionServerStatus: Equatable {
     /// Certificate line for a server row; `warning` when it expires within 30 days or already has.
     static func certificateText(expires: Date, now: Date = Date()) -> (text: String, warning: Bool) {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         let date = formatter.string(from: expires)
         let remaining = expires.timeIntervalSince(now)
-        if remaining <= 0 { return ("Certificate expired \(date)", true) }
+        if remaining <= 0 {
+            return (String(localized: "Certificate expired \(date)", table: "PhoneCertificateStatus"), true)
+        }
         let days = Int(remaining / 86_400)
         if days < certificateWarningDays {
-            return (days == 0 ? "Certificate expires today" : "Certificate expires in \(days) day\(days == 1 ? "" : "s")", true)
+            if days == 0 {
+                return (String(localized: "Certificate expires today", table: "PhoneCertificateStatus"), true)
+            }
+            let durationFormatter = DateComponentsFormatter()
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.locale = formatter.locale
+            durationFormatter.calendar = calendar
+            durationFormatter.unitsStyle = .full
+            durationFormatter.allowedUnits = [.day]
+            guard let duration = durationFormatter.string(from: DateComponents(day: days)) else {
+                preconditionFailure("Cannot format a valid certificate lifetime")
+            }
+            return (String(localized: "Certificate expires in \(duration)", table: "PhoneCertificateStatus"), true)
         }
-        return ("Certificate expires \(date)", false)
+        return (String(localized: "Certificate expires \(date)", table: "PhoneCertificateStatus"), false)
     }
 }

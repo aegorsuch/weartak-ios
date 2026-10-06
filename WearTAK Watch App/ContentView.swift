@@ -1161,7 +1161,7 @@ private struct MapLayersMenuView: View {
                                 Circle()
                                     .fill(TeamColor(cotName: group.name)?.mapColor ?? .gray)
                                     .frame(width: 10, height: 10)
-                                Text("\(group.name) (\(group.count))")
+                                Text("\(TeamColor(cotName: group.name)?.localizedName ?? group.name) (\(group.count))")
                             }
                         }
                     }
@@ -1173,7 +1173,7 @@ private struct MapLayersMenuView: View {
             } else {
                 Section(String(localized: "Default Roles (\(model.incomingUserRoles.count))", table: "WatchMain")) {
                     ForEach(model.incomingUserRoles) { group in
-                        Toggle("\(group.name) (\(group.count))", isOn: Binding(
+                        Toggle("\(AppSettings.localizedMapRole(group.name)) (\(group.count))", isOn: Binding(
                             get: { !settings.hiddenMapRoles.contains(group.id) },
                             set: { visible in
                                 if visible { settings.hiddenMapRoles.remove(group.id) }

@@ -120,7 +120,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `11`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `12`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -157,7 +157,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `11`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `12`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -612,6 +612,13 @@ Traditional Chinese. The app follows the device's preferred language.
 The translations are drafts marked for review and are intended for TestFlight
 feedback. User-entered and server-provided content, TAK protocol values, and
 some system or server error details remain in their original language.
+Known TAK team colors and roles also use translated display labels in map
+filters; custom server values and persisted filter keys remain unchanged.
+Companion localizes server connection summaries and elapsed-time units.
+Certificate-expiry notices also use translated wording, localized dates and
+localized day counts, without changing the 30-day warning threshold.
+The watch version label includes the build number and a Git revision bundled
+as a resource, independently of Info.plist generation.
 
 A point the sender deliberately sends again (a newer CoT `time` on a
 human-entered `how="h-…"` point) notifies again, even if it is already listed
@@ -1006,6 +1013,14 @@ for distribution builds.
 Run these checks on macOS. They use mocked HTTP, in-memory tokens, and fake
 outputs; they do not use real credentials or broadcast onto the LAN.
 
+After building Companion (including the embedded Watch app), check that the
+localized status/filter resources and revision stamp are actually packaged:
+
+```sh
+xcrun swiftc -parse-as-library Tests/LocalizationResourceChecks.swift -o /tmp/weartak-localization-checks
+/tmp/weartak-localization-checks "/path/to/WearTAK.app" "$(git rev-parse --short=7 HEAD)"
+```
+
 The Foundation-only outbox checks can also run with Swift on Windows:
 
 ```powershell
@@ -1017,6 +1032,7 @@ if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-offline-checks.exe" }
 xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/AppSettings.swift' \
   'WearTAK Watch App/DashboardStatus.swift' \
+  'WearTAK Watch App/WatchSettingsLabels.swift' \
   'WearTAK Watch App/RelayProtocol.swift' \
   'WearTAK Watch App/SitxCoT.swift' \
   'WearTAK Watch App/MulticastTAKTransport.swift' \

@@ -258,10 +258,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/WearTAKGitCommit.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\nrevision=$(/usr/bin/git -C \"$SRCROOT\" rev-parse --short=7 HEAD 2>/dev/null || printf unknown)\nplist=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\nif [ -f \"$plist\" ]; then\n  /usr/libexec/PlistBuddy -c \"Set :WearTAKGitCommit $revision\" \"$plist\" 2>/dev/null || /usr/libexec/PlistBuddy -c \"Add :WearTAKGitCommit string $revision\" \"$plist\"\nfi\n";
+			shellScript = "set -eu\nrevision=$(/usr/bin/git -C \"$SRCROOT\" rev-parse HEAD)\nresource=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/WearTAKGitCommit.txt\"\nmkdir -p \"$(dirname \"$resource\")\"\nprintf '%.7s\\n' \"$revision\" > \"$resource\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -429,7 +430,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = H284X28FTP;
 				ENABLE_PREVIEWS = YES;
@@ -476,7 +477,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = H284X28FTP;
 				ENABLE_PREVIEWS = YES;
@@ -526,7 +527,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK Companion connects to your TAK server and relays your watch's positions, alerts, and points.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "WearTAK Companion";
@@ -555,7 +556,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = H284X28FTP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "WearTAK Companion";

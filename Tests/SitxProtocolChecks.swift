@@ -304,6 +304,11 @@ struct SitxProtocolChecks {
         settings.mapButtonsVisible = true
         precondition(AppSettings(defaults: defaults).mapButtonsVisible)
         print("PASS: map-buttons default and visibility persistence")
+        precondition(TeamColor(cotName: "dark_green")?.localizedName == TeamColor.darkGreen.localizedName)
+        precondition(AppSettings.localizedMapRole(" medic ") == AppSettings.localizedOption("Medic"))
+        precondition(AppSettings.localizedMapRole("TEAM MEMBER") == AppSettings.localizedOption("Team Member"))
+        precondition(AppSettings.localizedMapRole("HQ") == "HQ")
+        precondition(AppSettings.localizedMapRole("Custom server role") == "Custom server role")
         precondition(settings.dashboardMetric == .exertion)
         settings.dashboardMetric = .heartRate
         precondition(AppSettings(defaults: defaults).dashboardMetric == .heartRate)

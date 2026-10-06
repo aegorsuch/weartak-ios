@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 
 struct SettingsView: View {
     @ObservedObject var model: WatchSessionModel
@@ -14,9 +15,21 @@ struct SettingsView: View {
 
     private var versionLabel: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        let revision = Bundle.main.infoDictionary?["WearTAKGitCommit"] as? String ?? "unknown"
-        return "\(version)-\(revision)"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+        return "\(version) (\(build))" + (Self.revision.map { " - \($0)" } ?? "")
     }
+
+    private static let revision: String? = {
+        do {
+            guard let url = Bundle.main.url(forResource: "WearTAKGitCommit", withExtension: "txt") else {
+                throw CocoaError(.fileNoSuchFile)
+            }
+            return try String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            Logger(subsystem: "com.aegorsuch.weartak", category: "Build").error("Cannot read build revision: \(error.localizedDescription)")
+            return nil
+        }
+    }()
 
     var body: some View {
         List {

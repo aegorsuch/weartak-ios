@@ -8,7 +8,9 @@ struct CompanionServerStatusChecks {
         precondition(off.level == .off && off.summary == "Disabled")
         let up = CompanionServerStatus(enabled: true, connected: true, detail: "Connected",
                                        connectedSince: now.addingTimeInterval(-3_900), now: now)
-        precondition(up.level == .connected && up.summary == "Connected 1 hr 5 min" && up.detail == nil)
+        precondition(up.level == .connected && up.summary == "Connected · \(CompanionServerStatus.duration(3_900))" && up.detail == nil)
+        let justNow = CompanionServerStatus(enabled: true, connected: true, detail: "Connected", connectedSince: now, now: now)
+        precondition(justNow.summary == "Connected just now")
         let connecting = CompanionServerStatus(enabled: true, connected: false, detail: "Connecting", connectedSince: nil, now: now)
         precondition(connecting.level == .connecting)
         let paused = CompanionServerStatus(enabled: true, connected: false, detail: "Paused in background", connectedSince: nil, now: now)
@@ -22,11 +24,25 @@ struct CompanionServerStatusChecks {
         precondition(CompanionServerStatus.plainError(unknown) == unknown, "TLS name prefix must not imply a TLS error")
         precondition(CompanionServerStatus.plainError("Configure certificate") == "Needs a client certificate")
         precondition(CompanionServerStatus.duration(30) == "just now")
-        precondition(CompanionServerStatus.duration(7_200) == "2 hr")
-        precondition(CompanionServerStatus.duration(86_400 * 3) == "3 days")
+        let durationFormatter = DateComponentsFormatter()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en")
+        durationFormatter.calendar = calendar
+        durationFormatter.unitsStyle = .short
+        durationFormatter.zeroFormattingBehavior = .dropAll
+        durationFormatter.allowedUnits = [.hour, .minute]
+        precondition(CompanionServerStatus.duration(7_200) == durationFormatter.string(from: DateComponents(hour: 2, minute: 0)))
+        durationFormatter.allowedUnits = [.day]
+        precondition(CompanionServerStatus.duration(86_400 * 3) == durationFormatter.string(from: DateComponents(day: 3)))
         precondition(CompanionServerStatus.certificateText(expires: now.addingTimeInterval(-1), now: now).warning)
         let soon = CompanionServerStatus.certificateText(expires: now.addingTimeInterval(86_400 * 10.5), now: now)
         precondition(soon.warning && soon.text == "Certificate expires in 10 days")
+        for days in [1, 2, 29] {
+            let certificate = CompanionServerStatus.certificateText(expires: now.addingTimeInterval(Double(days) * 86_400), now: now)
+            precondition(certificate.warning && certificate.text == "Certificate expires in \(days) day\(days == 1 ? "" : "s")")
+        }
+        precondition(CompanionServerStatus.certificateText(expires: now.addingTimeInterval(60), now: now).text == "Certificate expires today")
+        precondition(CompanionServerStatus.certificateText(expires: now.addingTimeInterval(86_400 * 30), now: now).warning == false)
         let later = CompanionServerStatus.certificateText(expires: now.addingTimeInterval(86_400 * 200), now: now)
         precondition(!later.warning && later.text.hasPrefix("Certificate expires "))
         print("Companion server status checks passed")
