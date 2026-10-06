@@ -52,6 +52,34 @@ Beta builds expire after 90 days. Install a newer TestFlight build when one is
 available. WearTAK Companion is optional; see its setup below. Selecting iTAK
 or TAK Aware does not yet connect the watch to those partner apps.
 
+#### Build 12: tester message / What to Test
+
+WearTAK 5.8.0 (12) includes draft Watch and Companion translations in all
+36 supported languages: **Arabic, Bulgarian, Croatian, Czech, Danish, Dutch,
+English, Estonian, Finnish, French, German, Greek, Hebrew, Hungarian,
+Indonesian, Italian, Japanese, Korean, Latvian, Lithuanian, Malay, Norwegian
+Bokmål, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish,
+Swedish, Thai, Turkish, Ukrainian, Vietnamese, Simplified Chinese, and
+Traditional Chinese**.
+
+- Select your preferred app/device language and reopen both apps. Check menus,
+  connection statuses, certificate-expiry notices, map role/team-color filters,
+  and permission descriptions. Report incorrect wording, English labels that
+  should translate, clipped text, and right-to-left layout issues.
+- Check that filtering map roles and teams still hides/shows the intended users.
+  Custom server text and TAK protocol abbreviations may remain unchanged.
+- Test Bloodhound Remove All: it hides listed points only on this watch;
+  server points and Data Sync map items should remain.
+- Test a large Data Sync mission: up to 999 loaded items, 99 nearest drawn, and
+  the mission still joined after restarting both apps.
+- For locked-phone TAK relay testing, allow Companion Location **Always** with
+  **Precise Location** on and keep phone location reporting running. Check
+  wrist-raise reconnection and the warning shown when location settings are
+  insufficient. Background delivery is not guaranteed.
+- Include build number, watch/iPhone models, language, reproduction steps, and
+  screenshots with feedback. The version label should include build 12 and
+  revision `806f322`, rather than `unknown`.
+
 ### Developers: build from source onto a watch
 
 This path requires a Mac, Xcode with the watchOS 26.2 SDK or newer, and an Apple
@@ -600,6 +628,8 @@ Bloodhound and send "Roger, bloodhounding to TITLE"), **Remove** (hide the point
 on this watch) or **Cancel**. **Remove All** at the top of the list hides all
 listed points on this watch. During that Bloodhound, **nPos** stops navigation,
 removes the point and sends "In Position at TITLE".
+
+#### Supported languages (36)
 
 The Watch app and WearTAK Companion localize their interface, common status
 messages and permission descriptions in Arabic, Bulgarian, Croatian, Czech,
