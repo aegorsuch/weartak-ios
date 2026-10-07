@@ -1073,7 +1073,12 @@ private struct TacticalMapView: View {
             .tag(MapPointSelection.marker(marker.id))
         }
         ForEach(model.mapEntities) { entity in
-            if entity.isUser {
+            if entity.isAlert {
+                Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
+                    IncomingAlertMarker()
+                }
+                .tag(MapPointSelection.incoming(entity.id))
+            } else if entity.isUser {
                 if settings.isMapUserVisible(team: entity.team, role: entity.role) {
                     Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
                         IncomingUserMarker(title: incomingMapTitle(entity), lastSeen: entity.lastSeen,
@@ -1711,6 +1716,35 @@ struct MapPointSymbol: View {
     }
 }
 
+private struct IncomingAlertMarker: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isLuminanceReduced) private var luminanceReduced
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var flashing: Bool { !reduceMotion && !luminanceReduced && scenePhase == .active }
+
+    var body: some View {
+        if flashing {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                circle(bright: Int(context.date.timeIntervalSinceReferenceDate) % 2 == 0)
+            }
+        } else {
+            circle(bright: true)
+        }
+    }
+
+    private func circle(bright: Bool) -> some View {
+        Circle()
+            .fill(Color.white.opacity(bright ? 1 : 0.35))
+            .overlay(Circle().stroke(.black, lineWidth: 2))
+            .frame(width: 24, height: 24)
+            .shadow(color: .black.opacity(0.7), radius: 2)
+            .frame(width: 32, height: 32)
+            .contentShape(Circle())
+            .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
+    }
+}
+
 /// Incoming TAK user: circle filled with the CoT `__group` team color, role badge inside.
 private struct IncomingUserDot: View {
     let team: TeamColor?
@@ -2278,13 +2312,24 @@ private struct IncomingPointDetailView: View {
         List {
             if let item {
                 Section {
-                    Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
-                        .font(.headline)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        if item.isAlert {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .red)
+                                .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
+                        }
+                        Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
+                            .font(.headline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Section {
                     HStack {
-                        Text(item.symbolKind?.watchMainLabel ?? String(localized: "Point", table: "WatchMain"))
+                        Text(item.isAlert
+                             ? (item.alertCategory.flatMap { $0.isEmpty ? nil : $0 }
+                                ?? String(localized: "Active Alert", table: "WatchMain"))
+                             : (item.symbolKind?.watchMainLabel ?? String(localized: "Point", table: "WatchMain")))
                         Spacer(minLength: 4)
                         Text(MapCoordinateFormatter.droppedTime(item.lastSeen))
                             .font(.caption2.monospacedDigit())
@@ -2428,6 +2473,9 @@ private struct IncomingPointDetailView: View {
         }
         .navigationTitle(String(localized: "Point Details", table: "WatchMain"))
         .onAppear { model.requestLocation() }
+        .onChange(of: item?.id) { _, currentID in
+            if currentID == nil { dismiss() }
+        }
         .confirmationDialog(mission == nil ? String(localized: "Delete point?", table: "WatchMain") : String(localized: "Delete from mission?", table: "WatchMain"), isPresented: $confirmDelete) {
             Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
                 if mission == nil {

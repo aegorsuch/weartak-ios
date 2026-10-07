@@ -647,6 +647,11 @@ any active Bloodhound target; alerts also expire at their CoT stale time.
 RGR can navigate to alerts without a reply address. nPos stops navigating to an
 alert without hiding it; the alert remains until cleared, expired or removed
 locally. Remove and Remove All still only hide items on this watch.
+On the map, alerts use a flashing white circle with a dark outline and the
+received-point menu (coordinates, range/bearing, Bloodhound and local Delete
+Marker). Cancelling or expiring an alert removes its map marker and closes its
+open point menu. Flashing dims once per second rather than disappearing,
+and stays solid with Reduce Motion, Always On dimming or an inactive app.
 
 #### Supported languages (36)
 
@@ -1094,8 +1099,8 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 
 Remote alert parser checks cover active/cancelled emergencies, self exclusion,
 stale-time handling and backwards-compatible relay decoding. The simulator
-load test also checks picker ordering, cancellation of a Bloodhound target,
-replay rejection and alert expiry.
+load test also checks picker ordering, map visibility and point-menu Bloodhound,
+cancellation of a Bloodhound target, replay rejection and alert expiry.
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \

@@ -1284,7 +1284,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "WearTAK.loadTestStarted") }
     }
 
-    private func checkSimulatorBloodhoundAlerts() throws {
+    private func checkSimulatorBloodhoundAlerts() async throws {
         let now = Date()
         let prefix = "bloodhound-alert-check-\(UUID())"
         let pointID = prefix + "-point"
@@ -1315,13 +1315,17 @@ final class WatchSessionModel: NSObject, ObservableObject {
         receiveEntity(newerAlert, at: now.addingTimeInterval(1))
         let ids = bloodhoundOrderPoints.filter { $0.id.hasPrefix(prefix) }.map(\.id)
         try require(ids == [newerAlertID, alertID, pointID], "Bloodhound alerts must precede ordinary points, newest first")
-        bloodhoundMapItemID = alertID
+        try require(mapEntities.contains { $0.id == alertID && $0.isAlert }, "Remote alerts must appear on the map")
+        try await toggleMapItemBloodhound(id: alertID)
+        try require(bloodhoundMapItemID == alertID && bloodhoundTarget?.latitude == alert.lat,
+                    "The point menu must navigate to an alert without a reply address")
         var cancel = alert
         cancel.emergencyState = .cancel
         cancel.sentAt = now.addingTimeInterval(2)
         receiveEntity(cancel, at: now.addingTimeInterval(2))
         try require(!bloodhoundOrderPoints.contains { $0.id == alertID } && bloodhoundMapItemID == nil,
                     "Cancellation must remove the alert and stop Bloodhound")
+        try require(!mapEntities.contains { $0.id == alertID }, "Cancellation must remove the alert from the map")
         receiveEntity(alert, at: now.addingTimeInterval(3))
         try require(!bloodhoundOrderPoints.contains { $0.id == alertID }, "A replay must not resurrect a cancelled alert")
         var reactivated = alert
@@ -1333,6 +1337,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         try require(bloodhoundOrderPoints.contains { $0.id == newerAlertID }, "An active alert must remain until its stale time")
         pruneIncomingEntities(now: now.addingTimeInterval(600))
         try require(!bloodhoundOrderPoints.contains { $0.id == newerAlertID }, "An expired alert must leave the picker")
+        try require(!mapEntities.contains { $0.id == newerAlertID }, "An expired alert must leave the map")
     }
 
     func runSimulatorLoadTest() async {
@@ -1344,7 +1349,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         do {
-            try checkSimulatorBloodhoundAlerts()
+            try await checkSimulatorBloodhoundAlerts()
             for (name, rate, count, detailBytes) in [
                 ("10-events-per-second", 10, 50, 0),
                 ("100-events-per-second", 100, 500, 0),
