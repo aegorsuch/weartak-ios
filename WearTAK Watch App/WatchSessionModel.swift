@@ -75,6 +75,8 @@ struct IncomingMapEntity: Identifiable {
     var sourceTransport: ContactChatRoute? = nil
     /// Data Sync mission holding this item; mission items stay on the map while subscribed.
     var missionName: String? = nil
+    var alertCategory: String? = nil
+    var isAlert: Bool = false
 
     var chatRoute: ContactChatRoute? {
         if let sourceServerID { return .companion(sourceServerID) }
@@ -231,6 +233,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     /// Latest CoT `time` seen per point, so a sender's re-send notifies again but reconnect replays do not.
     private var pointSendTimes: [String: Date] = [:]
     private static let pointSendTimesKey = "WearTAK.incomingPointSendTimes"
+    private var clearedAlertSendTimes: [String: Date] = [:]
+    private static let clearedAlertSendTimesKey = "WearTAK.clearedAlertSendTimes"
     private static let mapItemReplyLifetime: TimeInterval = 24 * 60 * 60
     @Published private var chatInbox = TAKChatInbox<ContactConversation>()
 
@@ -241,7 +245,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
     var chatConversations: [ContactConversation] { chatInbox.conversations }
     var incomingMapPoints: [IncomingMapEntity] { incomingEntities.filter { !$0.isUser } }
     /// Points offered in the Bloodhound order list; Data Sync items stay on the map only.
-    var bloodhoundOrderPoints: [IncomingMapEntity] { incomingEntities.filter { !$0.isUser && $0.missionName == nil } }
+    var bloodhoundOrderPoints: [IncomingMapEntity] {
+        let points = incomingEntities.filter { !$0.isUser && $0.missionName == nil }
+        return points.filter(\.isAlert).sorted { $0.lastSeen > $1.lastSeen } + points.filter { !$0.isAlert }
+    }
 
     func chatTitle(for conversation: ContactConversation) -> String {
         if let sender = contactMessages[conversation]?.last(where: { $0.senderUID == conversation.uid }) {
@@ -426,7 +433,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     team: entity.team, role: entity.role, senderUID: entity.senderUID,
                     sourceServerID: entity.sourceServerID,
                     sourceGeneration: 0, expiresAt: entity.expiresAt, isUser: entity.isUser,
-                    missionName: entity.missionName)
+                    missionName: entity.missionName, alertCategory: entity.alertCategory, isAlert: entity.isAlert)
             }
             self.saveCompanionMapCache()
         }
@@ -441,6 +448,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
         if let stored = UserDefaults.standard.dictionary(forKey: Self.pointSendTimesKey) as? [String: Double] {
             let now = Date()
             pointSendTimes = stored.mapValues { Date(timeIntervalSince1970: $0) }
+                .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
+        }
+        if let stored = UserDefaults.standard.dictionary(forKey: Self.clearedAlertSendTimesKey) as? [String: Double] {
+            let now = Date()
+            clearedAlertSendTimes = stored.mapValues { Date(timeIntervalSince1970: $0) }
                 .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         }
         if let stored = Self.loadStoredMissions() {
@@ -762,7 +774,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let item = incomingMapPoints.first(where: { $0.id == id }) else {
             throw ContactChatFailure.message("This map item is no longer available.")
         }
-        try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
+        if !item.isAlert || item.senderUID?.isEmpty == false {
+            try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
+        }
         bloodhoundTargetID = nil
         bloodhoundContactID = nil
         bloodhoundMapItemID = id
@@ -794,14 +808,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func markInPosition() async throws {
         let item = bloodhoundMapItemID.flatMap { id in incomingMapPoints.first { $0.id == id } }
-        if let item {
+        if let item, !item.isAlert || item.senderUID?.isEmpty == false {
             try await sendMapItemReply(item, text: "In Position at \(mapItemTitle(item))")
         }
         bloodhoundTargetID = nil
         bloodhoundContactID = nil
         bloodhoundMapItemID = nil
         bloodhoundProximityNotified = false
-        guard let item else { return }
+        guard let item, !item.isAlert else { return }
         removeIncomingPoint(item.id)
     }
 
@@ -911,6 +925,25 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
         let previousSend = pointSendTimes[payload.uid] ?? incomingEntities.first(where: { $0.id == payload.uid })?.lastSeen
+        if payload.emergencyState != nil {
+            if let sent = payload.sentAt, let previousSend, sent < previousSend { return }
+            if payload.emergencyState == .cancel {
+                incomingEntities.removeAll { $0.id == payload.uid }
+                unseenIncomingPointIDs.remove(payload.uid)
+                let clearedAt = max(payload.sentAt ?? now, clearedAlertSendTimes[payload.uid] ?? .distantPast)
+                clearedAlertSendTimes[payload.uid] = clearedAt
+                clearedAlertSendTimes = Dictionary(uniqueKeysWithValues: clearedAlertSendTimes
+                    .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
+                    .sorted { $0.value > $1.value }.prefix(200).map { ($0.key, $0.value) })
+                UserDefaults.standard.set(clearedAlertSendTimes.mapValues(\.timeIntervalSince1970),
+                                          forKey: Self.clearedAlertSendTimesKey)
+                pruneIncomingEntities(now: now)
+                return
+            }
+            // A snapshot must not resurrect an alert already cleared at the same event time.
+            if let clearedAt = clearedAlertSendTimes[payload.uid],
+               (payload.sentAt ?? now) <= clearedAt { return }
+        }
         let isNewerSend = payload.sentAt.map { sent in previousSend.map { sent > $0 } ?? true } ?? false
         let isResend = notifyNewPoint && payload.isHumanEntered && isNewerSend
         if let dismissedAt = dismissedPointIDs[payload.uid] {
@@ -932,9 +965,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
             type: payload.type, lastSeen: now,
             callSign: metadata.callSign, team: metadata.team, role: metadata.role,
             senderUID: metadata.senderUID,
-            sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt,
-            isUser: metadata.isUser == true || SitxCoT.isUser(type: payload.type), sourceTransport: sourceTransport,
-            missionName: previous?.missionName
+            sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt ?? payload.staleAt,
+            isUser: payload.emergencyState == nil && (metadata.isUser == true || SitxCoT.isUser(type: payload.type)),
+            sourceTransport: sourceTransport, missionName: previous?.missionName,
+            alertCategory: payload.alertCategory, isAlert: payload.emergencyState == .alert
         )
         let isNew: Bool
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
@@ -962,7 +996,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private func capLiveEntities() {
         let live = incomingEntities.filter { $0.missionName == nil }
         guard live.count > Self.maximumLiveEntities else { return }
-        let dropped = Set(live.sorted { $0.lastSeen > $1.lastSeen }.dropFirst(Self.maximumLiveEntities).map(\.id))
+        let dropped = Set(live.sorted {
+            if $0.isAlert != $1.isAlert { return $0.isAlert }
+            return $0.lastSeen > $1.lastSeen
+        }.dropFirst(Self.maximumLiveEntities).map(\.id))
         incomingEntities.removeAll { dropped.contains($0.id) }
     }
 
@@ -981,7 +1018,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func pruneIncomingEntities(now: Date = Date()) {
         incomingEntities.removeAll {
             $0.missionName == nil &&
-                (now.timeIntervalSince($0.lastSeen) > 300 || ($0.expiresAt.map { $0 <= now } ?? false))
+                ((!$0.isAlert || $0.expiresAt == nil) && now.timeIntervalSince($0.lastSeen) > 300 ||
+                 ($0.expiresAt.map { $0 <= now } ?? false))
         }
         companionMapCache.prune(now: now)
         if !unseenIncomingPointIDs.isEmpty {
@@ -1246,6 +1284,57 @@ final class WatchSessionModel: NSObject, ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "WearTAK.loadTestStarted") }
     }
 
+    private func checkSimulatorBloodhoundAlerts() throws {
+        let now = Date()
+        let prefix = "bloodhound-alert-check-\(UUID())"
+        let pointID = prefix + "-point"
+        let alertID = prefix + "-alert"
+        let newerAlertID = prefix + "-newer"
+        defer {
+            incomingEntities.removeAll { $0.id.hasPrefix(prefix) }
+            for id in [pointID, alertID, newerAlertID] { pointSendTimes.removeValue(forKey: id) }
+            UserDefaults.standard.set(pointSendTimes.mapValues(\.timeIntervalSince1970), forKey: Self.pointSendTimesKey)
+            clearedAlertSendTimes.removeValue(forKey: alertID)
+            UserDefaults.standard.set(clearedAlertSendTimes.mapValues(\.timeIntervalSince1970),
+                                      forKey: Self.clearedAlertSendTimesKey)
+            bloodhoundMapItemID = nil
+        }
+        func require(_ condition: Bool, _ message: String) throws {
+            guard condition else {
+                throw NSError(domain: "WearTAK.LoadTest", code: 7,
+                              userInfo: [NSLocalizedDescriptionKey: message])
+            }
+        }
+        let point = EntityRelayPayload(uid: pointID, lat: 38, lon: -77, type: "a-n-G", sentAt: now)
+        let alert = EntityRelayPayload(uid: alertID, lat: 38, lon: -77, type: "b-a-o",
+            sentAt: now, emergencyState: .alert, alertCategory: "Injury", staleAt: now.addingTimeInterval(600))
+        let newerAlert = EntityRelayPayload(uid: newerAlertID, lat: 39, lon: -77, type: "b-a-o-tbl",
+            sentAt: now.addingTimeInterval(1), emergencyState: .alert, staleAt: now.addingTimeInterval(600))
+        receiveEntity(point, at: now)
+        receiveEntity(alert, at: now)
+        receiveEntity(newerAlert, at: now.addingTimeInterval(1))
+        let ids = bloodhoundOrderPoints.filter { $0.id.hasPrefix(prefix) }.map(\.id)
+        try require(ids == [newerAlertID, alertID, pointID], "Bloodhound alerts must precede ordinary points, newest first")
+        bloodhoundMapItemID = alertID
+        var cancel = alert
+        cancel.emergencyState = .cancel
+        cancel.sentAt = now.addingTimeInterval(2)
+        receiveEntity(cancel, at: now.addingTimeInterval(2))
+        try require(!bloodhoundOrderPoints.contains { $0.id == alertID } && bloodhoundMapItemID == nil,
+                    "Cancellation must remove the alert and stop Bloodhound")
+        receiveEntity(alert, at: now.addingTimeInterval(3))
+        try require(!bloodhoundOrderPoints.contains { $0.id == alertID }, "A replay must not resurrect a cancelled alert")
+        var reactivated = alert
+        reactivated.sentAt = now.addingTimeInterval(4)
+        receiveEntity(reactivated, at: now.addingTimeInterval(4))
+        receiveEntity(cancel, at: now.addingTimeInterval(5))
+        try require(bloodhoundOrderPoints.contains { $0.id == alertID }, "A delayed cancellation must not clear a newer alert")
+        pruneIncomingEntities(now: now.addingTimeInterval(301))
+        try require(bloodhoundOrderPoints.contains { $0.id == newerAlertID }, "An active alert must remain until its stale time")
+        pruneIncomingEntities(now: now.addingTimeInterval(600))
+        try require(!bloodhoundOrderPoints.contains { $0.id == newerAlertID }, "An expired alert must leave the picker")
+    }
+
     func runSimulatorLoadTest() async {
         guard !loadTestStarted else { return }
         loadTestStarted = true
@@ -1255,6 +1344,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         do {
+            try checkSimulatorBloodhoundAlerts()
             for (name, rate, count, detailBytes) in [
                 ("10-events-per-second", 10, 50, 0),
                 ("100-events-per-second", 100, 500, 0),

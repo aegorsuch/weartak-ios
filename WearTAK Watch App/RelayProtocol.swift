@@ -54,6 +54,9 @@ struct EntityRelayPayload: Codable {
     /// CoT `time`/`how`; a newer `time` on a human-entered (`h-`) point means the sender re-sent it.
     var sentAt: Date? = nil
     var how: String? = nil
+    var emergencyState: EmergencyState? = nil
+    var alertCategory: String? = nil
+    var staleAt: Date? = nil
 
     var isHumanEntered: Bool { how?.hasPrefix("h") == true }
 

@@ -1,5 +1,8 @@
 import CoreLocation
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 
 enum SitxCoT {
     static func isUser(type: String) -> Bool {
@@ -97,6 +100,9 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     private var expired = false
     private var sentAt: Date?
     private var how: String?
+    private var emergencyState: EmergencyState?
+    private var alertCategory: String?
+    private var staleAt: Date?
 
     init(excludedUID: String, now: Date) {
         self.excludedUID = excludedUID
@@ -117,6 +123,9 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             hasTAKVersion = false
             hasContactEndpoint = false
             hasDeviceUID = false
+            emergencyState = eventType == "b-a-o-can" ? .cancel :
+                (eventType == "b-a-o" || eventType?.hasPrefix("b-a-o-") == true ? .alert : nil)
+            alertCategory = nil
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             var stale = attributes["stale"].flatMap { formatter.date(from: $0) }
@@ -125,6 +134,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                 stale = attributes["stale"].flatMap { formatter.date(from: $0) }
             }
             expired = stale.map { $0 <= now } ?? true
+            staleAt = stale
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             sentAt = attributes["time"].flatMap { formatter.date(from: $0) }
             if sentAt == nil {
@@ -146,6 +156,11 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             hasDeviceUID = true
         } else if elementName == "link", attributes["relation"] == "p-p" {
             senderUID = attributes["uid"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if elementName == "emergency" {
+            let cancelled = ["true", "1"].contains(attributes["cancel"]?.lowercased() ?? "")
+            if cancelled { emergencyState = .cancel }
+            else if emergencyState != .cancel { emergencyState = .alert }
+            alertCategory = attributes["type"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         } else if elementName == "point",
                   let latitude = attributes["lat"].flatMap(Double.init),
                   let longitude = attributes["lon"].flatMap(Double.init),
@@ -158,12 +173,15 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
         guard elementName == "event" else { return }
         if let eventUID, eventUID != excludedUID, !eventUID.isEmpty,
-           let eventType, eventType.hasPrefix("a-"), let point, !expired {
+           let eventType, eventType.hasPrefix("a-") || emergencyState != nil,
+           let point, !expired || emergencyState == .cancel,
+           emergencyState == nil || senderUID != excludedUID {
             let isUser = SitxCoT.isUser(type: eventType, hasGroup: hasGroup, hasTAKVersion: hasTAKVersion && senderUID == nil,
                                         hasContactEndpoint: hasContactEndpoint, hasDeviceUID: hasDeviceUID)
             entities.append(EntityRelayPayload(uid: eventUID, lat: point.latitude, lon: point.longitude, type: eventType,
                                                callSign: callSign, team: team, role: role, senderUID: senderUID,
-                                               isUser: isUser, sentAt: sentAt, how: how))
+                                               isUser: emergencyState == nil && isUser, sentAt: sentAt, how: how,
+                                               emergencyState: emergencyState, alertCategory: alertCategory, staleAt: staleAt))
         }
         eventUID = nil
         point = nil

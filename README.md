@@ -640,6 +640,14 @@ on this watch) or **Cancel**. **Remove All** at the top of the list hides all
 listed points on this watch. During that Bloodhound, **nPos** stops navigation,
 removes the point and sends "In Position at TITLE".
 
+Active CoT emergency alerts from other devices appear above ordinary incoming
+points, newest first, with a red triangle/exclamation icon, sender callsign,
+alert category and range. Cancellation removes the alert immediately, including
+any active Bloodhound target; alerts also expire at their CoT stale time.
+RGR can navigate to alerts without a reply address. nPos stops navigating to an
+alert without hiding it; the alert remains until cleared, expired or removed
+locally. Remove and Remove All still only hide items on this watch.
+
 #### Supported languages (36)
 
 The Watch app and WearTAK Companion localize their interface, common status
@@ -1082,6 +1090,18 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Shared/SitxShared.swift \
   Shared/PhoneLocationReporting.swift Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
+```
+
+Remote alert parser checks cover active/cancelled emergencies, self exclusion,
+stale-time handling and backwards-compatible relay decoding. The simulator
+load test also checks picker ordering, cancellation of a Bloodhound target,
+replay rejection and alert expiry.
+
+```sh
+xcrun swiftc -swift-version 5 -parse-as-library \
+  'WearTAK Watch App/RelayProtocol.swift' 'WearTAK Watch App/SitxCoT.swift' \
+  Tests/BloodhoundAlertChecks.swift -o /tmp/weartak-alert-checks
+/tmp/weartak-alert-checks
 ```
 
 Bridge/channel checks cover bounded XML framing, message correlation, channel

@@ -1785,17 +1785,42 @@ private struct BloodhoundView: View {
 
     private func pointDetail(_ item: IncomingMapEntity) -> String {
         let affiliation: String
-        switch item.type.split(separator: "-").dropFirst().first {
-        case "f": affiliation = String(localized: "Friendly", table: "WatchMain")
-        case "h": affiliation = String(localized: "Hostile", table: "WatchMain")
-        case "n": affiliation = String(localized: "Neutral", table: "WatchMain")
-        case "u": affiliation = String(localized: "Unknown", table: "WatchMain")
-        default: affiliation = String(localized: "Point", table: "WatchMain")
+        if item.isAlert {
+            affiliation = item.alertCategory.flatMap { $0.isEmpty ? nil : $0 }
+                ?? String(localized: "Active Alert", table: "WatchMain")
+        } else {
+            switch item.type.split(separator: "-").dropFirst().first {
+            case "f": affiliation = String(localized: "Friendly", table: "WatchMain")
+            case "h": affiliation = String(localized: "Hostile", table: "WatchMain")
+            case "n": affiliation = String(localized: "Neutral", table: "WatchMain")
+            case "u": affiliation = String(localized: "Unknown", table: "WatchMain")
+            default: affiliation = String(localized: "Point", table: "WatchMain")
+            }
         }
         let mission = item.missionName.map { "\n" + String(localized: "Mission: \($0)", table: "WatchMain") } ?? ""
         guard let location = model.lastLocation else { return affiliation + mission }
         let meters = Int(location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)))
         return "\(affiliation) · \(meters) m" + mission
+    }
+
+    private func pointRow(_ item: IncomingMapEntity) -> some View {
+        Button { selectedPoint = item } label: {
+            HStack {
+                if item.isAlert {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .red)
+                        .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pointTitle(item))
+                        .lineLimit(2)
+                    Text(pointDetail(item))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     var body: some View {
@@ -1836,22 +1861,20 @@ private struct BloodhoundView: View {
                         Text("No incoming points")
                             .foregroundStyle(.secondary)
                     } else {
+                        let alerts = model.bloodhoundOrderPoints.filter(\.isAlert)
+                        if !alerts.isEmpty {
+                            Section(String(localized: "Active Alert", table: "WatchMain")) {
+                                ForEach(alerts) { item in pointRow(item) }
+                            }
+                        }
                         Section {
                             Button("Remove All", role: .destructive) {
                                 confirmRemoveAll = true
                             }
                         }
                         Section("Incoming Points") {
-                            ForEach(model.bloodhoundOrderPoints) { item in
-                                Button { selectedPoint = item } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
-                                            .lineLimit(2)
-                                        Text(pointDetail(item))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
+                            ForEach(model.bloodhoundOrderPoints.filter { !$0.isAlert }) { item in
+                                pointRow(item)
                             }
                         }
                     }
@@ -1888,6 +1911,9 @@ private struct BloodhoundView: View {
         .onAppear { model.markIncomingPointsSeen() }
         .onChange(of: model.unseenIncomingPointIDs) { _, ids in
             if !ids.isEmpty { model.markIncomingPointsSeen() }
+        }
+        .onChange(of: model.bloodhoundOrderPoints.map(\.id)) { _, ids in
+            if let selectedPoint, !ids.contains(selectedPoint.id) { self.selectedPoint = nil }
         }
         .alert(String(localized: "Bloodhound response", table: "WatchMain"), isPresented: Binding(
             get: { responseError != nil },
