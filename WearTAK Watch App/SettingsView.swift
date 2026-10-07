@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject private var sitxClient: SitxClient
     @State private var showDeveloperModeEnabled = false
+    @State private var showNetworkLockedNotice = false
 
     init(model: WatchSessionModel, settings: AppSettings) {
         self.model = model
@@ -36,8 +37,20 @@ struct SettingsView: View {
             NavigationLink(String(localized: "Callsign and Device Preferences", table: "WatchSettings")) {
                 DevicePreferencesView(settings: settings)
             }
-            NavigationLink(String(localized: "Network Preferences", table: "WatchSettings")) {
-                NetworkPreferencesView(model: model, settings: settings, sitxClient: sitxClient)
+            if settings.networkPreferencesLocked {
+                Button {
+                    showNetworkLockedNotice = true
+                } label: {
+                    Label(String(localized: "Network Preferences", table: "WatchSettings"), systemImage: "lock.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .alert(String(localized: "Network settings locked", table: "WatchSettings"), isPresented: $showNetworkLockedNotice) {
+                    Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) {}
+                }
+            } else {
+                NavigationLink(String(localized: "Network Preferences", table: "WatchSettings")) {
+                    NetworkPreferencesView(model: model, settings: settings, sitxClient: sitxClient)
+                }
             }
             NavigationLink(String(localized: "Alerting Preferences", table: "WatchSettings")) {
                 AlertingPreferencesView(settings: settings)
@@ -53,6 +66,9 @@ struct SettingsView: View {
             }
             if settings.developerMode {
                 Toggle(String(localized: "Developer mode", table: "WatchSettings"), isOn: $settings.developerMode)
+                NavigationLink(String(localized: "Beta Features", table: "WatchSettings")) {
+                    BetaFeaturesView(settings: settings)
+                }
             }
         }
         .navigationTitle(String(localized: "Settings", table: "WatchSettings"))
@@ -60,6 +76,18 @@ struct SettingsView: View {
         .alert(String(localized: "Developer mode enabled", table: "WatchSettings"), isPresented: $showDeveloperModeEnabled) {
             Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) {}
         }
+    }
+}
+
+private struct BetaFeaturesView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            Toggle(String(localized: "Lock Network Preferences", table: "WatchSettings"),
+                   isOn: $settings.networkPreferencesLocked)
+        }
+        .navigationTitle(String(localized: "Beta Features", table: "WatchSettings"))
     }
 }
 
@@ -132,6 +160,7 @@ private struct DevicePreferencesView: View {
                     }
                 }
                 Toggle(String(localized: "Physiological Monitoring", table: "WatchSettings"), isOn: $settings.physiologicalMonitoringEnabled)
+                Toggle("BATDOK", isOn: $settings.batdokCotEnabled)
             }
         }
         .navigationTitle(String(localized: "Callsign and Device Preferences", table: "WatchSettings"))
@@ -519,34 +548,39 @@ struct NetworkPreferencesView: View {
 
     var body: some View {
         List {
-            NavigationLink {
-                RelayProviderView(model: model, settings: settings)
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(String(localized: "TAK Relay (\(settings.relayProvider.localizedName))", table: "WatchSettings", comment: "Settings row. The argument is the selected relay provider name."))
-                    if settings.relayProvider == .companion {
-                        CompanionLinkCaption(client: model.companionClient)
+            if settings.networkPreferencesLocked {
+                Label(String(localized: "Network settings locked", table: "WatchSettings"), systemImage: "lock.fill")
+                    .foregroundStyle(.secondary)
+            } else {
+                NavigationLink {
+                    RelayProviderView(model: model, settings: settings)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "TAK Relay (\(settings.relayProvider.localizedName))", table: "WatchSettings", comment: "Settings row. The argument is the selected relay provider name."))
+                        if settings.relayProvider == .companion {
+                            CompanionLinkCaption(client: model.companionClient)
+                        }
                     }
                 }
-            }
-            NavigationLink {
-                MulticastPreferencesView(settings: settings, client: model.multicastClient, model: model)
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("TAK SA Multicast")
-                    Text(settings.multicastEnabled ? String(localized: "Enabled", table: "WatchSettings") : String(localized: "Disabled", table: "WatchSettings"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                NavigationLink {
+                    MulticastPreferencesView(settings: settings, client: model.multicastClient, model: model)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TAK SA Multicast")
+                        Text(settings.multicastEnabled ? String(localized: "Enabled", table: "WatchSettings") : String(localized: "Disabled", table: "WatchSettings"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            }
-            NavigationLink {
-                SitxDeviceAPIView(settings: settings, client: sitxClient)
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sit(x) TAK")
-                    Text(WatchSettingsStatusText.sitx(sitxClient.status))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                NavigationLink {
+                    SitxDeviceAPIView(settings: settings, client: sitxClient)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sit(x) TAK")
+                        Text(WatchSettingsStatusText.sitx(sitxClient.status))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }

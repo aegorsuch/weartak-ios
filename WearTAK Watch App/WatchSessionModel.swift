@@ -146,7 +146,7 @@ enum PLIReportingRoute {
 protocol TAKTransport {
     var pliReportingRoute: PLIReportingRoute { get }
     func connect() async throws
-    func sendPLI(coordinate: CLLocationCoordinate2D) async throws
+    func sendPLI(coordinate: CLLocationCoordinate2D, reportingInterval: TimeInterval) async throws
     func sendMarker(_ marker: WatchMarker) async throws
     func deleteMarker(uid: String) async throws
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws
@@ -163,7 +163,9 @@ enum TAKTransportError: Error {
 
 struct UnconfiguredTAKTransport: TAKTransport {
     func connect() async throws { throw TAKTransportError.notConfigured }
-    func sendPLI(coordinate: CLLocationCoordinate2D) async throws { throw TAKTransportError.notConfigured }
+    func sendPLI(coordinate: CLLocationCoordinate2D, reportingInterval: TimeInterval) async throws {
+        throw TAKTransportError.notConfigured
+    }
     func sendMarker(_ marker: WatchMarker) async throws { throw TAKTransportError.notConfigured }
     func deleteMarker(uid: String) async throws { throw TAKTransportError.notConfigured }
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws { throw TAKTransportError.notConfigured }
@@ -805,7 +807,6 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     /// Retains the original recipient and GeoChat message ID until its route accepts the message.
     private func sendMapItemReply(_ item: IncomingMapEntity, text: String) async throws {
-        guard settings.chatEnabled else { throw ContactChatFailure.message("Enable Chat in settings.") }
         guard let senderUID = item.senderUID, !senderUID.isEmpty, senderUID != SitxClient.deviceID() else {
             throw ContactChatFailure.message("This point has no sender to reply to.")
         }
@@ -828,7 +829,6 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func chatUnavailableReason(for contact: IncomingMapEntity) -> String? {
-        if !settings.chatEnabled { return "Enable Chat in settings." }
         if !contact.isUser { return "Chat is available for user contacts only." }
         guard contact.chatRoute != nil else { return "The contact's chat transport is unknown." }
         return nil
@@ -840,7 +840,6 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard contact != nil || contactMessages[conversation] != nil else {
             throw ContactChatFailure.message("This contact is no longer available on that transport.")
         }
-        guard settings.chatEnabled else { throw ContactChatFailure.message("Enable Chat in settings.") }
         if let contact, let reason = chatUnavailableReason(for: contact) { throw ContactChatFailure.message(reason) }
         let ownUID = SitxClient.deviceID()
         let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
@@ -861,7 +860,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let ownUID = SitxClient.deviceID()
         let other = message.senderUID == ownUID ? message.recipientUID : message.senderUID
         let key = ContactConversation(uid: other, route: route)
-        if chatInbox.record(message, conversation: key, ownUID: ownUID), settings.chatEnabled {
+        if chatInbox.record(message, conversation: key, ownUID: ownUID) {
             WKInterfaceDevice.current().play(.notification)
             chatLogger.notice("New unread GeoChat recorded; notification haptic requested")
         }
@@ -1576,12 +1575,6 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         #if DEBUG && targetEnvironment(simulator)
         stepSimulatedBiometrics()
         #endif
-        guard transport.pliReportingRoute == .standaloneSitx else {
-            Task {
-                try? await transport.sendPLI(coordinate: location.coordinate)
-            }
-            return
-        }
         let hasActiveAlert = activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
         let interval: TimeInterval
         if hasActiveAlert {
@@ -1597,12 +1590,18 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         }
 
         let effectiveInterval = settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)
+        guard transport.pliReportingRoute == .standaloneSitx else {
+            Task {
+                try? await transport.sendPLI(coordinate: location.coordinate, reportingInterval: effectiveInterval)
+            }
+            return
+        }
         guard lastPLISentAt.map({ Date().timeIntervalSince($0) >= effectiveInterval }) ?? true else { return }
         isSendingPLI = true
         Task {
             defer { isSendingPLI = false }
             do {
-                try await transport.sendPLI(coordinate: location.coordinate)
+                try await transport.sendPLI(coordinate: location.coordinate, reportingInterval: effectiveInterval)
                 lastPLISentAt = Date()
             } catch {
                 if !sitxClient.hasReadyOutput { connectionState = .failed }
@@ -1619,6 +1618,8 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             startSimulatedBiometrics()
         }
         #endif
+        biometrics.ageYears = Calendar.current.component(.year, from: Date()) - settings.birthYear
+        biometrics.batdokCotEnabled = settings.batdokCotEnabled
         sitxClient.biometrics = biometrics
         companionClient.setBiometrics(biometrics)
     }

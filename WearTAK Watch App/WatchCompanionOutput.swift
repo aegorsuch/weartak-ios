@@ -136,8 +136,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     /// Phone-GPS PLI carries these vitals; context updates are limited to about one per 30 s.
     func setBiometrics(_ biometrics: WatchBiometrics) {
         guard self.biometrics != biometrics else { return }
+        let profileChanged = self.biometrics.ageYears != biometrics.ageYears ||
+            self.biometrics.batdokCotEnabled != biometrics.batdokCotEnabled
         self.biometrics = biometrics
-        guard usesCompanion, publishedBiometricsAt.map({ Date().timeIntervalSince($0) >= 25 }) ?? true else { return }
+        guard usesCompanion,
+              profileChanged || (publishedBiometricsAt.map({ Date().timeIntervalSince($0) >= 25 }) ?? true) else { return }
         publishIdentity(force: true)
     }
 

@@ -110,6 +110,14 @@ struct ContentView: View {
                 physiology.stopSensing()
             }
         }
+        .onChange(of: settings.batdokCotEnabled) { _, _ in
+            model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent,
+                                   measuredAt: physiology.readingDate)
+        }
+        .onChange(of: settings.birthYear) { _, _ in
+            model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent,
+                                   measuredAt: physiology.readingDate)
+        }
         .onChange(of: settings.environmentalAlertsEnabled) { _, enabled in
             if enabled && scenePhase == .active {
                 environment.startMonitoring()
@@ -162,6 +170,7 @@ private struct WatchDashboardView: View {
     @ObservedObject var physiology: PhysiologyMonitor
     @ObservedObject var settings: AppSettings
     let dropPoint: () -> Void
+    @State private var showNetworkLockedNotice = false
 
     private let accent = Color(red: 0.67, green: 0.80, blue: 0.98)
 
@@ -208,6 +217,9 @@ private struct WatchDashboardView: View {
         .onDisappear {
             physiology.stopViewing()
         }
+        .alert(String(localized: "Network settings locked", table: "WatchSettings"), isPresented: $showNetworkLockedNotice) {
+            Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) {}
+        }
     }
 
     private var metricAccessibilityText: String {
@@ -240,12 +252,23 @@ private struct WatchDashboardView: View {
     private func statusHeader(small: Bool) -> some View {
         HStack(spacing: 6) {
             VStack(spacing: small ? 2 : 3) {
-                DashboardTAKIndicator(model: model, settings: settings)
+                DashboardTAKIndicator(model: model, settings: settings) {
+                    showNetworkLockedNotice = true
+                }
                     .frame(width: 28, height: small ? 20 : 24)
-                NavigationLink {
-                    NetworkPreferencesView(model: model, settings: settings, sitxClient: model.sitxClient)
-                } label: {
-                    DashboardNetworkIndicator(model: model, small: small)
+                if settings.networkPreferencesLocked {
+                    Button { showNetworkLockedNotice = true } label: {
+                        DashboardNetworkIndicator(model: model, small: small)
+                            .overlay(alignment: .topTrailing) {
+                                Image(systemName: "lock.fill").font(.system(size: 7))
+                            }
+                    }
+                } else {
+                    NavigationLink {
+                        NetworkPreferencesView(model: model, settings: settings, sitxClient: model.sitxClient)
+                    } label: {
+                        DashboardNetworkIndicator(model: model, small: small)
+                    }
                 }
             }
             Spacer(minLength: 0)
@@ -334,24 +357,22 @@ private struct WatchDashboardView: View {
 
     private func shortcutRow(small: Bool) -> some View {
         HStack(spacing: 10) {
-            if settings.chatEnabled {
-                NavigationLink {
-                    ChatView(model: model, settings: settings)
-                } label: {
-                    roundControl("message.fill", color: accent, size: small ? 28 : 34)
-                        .overlay(alignment: .topTrailing) {
-                            if model.unreadChatCount > 0 {
-                                Text(model.unreadChatCount > 99 ? "99+" : "\(model.unreadChatCount)")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(3)
-                                    .background(.red, in: Capsule())
-                                    .offset(x: 4, y: -3)
-                            }
+            NavigationLink {
+                ChatView(model: model, settings: settings)
+            } label: {
+                roundControl("message.fill", color: accent, size: small ? 28 : 34)
+                    .overlay(alignment: .topTrailing) {
+                        if model.unreadChatCount > 0 {
+                            Text(model.unreadChatCount > 99 ? "99+" : "\(model.unreadChatCount)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(3)
+                                .background(.red, in: Capsule())
+                                .offset(x: 4, y: -3)
                         }
-                }
-                .accessibilityLabel(String(localized: "Chat, \(model.unreadChatCount) unread messages", table: "WatchMain"))
+                    }
             }
+            .accessibilityLabel(String(localized: "Chat, \(model.unreadChatCount) unread messages", table: "WatchMain"))
             NavigationLink {
                 SettingsView(model: model, settings: settings)
             } label: {
@@ -594,13 +615,15 @@ private struct DashboardTAKIndicator: View {
     @ObservedObject var sitx: SitxClient
     @ObservedObject var multicast: MulticastTAKTransport
     @ObservedObject var companion: WatchCompanionOutput
+    let showNetworkLockedNotice: () -> Void
 
-    init(model: WatchSessionModel, settings: AppSettings) {
+    init(model: WatchSessionModel, settings: AppSettings, showNetworkLockedNotice: @escaping () -> Void) {
         self.model = model
         self.settings = settings
         sitx = model.sitxClient
         multicast = model.multicastClient
         companion = model.companionClient
+        self.showNetworkLockedNotice = showNetworkLockedNotice
     }
 
     var body: some View {
@@ -614,10 +637,7 @@ private struct DashboardTAKIndicator: View {
         )
         let badge = DashboardServerBadge.resolve(status: state,
             phoneLink: settings.relayProvider == .companion ? companion.linkState : nil)
-        NavigationLink {
-            NetworkPreferencesView(model: model, settings: settings, sitxClient: sitx)
-        } label: {
-            ZStack(alignment: .bottomTrailing) {
+        let indicator = ZStack(alignment: .bottomTrailing) {
                 if state.usesServerIcon {
                     Image("TAKLogo")
                         .resizable()
@@ -633,6 +653,22 @@ private struct DashboardTAKIndicator: View {
                           ? "network" : DashboardTAKTransport.multicast.symbol)
                         .font(.system(size: 19))
                         .foregroundStyle(state.isConnected ? Color(red: 0.67, green: 0.80, blue: 0.98) : .gray)
+                }
+            }
+        Group {
+            if settings.networkPreferencesLocked {
+                Button {
+                    showNetworkLockedNotice()
+                } label: {
+                    indicator.overlay(alignment: .topTrailing) {
+                        Image(systemName: "lock.fill").font(.system(size: 7))
+                    }
+                }
+            } else {
+                NavigationLink {
+                    NetworkPreferencesView(model: model, settings: settings, sitxClient: sitx)
+                } label: {
+                    indicator
                 }
             }
         }

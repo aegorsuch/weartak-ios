@@ -110,6 +110,11 @@ struct SitxProtocolChecks {
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         precondition(!settings.developerMode)
+        precondition(!settings.networkPreferencesLocked)
+        settings.networkPreferencesLocked = true
+        precondition(AppSettings(defaults: defaults).networkPreferencesLocked)
+        settings.networkPreferencesLocked = false
+        precondition(!AppSettings(defaults: defaults).networkPreferencesLocked)
         for _ in 0..<6 { precondition(!settings.registerVersionTap()) }
         precondition(!settings.developerMode)
         settings.resetVersionTaps()
@@ -123,6 +128,7 @@ struct SitxProtocolChecks {
         precondition(settings.registerVersionTap())
         settings.developerMode = false
         print("PASS: developer mode hidden default, seven-tap threshold, reset, persistence and disabling")
+        print("PASS: network preferences lock defaults unlocked and persists changes")
         precondition(DashboardPhysiologySeverity.resolve(warningActive: false, alertActive: false) == .normal)
         precondition(DashboardPhysiologySeverity.resolve(warningActive: true, alertActive: false) == .warning)
         precondition(DashboardPhysiologySeverity.resolve(warningActive: false, alertActive: true) == .alert)
@@ -304,6 +310,12 @@ struct SitxProtocolChecks {
         settings.mapButtonsVisible = true
         precondition(AppSettings(defaults: defaults).mapButtonsVisible)
         print("PASS: map-buttons default and visibility persistence")
+        precondition(settings.batdokCotEnabled)
+        settings.batdokCotEnabled = false
+        precondition(!AppSettings(defaults: defaults).batdokCotEnabled)
+        settings.batdokCotEnabled = true
+        precondition(AppSettings(defaults: defaults).batdokCotEnabled)
+        print("PASS: BATDOK CoT default and preference persistence")
         precondition(TeamColor(cotName: "dark_green")?.localizedName == TeamColor.darkGreen.localizedName)
         precondition(AppSettings.localizedMapRole(" medic ") == AppSettings.localizedOption("Medic"))
         precondition(AppSettings.localizedMapRole("TEAM MEMBER") == AppSettings.localizedOption("Team Member"))
@@ -608,7 +620,7 @@ struct SitxProtocolChecks {
         try await client.connect()
         precondition(client.hasReadyOutput)
         client.biometrics = WatchBiometrics(heartRate: 88, exertion: 47, measuredAt: Date())
-        try await client.sendPLI(coordinate: marker.coordinate)
+        try await client.sendPLI(coordinate: marker.coordinate, reportingInterval: 30)
         try await client.sendEmergencyAlert(state: .alert, type: "Multicast alert")
         try await client.sendEmergencyAlert(state: .cancel, type: "Multicast alert")
         try await client.sendMarker(marker)
@@ -633,7 +645,7 @@ struct SitxProtocolChecks {
         precondition(multicastCancel.attributes["emergency"]?.first?["cancel"] == "true")
         output.failSend = true
         do {
-            try await client.sendPLI(coordinate: marker.coordinate)
+            try await client.sendPLI(coordinate: marker.coordinate, reportingInterval: 30)
             fatalError("All failed outputs must report a failure")
         } catch {}
         output.failSend = false
@@ -650,7 +662,7 @@ struct SitxProtocolChecks {
         client.isPhoneReachable = true
         settings.sitxEnabled = false
         try await client.connect()
-        try await client.sendPLI(coordinate: marker.coordinate)
+        try await client.sendPLI(coordinate: marker.coordinate, reportingInterval: 30)
         try await client.sendEmergencyAlert(state: .alert, type: "Companion test")
         precondition(phoneOutput.messages.count == 2 && client.hasReadyOutput)
         let relayedPLI = try fields(phoneOutput.messages[0])

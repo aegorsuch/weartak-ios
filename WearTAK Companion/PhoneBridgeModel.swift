@@ -25,6 +25,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var phoneReporting = PhoneReportingStatus()
     /// Non-nil when location settings will let the watch's TAK link drop while the phone is locked.
     @Published private(set) var backgroundAdvice: String?
+    @Published var developerMode: Bool {
+        didSet {
+            developerModeTaps = 0
+            defaults.set(developerMode, forKey: Self.developerModeKey)
+        }
+    }
+    @Published var adminLockEnabled: Bool {
+        didSet { defaults.set(adminLockEnabled, forKey: Self.adminLockKey) }
+    }
+    private var developerModeTaps = 0
 
     struct ServerState {
         var configured = false
@@ -61,6 +71,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var chatBuffer = CompanionChatBuffer()
     private var lastMapEventReceivedAt: Date?
     private static let mapStorageKey = "WearTAK.companion.mapCache"
+    private static let developerModeKey = "WearTAK.companion.developerMode"
+    private static let adminLockKey = "WearTAK.companion.adminLock"
     // An active phone location session keeps Companion running, so server sessions stay up while it reports.
     private var canRelay: Bool { active || backgroundTask != .invalid || reporter.isRunning }
     private let reporter: PhoneLocationReporter
@@ -85,6 +97,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
+        developerMode = defaults.bool(forKey: Self.developerModeKey)
+        adminLockEnabled = defaults.bool(forKey: Self.adminLockKey)
         reporter = PhoneLocationReporter(defaults: defaults)
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
@@ -143,6 +157,19 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             WCSession.default.delegate = self
             WCSession.default.activate()
         }
+    }
+
+    @discardableResult
+    func registerDeveloperModeTap() -> Bool {
+        guard !developerMode else { return false }
+        developerModeTaps += 1
+        guard developerModeTaps == 7 else { return false }
+        developerMode = true
+        return true
+    }
+
+    func resetDeveloperModeTaps() {
+        developerModeTaps = 0
     }
 
     func save(_ server: CompanionServer) throws {
@@ -525,7 +552,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                   current.hasSameSettings(as: identity) else { return }
             self.phoneReportsByServer.merge(delivered) { _, latest in latest }
             if !delivered.isEmpty {
-                self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s); vitals \((biometrics ?? WatchBiometrics()).fresh().remarks, privacy: .public)")
+                self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s); vitals \((biometrics ?? WatchBiometrics()).fresh(reportingInterval: interval).remarks, privacy: .public)")
                 self.lastPhoneReportAt = Date()
                 self.phoneReporting.lastReportAt = self.lastPhoneReportAt
             }

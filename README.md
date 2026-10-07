@@ -244,6 +244,12 @@ relative altitude, and pressure where supported. Physiological sensing and
 automatic alerts have separate preferences. Alert thresholds and durations are
 configurable. The watch target requires the HealthKit capability when signing
 for a device. Sensor monitoring and direct reporting stop in the background.
+Position reports expire, and physiological values in them are marked
+unavailable, after two reporting intervals plus 15 seconds. The BATDOK
+preference controls whether PLI includes an `_atmist_` vital-sign element and
+the `<biometrics>` block; it defaults on to match Wear OS.
+Network Preferences can be locked from the developer-only Beta Features page;
+the lock blocks its Settings and dashboard shortcuts.
 
 The watch Info.plist includes both HealthKit read and update purpose strings
 required by App Store validation. The current monitor requests read access only
@@ -408,6 +414,11 @@ and local multicast without Companion.
   its timestamp (kept after a reconnect), the certificate expiry, Reconnect Now
   and Copy Details, which copies a plain-text report to paste into a chat or
   ticket.
+  An optional developer mode is enabled by tapping the version at the bottom
+  of the main screen seven times. Its Beta Features page can lock server
+  configuration, including Sit(x), while keeping connection status and
+  reconnect controls available. This is an in-app editing safeguard, not
+  authentication against someone with access to the phone.
 3. On the watch, select Companion in Settings > Network Preferences > TAK
   Relay. Open the watch app while the paired phone is in range. A watch request
   can wake Companion for a short refresh while the phone is locked.

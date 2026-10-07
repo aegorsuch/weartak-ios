@@ -105,6 +105,7 @@ enum WiFiBatteryPolicy: String, CaseIterable, Identifiable {
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let developerMode = "WearTAK.developerMode"
+        static let networkPreferencesLocked = "WearTAK.networkPreferencesLocked"
         static let dashboardMetric = "WearTAK.dashboardMetric"
         static let mapButtonsVisible = "WearTAK.mapButtonsVisible"
         static let hiddenMapTeams = "WearTAK.hiddenMapTeams"
@@ -121,7 +122,6 @@ final class AppSettings: ObservableObject {
         static let vehicleReportingInterval = "WearTAK.vehicleReportingInterval"
         static let alertingReportingInterval = "WearTAK.alertingReportingInterval"
         static let constantReportingInterval = "WearTAK.constantReportingInterval"
-        static let chatEnabled = "WearTAK.chatEnabled"
         static let relayProvider = "WearTAK.relayProvider"
         static let sitxApiHost = "WearTAK.sitxApiHost"
         static let sitxEnabled = "WearTAK.sitxEnabled"
@@ -147,6 +147,7 @@ final class AppSettings: ObservableObject {
         static let batteryAlertsEnabled = "WearTAK.batteryAlertsEnabled"
         static let physiologicalAlertsEnabled = "WearTAK.physiologicalAlertsEnabled"
         static let physiologicalMonitoringEnabled = "WearTAK.physiologicalMonitoringEnabled"
+        static let batdokCotEnabled = "WearTAK.batdokCotEnabled"
         static let bloodhoundProximityRadius = "WearTAK.bloodhoundProximityRadius"
         static let bloodhoundProximityVibrationEnabled = "WearTAK.bloodhoundProximityVibrationEnabled"
         static let bloodhoundProximityIntensity = "WearTAK.bloodhoundProximityIntensity"
@@ -177,6 +178,10 @@ final class AppSettings: ObservableObject {
             developerUnlockTaps = 0
             defaults.set(developerMode, forKey: Keys.developerMode)
         }
+    }
+
+    @Published var networkPreferencesLocked: Bool {
+        didSet { defaults.set(networkPreferencesLocked, forKey: Keys.networkPreferencesLocked) }
     }
 
     @discardableResult
@@ -265,10 +270,6 @@ final class AppSettings: ObservableObject {
 
     @Published var constantReportingInterval: Int {
         didSet { setReportingInterval(constantReportingInterval, key: Keys.constantReportingInterval) }
-    }
-
-    @Published var chatEnabled: Bool {
-        didSet { defaults.set(chatEnabled, forKey: Keys.chatEnabled) }
     }
 
     @Published var relayProvider: RelayProvider {
@@ -444,6 +445,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(physiologicalMonitoringEnabled, forKey: Keys.physiologicalMonitoringEnabled) }
     }
 
+    @Published var batdokCotEnabled: Bool {
+        didSet { defaults.set(batdokCotEnabled, forKey: Keys.batdokCotEnabled) }
+    }
+
     @Published var bloodhoundProximityRadius: Int {
         didSet {
             let clamped = min(max(bloodhoundProximityRadius, 10), 200)
@@ -535,6 +540,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         developerMode = defaults.bool(forKey: Keys.developerMode)
+        networkPreferencesLocked = defaults.bool(forKey: Keys.networkPreferencesLocked)
         dashboardMetric = DashboardMetric(rawValue: defaults.string(forKey: Keys.dashboardMetric) ?? "") ?? .exertion
         mapButtonsVisible = defaults.object(forKey: Keys.mapButtonsVisible) as? Bool ?? true
         hiddenMapTeams = Set(defaults.stringArray(forKey: Keys.hiddenMapTeams) ?? [])
@@ -551,8 +557,7 @@ final class AppSettings: ObservableObject {
         teamColor = TeamColor(rawValue: defaults.string(forKey: Keys.teamColor) ?? "White") ?? .white
         roleGroup = defaults.string(forKey: Keys.roleGroup).flatMap(UserRoleGroup.init(rawValue:))
         role = defaults.string(forKey: Keys.role) ?? ""
-        chatEnabled = true
-        defaults.removeObject(forKey: Keys.chatEnabled)
+        defaults.removeObject(forKey: "WearTAK.chatEnabled")
         let storedRelayProvider = defaults.string(forKey: Keys.relayProvider)
         if storedRelayProvider == "TAK Aware Relay" {
             relayProvider = .takAwareRelay
@@ -589,6 +594,7 @@ final class AppSettings: ObservableObject {
         batteryAlertsEnabled = defaults.object(forKey: Keys.batteryAlertsEnabled) as? Bool ?? false
         physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? false
         physiologicalMonitoringEnabled = defaults.object(forKey: Keys.physiologicalMonitoringEnabled) as? Bool ?? true
+        batdokCotEnabled = defaults.object(forKey: Keys.batdokCotEnabled) as? Bool ?? true
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true
         bloodhoundProximityIntensity = defaults.string(forKey: Keys.bloodhoundProximityIntensity) ?? "Single Burst"

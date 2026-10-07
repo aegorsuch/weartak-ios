@@ -104,19 +104,31 @@ struct WatchReportingIdentity: Codable, Equatable {
 /// Wire format matches WearOS WearTAK: readable `<remarks>` plus a structured `<biometrics>` block.
 struct WatchBiometrics: Codable, Equatable {
     nonisolated static let contextKey = "WearTAKWatch.biometrics"
-    static let maximumAge: TimeInterval = 300
+    static let staleGrace: TimeInterval = 15
     static let deviceModel = "WATCHOS"
 
     var heartRate: Int?
     var exertion: Int?
     var measuredAt: Date?
+    var ageYears: Int? = nil
+    var batdokCotEnabled: Bool? = nil
 
-    /// Readings older than five minutes (or from the future) are reported as N/A.
-    func fresh(now: Date = Date()) -> Self {
-        guard let measuredAt, now.timeIntervalSince(measuredAt) <= Self.maximumAge,
-              measuredAt.timeIntervalSince(now) <= WatchReportingIdentity.maximumClockSkew else { return Self() }
+    var includesBatdok: Bool { batdokCotEnabled ?? true }
+
+    static func staleLifetime(reportingInterval: TimeInterval) -> TimeInterval {
+        max(reportingInterval, 1) * 2 + staleGrace
+    }
+
+    /// Readings older than two reporting intervals plus 15 seconds (or from the future) are N/A.
+    func fresh(reportingInterval: TimeInterval, now: Date = Date()) -> Self {
+        let maximumAge = Self.staleLifetime(reportingInterval: reportingInterval)
+        guard let measuredAt, now.timeIntervalSince(measuredAt) <= maximumAge,
+              measuredAt.timeIntervalSince(now) <= WatchReportingIdentity.maximumClockSkew else {
+            return Self(ageYears: ageYears, batdokCotEnabled: batdokCotEnabled)
+        }
         return Self(heartRate: heartRate.flatMap { (1...300).contains($0) ? $0 : nil },
-                    exertion: exertion.flatMap { (0...250).contains($0) ? $0 : nil }, measuredAt: measuredAt)
+                    exertion: exertion.flatMap { (0...250).contains($0) ? $0 : nil }, measuredAt: measuredAt,
+                    ageYears: ageYears, batdokCotEnabled: batdokCotEnabled)
     }
 
     var remarks: String {
@@ -125,13 +137,23 @@ struct WatchBiometrics: Codable, Equatable {
 
     /// `<biometrics>` device element; `alertAttributes` are already-escaped attributes for alert events.
     func biometricsElement(uid: String, alertAttributes: String = "") -> String {
-        "<biometrics\(alertAttributes)><device><model>\(Self.deviceModel)</model><uid>\(PhonePLI.escape(uid))</uid>" +
+        guard includesBatdok else { return "" }
+        return "<biometrics\(alertAttributes)><device><model>\(Self.deviceModel)</model><uid>\(PhonePLI.escape(uid))</uid>" +
             "<hr>\(heartRate.map(String.init) ?? "N/A")</hr>" +
             "<exert>\(exertion.map(String.init) ?? "N/A")</exert></device></biometrics>"
     }
 
-    func pliDetail(uid: String) -> String {
-        "<remarks>\(remarks)</remarks>" + biometricsElement(uid: uid)
+    func pliDetail(uid: String, now: Date = Date(), reportingInterval: TimeInterval = 60) -> String {
+        let stale = ISO8601DateFormatter().string(from: now.addingTimeInterval(Self.staleLifetime(reportingInterval: reportingInterval)))
+        let atmist: String
+        if includesBatdok, let ageYears, ageYears >= 0, let heartRate {
+            let time = ISO8601DateFormatter().string(from: now)
+            atmist = "<_atmist_ age=\"\(ageYears)\" timeOfIncident=\"\(time)\">" +
+                "<vitalSign index=\"0\" timestamp=\"\(stale)\">(HR,\(heartRate),\(time))</vitalSign></_atmist_>"
+        } else {
+            atmist = ""
+        }
+        return "<remarks>\(remarks)</remarks>" + atmist + biometricsElement(uid: uid)
     }
 
     func contextValue() throws -> Data { try JSONEncoder().encode(self) }
@@ -174,7 +196,9 @@ enum PhoneReportingPolicy {
     }
 
     static func staleLifetime(interval: TimeInterval) -> TimeInterval {
-        min(max(interval, minimumInterval), maximumInterval) * 3 + 60
+        WatchBiometrics.staleLifetime(
+            reportingInterval: min(max(interval, minimumInterval), maximumInterval)
+        )
     }
 
     static func validate(_ fix: PhoneLocationFix, now: Date = Date()) throws {
@@ -310,7 +334,10 @@ enum PhonePLI {
         if fix.speed >= 0, fix.course >= 0 {
             detail += "<track course=\"\(number(fix.course))\" speed=\"\(number(fix.speed))\"/>"
         }
-        if let biometrics { detail += biometrics.fresh(now: now).pliDetail(uid: identity.uid) }
+        if let biometrics {
+            detail += biometrics.fresh(reportingInterval: interval, now: now)
+                .pliDetail(uid: identity.uid, now: now, reportingInterval: interval)
+        }
         return "<event version=\"2.0\" uid=\"\(escape(identity.uid))\" type=\"\(type)\" time=\"\(time)\" start=\"\(start)\" stale=\"\(stale)\" how=\"m-g\">" +
             "<point lat=\"\(number(fix.latitude, digits: 7))\" lon=\"\(number(fix.longitude, digits: 7))\" hae=\"\(hae)\" ce=\"\(number(fix.horizontalAccuracy))\" le=\"\(le)\"/>" +
             "<detail>\(detail)</detail></event>"

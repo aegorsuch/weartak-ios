@@ -80,8 +80,9 @@ struct PhoneLocationReportingChecks {
         legacyPayload.removeValue(forKey: "alertActive")
         let legacy = try WatchReportingIdentity.decode(contextValue: JSONSerialization.data(withJSONObject: legacyPayload))
         precondition(legacy == identity)
-        precondition(PhoneReportingPolicy.staleLifetime(interval: 30) == 150)
-        precondition(PhoneReportingPolicy.staleLifetime(interval: 86_400) == 1_860)
+        precondition(PhoneReportingPolicy.staleLifetime(interval: 30) == 75)
+        precondition(PhoneReportingPolicy.staleLifetime(interval: 86_400) == 1_215)
+        precondition(WatchBiometrics.staleLifetime(reportingInterval: 30) == 75)
         precondition(PhoneReportingPolicy.isDue(lastSentAt: nil, interval: 30, now: now))
         precondition(!PhoneReportingPolicy.isDue(lastSentAt: now.addingTimeInterval(-29), interval: 30, now: now))
         precondition(PhoneReportingPolicy.isDue(lastSentAt: now.addingTimeInterval(-30), interval: 30, now: now))
@@ -111,7 +112,7 @@ struct PhoneLocationReportingChecks {
         precondition(PhonePLI.header(xml)! == (uid, "a-f-G-U-C"))
         precondition(xml.contains("time=\"2027-01-15T08:00:00.000Z\""), xml)
         precondition(xml.contains("start=\"2027-01-15T07:59:57.000Z\""), xml)
-        precondition(xml.contains("stale=\"2027-01-15T08:02:30.000Z\""), xml)
+        precondition(xml.contains("stale=\"2027-01-15T08:01:15.000Z\""), xml)
         precondition(xml.contains("how=\"m-g\""))
         precondition(xml.contains("<point lat=\"38.8977000\" lon=\"-77.0365000\" hae=\"21.5\" ce=\"8.0\" le=\"4.0\"/>"), xml)
         precondition(xml.contains("<contact callsign=\"ODIN &lt;1&gt;\" endpoint=\"*:-1:stcp\"/>"))
@@ -134,15 +135,29 @@ struct PhoneLocationReportingChecks {
 
         // Watch biometrics: WearOS-compatible remarks and <biometrics>; stale or missing vitals become N/A.
         precondition(!xml.contains("<biometrics"))
-        let vitals = WatchBiometrics(heartRate: 72, exertion: 38, measuredAt: now.addingTimeInterval(-60))
+        let vitals = WatchBiometrics(heartRate: 72, exertion: 38, measuredAt: now.addingTimeInterval(-60),
+                                     ageYears: 35, batdokCotEnabled: true)
         let decodedVitals = WatchBiometrics.decode(contextValue: try vitals.contextValue())
         precondition(decodedVitals == vitals)
         let bio = PhonePLI.event(identity: identity, fix: fix, interval: 30, appVersion: "1", osVersion: "iOS",
                                  biometrics: vitals, now: now)
         precondition(bio.contains("<remarks>Exert:38%;HR:72</remarks>"), bio)
+        precondition(bio.contains("<_atmist_ age=\"35\""), bio)
+        precondition(bio.contains("(HR,72,"), bio)
+        precondition(bio.contains("</_atmist_>"), bio)
         precondition(bio.contains("<biometrics><device><model>WATCHOS</model><uid>\(uid)</uid><hr>72</hr><exert>38</exert></device></biometrics>"), bio)
         precondition(CoTStreamFramer.isEvent(Data(bio.utf8)))
-        var oldVitals = vitals; oldVitals.measuredAt = now.addingTimeInterval(-301)
+        var batdokDisabledVitals = vitals
+        batdokDisabledVitals.batdokCotEnabled = false
+        let batdokDisabled = PhonePLI.event(identity: identity, fix: fix, interval: 30, appVersion: "1", osVersion: "iOS",
+                                            biometrics: batdokDisabledVitals, now: now)
+        precondition(batdokDisabled.contains("<remarks>Exert:38%;HR:72</remarks>"), batdokDisabled)
+        precondition(!batdokDisabled.contains("<_atmist_") && !batdokDisabled.contains("<biometrics"), batdokDisabled)
+        var cutoffVitals = vitals; cutoffVitals.measuredAt = now.addingTimeInterval(-75)
+        let atCutoff = PhonePLI.event(identity: identity, fix: fix, interval: 30, appVersion: "1", osVersion: "iOS",
+                                      biometrics: cutoffVitals, now: now)
+        precondition(atCutoff.contains("<hr>72</hr>"), atCutoff)
+        var oldVitals = cutoffVitals; oldVitals.measuredAt = now.addingTimeInterval(-76)
         let stale = PhonePLI.event(identity: identity, fix: fix, interval: 30, appVersion: "1", osVersion: "iOS",
                                    biometrics: oldVitals, now: now)
         precondition(stale.contains("<remarks>Exert:N/A%;HR:N/A</remarks>") && stale.contains("<hr>N/A</hr>"), stale)

@@ -87,6 +87,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     var companionOutput: (any CoTOutput)?
     /// Latest watch vitals; stale readings are sent as N/A.
     var biometrics = WatchBiometrics()
+    private var biometricsReportingInterval: TimeInterval = 60
     var isSitxConnected: Bool {
         settings.sitxEnabled && !isPhoneReachable && socket != nil && status == State.connected
     }
@@ -451,16 +452,19 @@ final class SitxClient: ObservableObject, TAKTransport {
         if !delivered { throw failure }
     }
 
-    func sendPLI(coordinate: CLLocationCoordinate2D) async throws {
+    func sendPLI(coordinate: CLLocationCoordinate2D, reportingInterval: TimeInterval = 60) async throws {
+        biometricsReportingInterval = reportingInterval
+        let now = Date()
         let os = ProcessInfo.processInfo.operatingSystemVersion
         let detail = SitxCoT.pliDetail(
             uid: Self.deviceID(), callSign: settings.callSign, team: settings.teamColor.rawValue, role: settings.role,
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
-            osVersion: "watchOS \(os.majorVersion).\(os.minorVersion)") + biometrics.fresh().pliDetail(uid: Self.deviceID())
-        let lifetime = TimeInterval(max(settings.stationaryReportingInterval, settings.constantReportingInterval,
-                                        settings.onFootReportingInterval, settings.vehicleReportingInterval)) * 6 + 120
+            osVersion: "watchOS \(os.majorVersion).\(os.minorVersion)") +
+            biometrics.fresh(reportingInterval: reportingInterval, now: now)
+                .pliDetail(uid: Self.deviceID(), now: now, reportingInterval: reportingInterval)
+        let lifetime = WatchBiometrics.staleLifetime(reportingInterval: reportingInterval)
         try await deliver(SitxCoT.event(uid: Self.deviceID(), type: SitxCoT.pliType, coordinate: coordinate,
-                                      detail: detail, lifetime: lifetime))
+                                      detail: detail, lifetime: lifetime, now: now))
     }
 
     func sendMarker(_ marker: WatchMarker) async throws {
@@ -501,7 +505,7 @@ final class SitxClient: ObservableObject, TAKTransport {
         let emergency = cancel ? "<emergency cancel=\"true\">\(SitxCoT.escape(settings.callSign))</emergency>"
             : "<emergency type=\"\(SitxCoT.escape(type))\">\(SitxCoT.escape(settings.callSign))</emergency>"
         let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\"/><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/><remarks>\(SitxCoT.escape(type))</remarks>" +
-            biometrics.fresh().biometricsElement(uid: Self.deviceID(),
+            biometrics.fresh(reportingInterval: biometricsReportingInterval).biometricsElement(uid: Self.deviceID(),
                 alertAttributes: " alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertCategory=\"\(SitxCoT.escape(type))\" alertPriority=\"1\" alertDescription=\"\(SitxCoT.escape(type))\"") + emergency
         return SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
                             detail: detail, lifetime: 86_400)

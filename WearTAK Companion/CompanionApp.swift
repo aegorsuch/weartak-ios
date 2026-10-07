@@ -15,6 +15,7 @@ struct CompanionSetupView: View {
     @State private var serverToRemove: CompanionServer?
     @State private var confirmRemove = false
     @State private var errorText: String?
+    @State private var showDeveloperModeEnabled = false
 
     init() {
         #if DEBUG
@@ -63,6 +64,11 @@ struct CompanionSetupView: View {
                     }
                 }
                 Section(String(localized: "TAK Servers", table: "CompanionApp")) {
+                    if bridge.adminLockEnabled {
+                        Label("Server admin lock is on; configuration is read-only.", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if bridge.servers.isEmpty {
                         Text("No servers configured", tableName: "CompanionApp")
                             .foregroundStyle(.secondary)
@@ -78,7 +84,7 @@ struct CompanionSetupView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(String(localized: "Edit server \(server.host)", table: "CompanionApp"))
+                            .accessibilityLabel(String(localized: bridge.adminLockEnabled ? "View server status for \(server.host)" : "Edit server \(server.host)", table: "CompanionApp"))
                             if server.enabled, bridge.serverStates[server.id]?.detail != "Connecting" {
                                 Button { bridge.reconnect(id: server.id) } label: {
                                     Image(systemName: "arrow.clockwise")
@@ -89,30 +95,54 @@ struct CompanionSetupView: View {
                             Toggle(String(localized: "Enable \(server.host)", table: "CompanionApp"), isOn: Binding(
                                 get: { bridge.servers.first { $0.id == server.id }?.enabled ?? false },
                                 set: { enabled in
+                                    guard !bridge.adminLockEnabled else { return }
                                     do { try bridge.setEnabled(enabled, id: server.id) }
                                     catch { errorText = error.localizedDescription }
                                 }
                             ))
                             .labelsHidden()
-                            Button(role: .destructive) {
-                                serverToRemove = server
-                                confirmRemove = true
-                            } label: {
-                                Image(systemName: "trash")
+                            .disabled(bridge.adminLockEnabled)
+                            if !bridge.adminLockEnabled {
+                                Button(role: .destructive) {
+                                    serverToRemove = server
+                                    confirmRemove = true
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel(String(localized: "Remove server \(server.host)", table: "CompanionApp"))
                             }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel(String(localized: "Remove server \(server.host)", table: "CompanionApp"))
                         }
                     }
-                    Button { editor = ServerEditorRoute(server: nil) } label: {
-                        Label(String(localized: "Add Server", table: "CompanionApp"), systemImage: "plus")
+                    if !bridge.adminLockEnabled {
+                        Button { editor = ServerEditorRoute(server: nil) } label: {
+                            Label(String(localized: "Add Server", table: "CompanionApp"), systemImage: "plus")
+                        }
                     }
                 }
                 Section {
                     NavigationLink {
-                        CompanionSitxView(sitx: bridge.sitx)
+                        CompanionSitxView(bridge: bridge, sitx: bridge.sitx)
                     } label: {
                         CompanionSitxRow(sitx: bridge.sitx)
+                    }
+                }
+                Section {
+                    Button {
+                        showDeveloperModeEnabled = bridge.registerDeveloperModeTap()
+                    } label: {
+                        Text("Version \(appVersion)")
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityHint("Tap seven times to enable developer mode.")
+                    .alert("Developer mode enabled", isPresented: $showDeveloperModeEnabled) {
+                        Button(String(localized: "OK", table: "CompanionApp"), role: .cancel) {}
+                    }
+                    if bridge.developerMode {
+                        Toggle("Developer mode", isOn: $bridge.developerMode)
+                        NavigationLink("Beta Features") {
+                            CompanionBetaFeaturesView(bridge: bridge)
+                        }
                     }
                 }
             }
@@ -122,6 +152,7 @@ struct CompanionSetupView: View {
             }
             .confirmationDialog(String(localized: "Remove server and its certificate?", table: "CompanionApp"), isPresented: $confirmRemove) {
                 Button(String(localized: "Remove Server", table: "CompanionApp"), role: .destructive) {
+                    guard !bridge.adminLockEnabled else { return }
                     do {
                         if let serverToRemove { try bridge.remove(id: serverToRemove.id) }
                     } catch { errorText = error.localizedDescription }
@@ -131,11 +162,32 @@ struct CompanionSetupView: View {
                 Button(String(localized: "OK", table: "CompanionApp"), role: .cancel) { errorText = nil }
             } message: { Text(errorText ?? "") }
             .onAppear { bridge.setActive(scenePhase == .active) }
+            .onDisappear { bridge.resetDeveloperModeTaps() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { bridge.setActive(false) }
                 else if phase == .active { bridge.setActive(true) }
             }
         }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+        return "\(version) (\(build))"
+    }
+}
+
+private struct CompanionBetaFeaturesView: View {
+    @ObservedObject var bridge: PhoneBridgeModel
+
+    var body: some View {
+        Form {
+            Toggle("Lock server configuration", isOn: $bridge.adminLockEnabled)
+            Text("When enabled, server and Sit(x) settings can be viewed but not changed. Reconnect and status information remain available.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .navigationTitle("Beta Features")
     }
 }
 
@@ -322,7 +374,7 @@ private struct CompanionServerEditor: View {
 
     private var connected: Bool { bridge.serverStates[serverID]?.connected == true }
     private var enabled: Bool { bridge.servers.first { $0.id == serverID }?.enabled ?? false }
-    private var settingsLocked: Bool { enabled || connected }
+    private var settingsLocked: Bool { bridge.adminLockEnabled || enabled || connected }
 
     var body: some View {
         NavigationStack {
@@ -333,11 +385,12 @@ private struct CompanionServerEditor: View {
                         Toggle(String(localized: "Server enabled", table: "CompanionApp"), isOn: Binding(
                             get: { enabled },
                             set: { value in
+                                guard !bridge.adminLockEnabled else { return }
                                 do { try bridge.setEnabled(value, id: serverID) }
                                 catch { connectionError = error.localizedDescription }
                             }
                         ))
-                        .disabled(busy)
+                        .disabled(busy || bridge.adminLockEnabled)
                     } footer: {
                         Text("Turn off Server enabled to edit the address or authentication. Save your changes before enabling again. This switch immediately changes the saved server; Cancel does not undo it.", tableName: "CompanionApp")
                     }
@@ -358,7 +411,9 @@ private struct CompanionServerEditor: View {
                 } header: {
                     Text("TAK Server", tableName: "CompanionApp")
                 } footer: {
-                    if settingsLocked {
+                    if bridge.adminLockEnabled {
+                        Label("Server admin lock is on.", systemImage: "lock.fill")
+                    } else if settingsLocked {
                         Label(String(localized: "Disable server to edit", table: "CompanionApp"), systemImage: "lock.fill")
                     }
                 }
@@ -407,7 +462,9 @@ private struct CompanionServerEditor: View {
                 } header: {
                     Text("Authentication", tableName: "CompanionApp")
                 } footer: {
-                    if settingsLocked {
+                    if bridge.adminLockEnabled {
+                        Label("Server admin lock is on.", systemImage: "lock.fill")
+                    } else if settingsLocked {
                         Label(String(localized: "Disable server to edit", table: "CompanionApp"), systemImage: "lock.fill")
                     }
                 }
@@ -420,7 +477,9 @@ private struct CompanionServerEditor: View {
                     )
                 }
             }
-            .navigationTitle(original == nil ? String(localized: "Add Server", table: "CompanionApp") : String(localized: "Edit Server", table: "CompanionApp"))
+            .navigationTitle(bridge.adminLockEnabled
+                ? String(localized: "Server Status", table: "CompanionApp")
+                : original == nil ? String(localized: "Add Server", table: "CompanionApp") : String(localized: "Edit Server", table: "CompanionApp"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -428,7 +487,7 @@ private struct CompanionServerEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Save", table: "CompanionApp")) { save() }
-                        .disabled(endpoint == nil || busy)
+                        .disabled(endpoint == nil || busy || bridge.adminLockEnabled)
                 }
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.data]) { result in
@@ -486,7 +545,7 @@ private struct CompanionServerEditor: View {
     }
 
     private func enroll() {
-        guard let endpoint, !busy else { return }
+        guard !bridge.adminLockEnabled, let endpoint, !busy else { return }
         do { try validateUnique(endpoint) }
         catch { certificateStatus = error.localizedDescription; return }
         busy = true
@@ -515,6 +574,7 @@ private struct CompanionServerEditor: View {
     }
 
     private func importFile(_ result: Result<URL, Error>) {
+        guard !bridge.adminLockEnabled else { return }
         do {
             let url = try result.get()
             let scoped = url.startAccessingSecurityScopedResource()
@@ -546,7 +606,7 @@ private struct CompanionServerEditor: View {
     }
 
     private func save() {
-        guard let endpoint else { return }
+        guard !bridge.adminLockEnabled, let endpoint else { return }
         do {
             try validateUnique(endpoint)
             if let pendingIdentity {
@@ -587,6 +647,7 @@ private struct CompanionSitxRow: View {
 
 /// Same menu as the watch: Sit(x) TAK toggle, Address, Group, Sit(x) State, Re-auth.
 private struct CompanionSitxView: View {
+    @ObservedObject var bridge: PhoneBridgeModel
     @ObservedObject var sitx: CompanionSitxSession
     @State private var showAuthorization = false
     @State private var confirmRemoval = false
@@ -594,15 +655,21 @@ private struct CompanionSitxView: View {
 
     var body: some View {
         List {
-            Toggle("Sit(x) TAK", isOn: Binding(get: { sitx.enabled }, set: { sitx.setEnabled($0) }))
+            Toggle("Sit(x) TAK", isOn: Binding(get: { sitx.enabled }, set: {
+                guard !bridge.adminLockEnabled else { return }
+                sitx.setEnabled($0)
+            }))
+            .disabled(bridge.adminLockEnabled)
             NavigationLink {
-                CompanionSitxAddressView(sitx: sitx)
+                CompanionSitxAddressView(bridge: bridge, sitx: sitx)
             } label: {
                 LabeledContent(String(localized: "Address", table: "CompanionApp"), value: sitx.host.isEmpty ? String(localized: "Not set", table: "CompanionApp") : SitxAPI.displayHost(sitx.host))
             }
+            .disabled(bridge.adminLockEnabled)
             NavigationLink {
                 List(sitx.groups) { group in
                     Button {
+                        guard !bridge.adminLockEnabled else { return }
                         sitx.selectGroup(group)
                     } label: {
                         HStack {
@@ -617,22 +684,24 @@ private struct CompanionSitxView: View {
             } label: {
                 LabeledContent(String(localized: "Group", table: "CompanionApp"), value: sitx.selectedGroupName ?? String(localized: "Not selected", table: "CompanionApp"))
             }
-            .disabled(sitx.groups.isEmpty || !sitx.enabled)
+            .disabled(bridge.adminLockEnabled || sitx.groups.isEmpty || !sitx.enabled)
             LabeledContent(String(localized: "Sit(x) State", table: "CompanionApp")) {
                 Text(sitx.state.detail).multilineTextAlignment(.trailing)
             }
             Button {
+                guard !bridge.adminLockEnabled else { return }
                 sitx.reauthorize()
             } label: {
                 Label(String(localized: "Re-auth", table: "CompanionApp"), systemImage: "arrow.clockwise")
             }
-            .disabled(!sitx.enabled || sitx.host.isEmpty)
+            .disabled(bridge.adminLockEnabled || !sitx.enabled || sitx.host.isEmpty)
             Button(String(localized: "Remove Sit(x) connection", table: "CompanionApp"), role: .destructive) { confirmRemoval = true }
-                .disabled(removing)
+                .disabled(removing || bridge.adminLockEnabled)
         }
         .navigationTitle("Sit(x) TAK")
         .confirmationDialog(String(localized: "Remove Sit(x) connection and all saved authorization, address and groups?", table: "CompanionApp"), isPresented: $confirmRemoval) {
             Button(String(localized: "Remove Sit(x) connection", table: "CompanionApp"), role: .destructive) {
+                guard !bridge.adminLockEnabled else { return }
                 removing = true
                 Task {
                     await sitx.removeConnection()
@@ -661,6 +730,7 @@ private struct CompanionSitxView: View {
                         Link(destination: url) {
                             Label(String(localized: "Authorize", table: "CompanionApp"), systemImage: "arrow.up.right.square")
                         }
+                        .disabled(bridge.adminLockEnabled)
                     }
                     Text(sitx.state.detail).foregroundStyle(.secondary)
                 }
@@ -677,11 +747,13 @@ private struct CompanionSitxView: View {
 }
 
 private struct CompanionSitxAddressView: View {
+    @ObservedObject var bridge: PhoneBridgeModel
     @ObservedObject var sitx: CompanionSitxSession
     @Environment(\.dismiss) private var dismiss
     @State private var address: String
 
-    init(sitx: CompanionSitxSession) {
+    init(bridge: PhoneBridgeModel, sitx: CompanionSitxSession) {
+        self.bridge = bridge
         self.sitx = sitx
         _address = State(initialValue: SitxAPI.organization(sitx.host))
     }
@@ -692,19 +764,20 @@ private struct CompanionSitxAddressView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .onSubmit(saveAddress)
+                .disabled(bridge.adminLockEnabled)
             Text(SitxAPI.normalizedHost(address).map(SitxAPI.displayHost) ?? ".sitx.io")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button(action: saveAddress) {
                 Label(String(localized: "Save", table: "CompanionApp"), systemImage: "checkmark")
             }
-            .disabled(SitxAPI.normalizedHost(address) == nil)
+            .disabled(bridge.adminLockEnabled || SitxAPI.normalizedHost(address) == nil)
         }
         .navigationTitle(String(localized: "Address", table: "CompanionApp"))
     }
 
     private func saveAddress() {
-        guard let host = SitxAPI.normalizedHost(address) else { return }
+        guard !bridge.adminLockEnabled, let host = SitxAPI.normalizedHost(address) else { return }
         sitx.setAddress(host)
         dismiss()
     }
