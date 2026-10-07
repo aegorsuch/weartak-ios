@@ -69,6 +69,21 @@ struct ContentView: View {
             if ProcessInfo.processInfo.arguments.contains("--preview-map") {
                 showMapPreview = true
             }
+            #if targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--preview-remote-alert") {
+                let now = Date()
+                let coordinate = model.lastLocation?.coordinate
+                    ?? CLLocationCoordinate2D(latitude: 41.8801, longitude: -87.6410)
+                let xml = SitxCoT.event(uid: "simulator-demo-remote-alert", type: "b-a-o",
+                    coordinate: coordinate,
+                    detail: "<contact callsign=\"DEMO ALPHA\"/><emergency type=\"Injury\">DEMO ALPHA</emergency>",
+                    lifetime: 600, now: now)
+                for payload in SitxCoT.parse(Data(xml.utf8), excluding: SitxClient.deviceID(), now: now) {
+                    model.receiveEntity(payload, at: now)
+                }
+                showMapPreview = true
+            }
+            #endif
             #endif
             if settings.physiologicalAlertsEnabled {
                 await physiology.startMonitoring()
@@ -1682,6 +1697,19 @@ private extension ManualAlertType {
     }
 }
 
+private func incomingAlertCategoryLabel(_ category: String?) -> String {
+    guard let category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        return String(localized: "Active Alert", table: "WatchMain")
+    }
+    let trimmed = category.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let known = ManualAlertType.allCases.first(where: {
+        $0.rawValue.caseInsensitiveCompare(trimmed) == .orderedSame
+    }) {
+        return known.watchMainLabel
+    }
+    return category
+}
+
 struct MapPointSymbol: View {
     let kind: MarkerKind
 
@@ -1820,8 +1848,7 @@ private struct BloodhoundView: View {
     private func pointDetail(_ item: IncomingMapEntity) -> String {
         let affiliation: String
         if item.isAlert {
-            affiliation = item.alertCategory.flatMap { $0.isEmpty ? nil : $0 }
-                ?? String(localized: "Active Alert", table: "WatchMain")
+            affiliation = incomingAlertCategoryLabel(item.alertCategory)
         } else {
             switch item.type.split(separator: "-").dropFirst().first {
             case "f": affiliation = String(localized: "Friendly", table: "WatchMain")
@@ -2327,8 +2354,7 @@ private struct IncomingPointDetailView: View {
                 Section {
                     HStack {
                         Text(item.isAlert
-                             ? (item.alertCategory.flatMap { $0.isEmpty ? nil : $0 }
-                                ?? String(localized: "Active Alert", table: "WatchMain"))
+                             ? incomingAlertCategoryLabel(item.alertCategory)
                              : (item.symbolKind?.watchMainLabel ?? String(localized: "Point", table: "WatchMain")))
                         Spacer(minLength: 4)
                         Text(MapCoordinateFormatter.droppedTime(item.lastSeen))

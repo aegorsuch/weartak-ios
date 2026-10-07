@@ -26,7 +26,7 @@ struct WatchMarker {
 protocol TAKTransport {
     var pliReportingRoute: PLIReportingRoute { get }
     func connect() async throws
-    func sendPLI(coordinate: CLLocationCoordinate2D) async throws
+    func sendPLI(coordinate: CLLocationCoordinate2D, reportingInterval: TimeInterval) async throws
     func sendMarker(_ marker: WatchMarker) async throws
     func deleteMarker(uid: String) async throws
     func sendEmergencyAlert(state: EmergencyState, type: String) async throws

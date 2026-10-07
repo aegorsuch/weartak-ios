@@ -80,6 +80,17 @@ Traditional Chinese**.
   screenshots with feedback. The version label should include build 12 and
   revision `806f322`, rather than `unknown`.
 
+#### Build 13: additional testing
+
+Build 13 adds physiology/network admin controls and remote emergency alerts.
+Test live alerts from another TAK device: alerts should appear first in
+Bloodhound and as pulsing white map markers. Check point details, navigation,
+In Position, sender cancellation, and stale-time expiry. Reduce Motion and
+Always On dimming should keep alert markers solid. Known manual alert categories
+should translate (Injury is Lesión in Spanish); custom categories stay unchanged.
+Check admin controls and reporting behavior on real paired devices.
+Simulator demo alerts are excluded from release builds.
+
 ### Developers: build from source onto a watch
 
 This path requires a Mac, Xcode with the watchOS 26.2 SDK or newer, and an Apple
@@ -148,7 +159,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `12`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `13`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -185,7 +196,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `12`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `13`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -644,6 +655,9 @@ Active CoT emergency alerts from other devices appear above ordinary incoming
 points, newest first, with a red triangle/exclamation icon, sender callsign,
 alert category and range. Cancellation removes the alert immediately, including
 any active Bloodhound target; alerts also expire at their CoT stale time.
+Recognized manual alert categories use translated labels in the picker and
+point details (for example, Injury becomes Lesión in Spanish); custom incoming
+categories and CoT values remain unchanged.
 RGR can navigate to alerts without a reply address. nPos stops navigating to an
 alert without hiding it; the alert remains until cleared, expired or removed
 locally. Remove and Remove All still only hide items on this watch.

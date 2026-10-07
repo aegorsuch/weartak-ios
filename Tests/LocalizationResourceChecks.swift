@@ -25,6 +25,9 @@ struct LocalizationResourceChecks {
                 let value = watch.localizedString(forKey: key, value: nil, table: "WatchSettings")
                 precondition(!value.isEmpty && value != key, "Missing \(language) translation for \(key)")
             }
+            let injury = watch.localizedString(forKey: "Injury", value: nil, table: "WatchMain")
+            precondition(injury != "Injury" && !injury.isEmpty)
+            if language == "es" { precondition(injury == "Lesión") }
             for key in ["Certificate expired %@", "Certificate expires %@",
                         "Certificate expires in %@", "Certificate expires today"] {
                 let value = phone.localizedString(forKey: key, value: nil, table: "PhoneCertificateStatus")
