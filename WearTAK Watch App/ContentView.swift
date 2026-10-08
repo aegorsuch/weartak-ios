@@ -851,6 +851,7 @@ private struct TacticalMapView: View {
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var cameraHeading: Double = 0
     @State private var selectedMapPoint: MapPointSelection?
+    @State private var mapPointCluster: MapPointCluster?
     @State private var visibleRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
         span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
@@ -904,28 +905,34 @@ private struct TacticalMapView: View {
                             longPressStart = nil
                         }
                 )
+                .onChange(of: selectedMapPoint) { _, selection in
+                    guard let selection else { return }
+                    let clustered = selectableMapPoints().compactMap { point -> (MapPointSelection, CGPoint)? in
+                        guard let screenPoint = proxy.convert(point.coordinate, to: .local) else { return nil }
+                        return (point.selection, screenPoint)
+                    }
+                    if let anchor = coordinate(for: selection),
+                       let anchorPoint = proxy.convert(anchor, to: .local) {
+                        var seen = Set<MapPointSelection>()
+                        let nearby = clustered.compactMap { candidate -> MapPointSelection? in
+                            guard hypot(candidate.1.x - anchorPoint.x, candidate.1.y - anchorPoint.y) <= 32,
+                                  seen.insert(candidate.0).inserted else { return nil }
+                            return candidate.0
+                        }
+                        if nearby.count > 1 {
+                            mapPointCluster = MapPointCluster(selections: nearby)
+                        } else {
+                            openMapPoint(selection)
+                        }
+                    } else {
+                        openMapPoint(selection)
+                    }
+                    selectedMapPoint = nil
+                }
             }
             .onAppear(perform: centerOnce)
             .onChange(of: model.lastLocation?.timestamp) { _, _ in
                 centerOnce()
-            }
-            .onChange(of: selectedMapPoint) { _, selection in
-                guard let selection else { return }
-                switch selection {
-                case .selfMarker:
-                    if let location = model.lastLocation {
-                        pointDraft = MapPointDraft(coordinate: location.coordinate)
-                    }
-                case .marker(let id):
-                    if let marker = model.markers.first(where: { $0.id == id }) {
-                        pointDraft = MapPointDraft(marker: marker)
-                    }
-                case .contact(let uid):
-                    contactSelection = MapContactSelection(id: uid)
-                case .incoming(let id):
-                    incomingSelection = MapContactSelection(id: id)
-                }
-                selectedMapPoint = nil
             }
 
             if settings.mapButtonsVisible {
@@ -1027,6 +1034,37 @@ private struct TacticalMapView: View {
         .sheet(item: $incomingSelection) { selection in
             NavigationStack {
                 IncomingPointDetailView(model: model, id: selection.id)
+            }
+        }
+        .sheet(item: $mapPointCluster) { cluster in
+            NavigationStack {
+                List {
+                    ForEach(cluster.selections, id: \.self) { selection in
+                        NavigationLink {
+                            mapPointDetail(selection)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(mapPointTitle(selection))
+                                    .lineLimit(2)
+                                if let coordinate = coordinate(for: selection) {
+                                    Text(MapCoordinateFormatter.mgrs(coordinate) ??
+                                         String(format: "%.5f, %.5f", coordinate.latitude, coordinate.longitude))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                        }
+                    }
+                }
+                .navigationTitle(String(localized: "Select Map Item", table: "WatchMain"))
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(String(localized: "Cancel", table: "WatchMain")) {
+                            mapPointCluster = nil
+                        }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showLayersMenu) {
@@ -1164,6 +1202,85 @@ private struct TacticalMapView: View {
         entity.displayTitle
     }
 
+    private func openMapPoint(_ selection: MapPointSelection) {
+        switch selection {
+        case .selfMarker:
+            if let location = model.lastLocation {
+                pointDraft = MapPointDraft(coordinate: location.coordinate)
+            }
+        case .marker(let id):
+            if let marker = model.markers.first(where: { $0.id == id }) {
+                pointDraft = MapPointDraft(marker: marker)
+            }
+        case .contact(let uid):
+            contactSelection = MapContactSelection(id: uid)
+        case .incoming(let id):
+            incomingSelection = MapContactSelection(id: id)
+        }
+    }
+
+    private func coordinate(for selection: MapPointSelection) -> CLLocationCoordinate2D? {
+        switch selection {
+        case .selfMarker:
+            return model.lastLocation?.coordinate
+        case .marker(let id):
+            return model.markers.first(where: { $0.id == id })?.coordinate
+        case .contact(let uid), .incoming(let uid):
+            return model.mapEntities.first(where: { $0.id == uid })?.coordinate
+        }
+    }
+
+    private func selectableMapPoints() -> [(selection: MapPointSelection, coordinate: CLLocationCoordinate2D)] {
+        var points: [(MapPointSelection, CLLocationCoordinate2D)] = []
+        if let location = model.lastLocation {
+            points.append((.selfMarker, location.coordinate))
+        }
+        points.append(contentsOf: model.markers.map { (.marker($0.id), $0.coordinate) })
+        for entity in model.mapEntities {
+            if entity.isUser {
+                if settings.isMapUserVisible(team: entity.team, role: entity.role) {
+                    points.append((.contact(entity.id), entity.coordinate))
+                }
+            } else {
+                points.append((.incoming(entity.id), entity.coordinate))
+            }
+        }
+        return points
+    }
+
+    private func mapPointTitle(_ selection: MapPointSelection) -> String {
+        switch selection {
+        case .selfMarker:
+            return String(localized: "Self", table: "WatchMain")
+        case .marker(let id):
+            return model.markers.first(where: { $0.id == id })?.displayTitle ?? String(localized: "Point", table: "WatchMain")
+        case .contact(let uid), .incoming(let uid):
+            return model.mapEntities.first(where: { $0.id == uid })?.displayTitle ?? String(localized: "Point", table: "WatchMain")
+        }
+    }
+
+    @ViewBuilder
+    private func mapPointDetail(_ selection: MapPointSelection) -> some View {
+        switch selection {
+        case .selfMarker:
+            if let location = model.lastLocation {
+                SelfCoordinateView(coordinate: location.coordinate)
+            } else {
+                Text("Location unavailable", tableName: "WatchMain")
+            }
+        case .marker(let id):
+            if let marker = model.markers.first(where: { $0.id == id }) {
+                PointDetailView(model: model, marker: marker)
+            } else {
+                Text("Point unavailable", tableName: "WatchMain")
+            }
+        case .contact(let uid):
+            MapContactDetailView(model: model, uid: uid)
+        case .incoming(let id):
+            IncomingPointDetailView(model: model, id: id)
+        }
+    }
+
     private func mapControl(_ systemName: String, label: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 15, weight: .semibold))
@@ -1267,7 +1384,9 @@ struct DataSyncMenuView: View {
                 Text("Connect to a TAK Server to use Data Sync.", tableName: "WatchMain")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(client.missionServers) { server in
+                ForEach(client.missionServers.sorted {
+                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }) { server in
                     NavigationLink {
                         DataSyncServerView(client: client, serverID: server.id)
                     } label: {
@@ -1390,7 +1509,9 @@ private struct MapChannelsMenuView: View {
                 Text("Connect to a TAK Server to configure channels.", tableName: "WatchMain")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(client.channelServers) { server in
+                ForEach(client.channelServers.sorted {
+                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }) { server in
                     NavigationLink {
                         MapServerChannelsView(client: client, serverID: server.id)
                     } label: {
@@ -1487,6 +1608,11 @@ private enum MapPointSelection: Hashable {
     case marker(UUID)
     case contact(String)
     case incoming(String)
+}
+
+private struct MapPointCluster: Identifiable {
+    let id = UUID()
+    let selections: [MapPointSelection]
 }
 
 private struct MapContactSelection: Identifiable {

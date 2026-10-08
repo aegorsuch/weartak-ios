@@ -107,7 +107,10 @@ struct CompanionSetupView: View {
                         Text("No servers configured", tableName: "CompanionApp")
                             .foregroundStyle(.secondary)
                     }
-                    ForEach(bridge.servers) { server in
+                    ForEach(bridge.servers.sorted {
+                        let order = $0.host.localizedStandardCompare($1.host)
+                        return order == .orderedSame ? $0.port < $1.port : order == .orderedAscending
+                    }) { server in
                         HStack(spacing: 12) {
                             Button { editor = ServerEditorRoute(server: server) } label: {
                                 CompanionServerRowStatus(
