@@ -278,7 +278,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private let settings: AppSettings
     private var connectionTask: Task<Void, Never>?
     private var reportingTimer: Timer?
-    private var callSignSubscription: AnyCancellable?
+    private var identitySubscription: AnyCancellable?
     private var sitxRelaySubscriptions: Set<AnyCancellable> = []
     private var isSendingPLI = false
     #if DEBUG && targetEnvironment(simulator)
@@ -314,18 +314,17 @@ final class WatchSessionModel: NSObject, ObservableObject {
             offlineOutbox = try OfflineOutbox()
             expireOfflineEvents()
         } catch { reportOfflineError(error) }
-        callSignSubscription = settings.$callSign.removeDuplicates().dropFirst().sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.lastPLISentAt = nil
-                guard self.isAppActive, self.connectionState == .connected else { return }
-                if let location = self.lastLocation {
-                    self.sendPLIIfDue(for: location)
-                } else {
+        identitySubscription = settings.$callSign
+            .combineLatest(settings.$teamColor, settings.$role)
+            .dropFirst()
+            .sink { [weak self] _, _, _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.lastPLISentAt = nil
+                    guard self.isAppActive, self.connectionState == .connected else { return }
                     self.requestLocation()
                 }
             }
-        }
         selectedMarkerKind = MarkerKind(rawValue: UserDefaults.standard.string(forKey: "WearTAK.lastMarkerKind") ?? "") ?? .unknown
         if let savedAlert = UserDefaults.standard.string(forKey: "WearTAK.manualAlertType") {
             activeAlertType = ManualAlertType(rawValue: savedAlert)
