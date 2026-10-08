@@ -732,7 +732,7 @@ struct SitxProtocolChecks {
                 if status.hasPrefix("Retrying authorization: ") {
                     sawRetry = true
                     precondition(status.contains("-1005 (connection lost)"))
-                    precondition(WatchSettingsLabels.sitx(status).contains("Retrying authorization"))
+                    precondition(WatchSettingsStatusText.sitx(status).contains("Retrying authorization"))
                 }
             }
             defer { subscription.cancel(); client.forgetAuthorization() }
