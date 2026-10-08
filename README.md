@@ -495,9 +495,9 @@ Pairing status is not TAK server health or live-message availability.
 
 ### Phone GPS location reporting
 
-Companion does not display a Phone Location Reporting section. The watch's
-Network Preferences TAK Relay row shows only the selected provider, without
-phone reporting details. These UI choices do not disable automatic reporting.
+Companion's **Background location reporting** section shows the current status
+and a brief explanation. Expand **Details** for the location permission, last
+position sent, any reason reporting is stopped, and a link to Location Settings.
 
 There is no separate tracking switch. Companion starts reporting this iPhone's
 GPS automatically when all of these are true: at least one enabled TAK server
@@ -547,7 +547,8 @@ continue using watch GPS. Watch alerts, alert cancels and dropped points are
 always relayed. iTAK and TAK Aware do not supply WearTAK location or connectivity;
 Companion requires its own permissions and TAK connection.
 
-The reporting details are not displayed in Companion or under TAK Relay.
+The watch's TAK Relay row shows only the selected provider; Companion's
+Background location reporting section is the place to check phone reporting.
 iOS shows a location indicator while Companion reports in the
 background. The app uses the `location` background mode only for this active
 location session; there is no workout session, silent audio or keepalive timer.
@@ -1085,6 +1086,11 @@ application context (at most every 30 seconds). Alert events include the
 
 Manual, physiological, and environmental alert activations and cancellations,
 point updates, and point deletions send independently of the PLI timer. Alert
+picker choices are alphabetized by their displayed labels and include 911 Alert,
+Gate Runner, Geofence Breached, Gunshot, Gunshot Injury, In Contact, Injury,
+Ring The Bell, UAS, and Vehicle. Received emergency categories preserve those
+same names; Geofence Breached is a manual alert, not automatic geofence monitoring.
+Alert activation
 and cancellation events share an alert UID; cancellations use `b-a-o-can` and
 `<emergency cancel="true">`. Point deletion uses `t-x-d-d`, a link to the point
 UID, and `__forcedelete`. Incoming nonexpired CoT users and points appear on
@@ -1097,8 +1103,9 @@ Off, its address changes, the destination group changes, or Re-auth starts.
 The watch persists a shared offline outbox for markers (including location-
 pending drops), marker edits/deletions, manual/automatic/environmental alerts
 and cancellations, and outgoing GeoChat/point replies. PLI is not backlogged.
-Dropping a deferred marker reports: "Marker details stored and will be sent
-when connected and/or location is updated". A drop without a fresh valid fix
+Routine queue-storage and transport-acceptance updates do not show pop-ups on
+the watch home screen. Errors and expiry warnings remain visible. The marker
+confirmation screen explains deferred storage. A drop without a fresh valid fix
 keeps its title/type/remark and original UID, then uses the next fresh watch
 location. It does not claim that the eventual coordinates were the drop
 location.

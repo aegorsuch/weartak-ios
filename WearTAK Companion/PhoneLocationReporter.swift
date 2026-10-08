@@ -41,11 +41,11 @@ final class PhoneLocationReporter: NSObject, CLLocationManagerDelegate {
 
     var permissionSummary: String {
         switch authorization {
-        case .notDetermined: return "Not requested"
-        case .whenInUse: return "While Using (starts only while Companion is open)"
-        case .always: return "Always"
-        case .denied: return "Denied"
-        case .restricted: return "Restricted"
+        case .notDetermined: return String(localized: "Not requested", table: "PhoneLocationReporting")
+        case .whenInUse: return String(localized: "While Using (starts only while Companion is open)", table: "PhoneLocationReporting")
+        case .always: return String(localized: "Always", table: "PhoneLocationReporting")
+        case .denied: return String(localized: "Denied", table: "PhoneLocationReporting")
+        case .restricted: return String(localized: "Restricted", table: "PhoneLocationReporting")
         }
     }
 

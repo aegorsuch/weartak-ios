@@ -15,10 +15,14 @@ enum ConnectionState: String {
 }
 
 enum ManualAlertType: String, CaseIterable, Identifiable {
+    case alert911 = "911 Alert"
     case gateRunner = "Gate Runner"
+    case geofenceBreached = "Geofence Breached"
     case gunshot = "Gunshot"
     case gunshotInjury = "Gunshot Injury"
+    case inContact = "In Contact"
     case injury = "Injury"
+    case ringTheBell = "Ring The Bell"
     case uas = "UAS"
     case vehicle = "Vehicle"
 
@@ -188,6 +192,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var forwardingOffline = false
     private var lastOfflineAttempt: Date?
     @Published var offlineNotice: String?
+    @Published private(set) var offlineError: String?
     @Published var offlineExpiryNotice: String?
     @Published private(set) var queuedEventCount = 0
     static var markerStoredMessage: String {
@@ -675,6 +680,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func storeMarker(at coordinate: CLLocationCoordinate2D?, kind: MarkerKind, title: String, remark: String) -> Bool {
         if let coordinate, !CLLocationCoordinate2DIsValid(coordinate) {
             offlineNotice = String(localized: "Invalid marker coordinates.", table: "WatchStatus")
+            offlineError = offlineNotice
             return false
         }
         selectedMarkerKind = kind
@@ -1690,6 +1696,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     private func reportOfflineError(_ error: Error) {
         offlineNotice = error.localizedDescription
+        offlineError = error.localizedDescription
         chatLogger.error("Offline forwarding: \(error.localizedDescription, privacy: .public)")
     }
 
@@ -1714,6 +1721,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             expireOfflineEvents()
             try offlineOutbox.enqueue(key: key, payload: JSONEncoder().encode(operation))
             queuedEventCount = offlineOutbox.entries.count
+            offlineError = nil
             offlineNotice = notice
             lastOfflineAttempt = nil
             forwardOfflineEvents()
@@ -1762,6 +1770,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     var operation = try JSONDecoder().decode(OfflineOperation.self, from: entry.payload)
                     guard operation.scope == offlineScope else {
                         offlineNotice = String(localized: "Stored events are waiting for their original network configuration.", table: "WatchStatus")
+                        offlineError = offlineNotice
                         continue
                     }
                     if operation.xml == nil, operation.kind == .marker,
@@ -1800,6 +1809,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                         try await sitxClient.sendQueuedEvent(xml)
                     }
                     try offlineOutbox.acknowledge(id: entry.id)
+                    offlineError = nil
                     offlineNotice = String(localized: "Accepted by transport; recipient delivery is not confirmed.", table: "WatchStatus")
                 } catch {
                     reportOfflineError(error)

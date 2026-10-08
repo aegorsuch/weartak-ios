@@ -37,6 +37,40 @@ struct CompanionSetupView: View {
         NavigationStack {
             List {
                 TLSApprovalSection(bridge: bridge)
+                Section {
+                    LabeledContent(
+                        String(localized: "Reporting status", table: "PhoneLocationReporting"),
+                        value: bridge.phoneReporting.state
+                    )
+                    DisclosureGroup(String(localized: "Details", table: "PhoneLocationReporting")) {
+                        LabeledContent(
+                            String(localized: "Location permission", table: "PhoneLocationReporting"),
+                            value: bridge.phoneReporting.permission
+                        )
+                        LabeledContent(
+                            String(localized: "Last position sent", table: "PhoneLocationReporting"),
+                            value: bridge.phoneReporting.lastReportAt?.formatted(date: .abbreviated, time: .shortened)
+                                ?? String(localized: "No positions sent yet", table: "PhoneLocationReporting")
+                        )
+                        if let detail = bridge.phoneReporting.detail {
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text("Companion uses this iPhone's GPS to send your paired watch's position to configured TAK servers while this phone is locked. Reporting starts automatically when a paired watch selects Companion as its relay and an enabled server with a client certificate is available. Background reporting requires Location Services, Precise Location, and Always permission; While Using access supports reporting only while Companion is open.", tableName: "PhoneLocationReporting")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button(String(localized: "Open Location Settings", table: "PhoneLocationReporting")) {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Background location reporting", tableName: "PhoneLocationReporting")
+                } footer: {
+                    Text("Sends your paired watch's position to TAK while this iPhone is locked.", tableName: "PhoneLocationReporting")
+                }
                 if let advice = bridge.backgroundAdvice {
                     Section {
                         Label {

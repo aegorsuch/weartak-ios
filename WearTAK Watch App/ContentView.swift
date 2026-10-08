@@ -42,9 +42,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showPointTypePicker) {
             NavigationStack {
-                PointTypePickerView(model: model) { kind in
-                    showToast(model.offlineNotice ?? String(localized: "\(kind.watchMainLabel) point dropped", table: "WatchMain"))
-                }
+                PointTypePickerView(model: model) { _ in }
             }
         }
         .task {
@@ -95,8 +93,8 @@ struct ContentView: View {
         .onChange(of: physiology.readingDate, initial: true) { _, date in
             model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent, measuredAt: date)
         }
-        .onChange(of: model.offlineNotice) { _, notice in
-            if let notice { showToast(notice) }
+        .onChange(of: model.offlineError) { _, error in
+            if let error { showToast(error) }
         }
         .onChange(of: model.remoteAlertError) { _, error in
             if let error { showToast(error) }
@@ -207,11 +205,6 @@ private struct WatchDashboardView: View {
                         .frame(height: rowHeight * 0.20)
                     navigationRow(small: small)
                         .frame(height: rowHeight * 0.24)
-                    if model.queuedEventCount > 0 {
-                        Text("\(model.queuedEventCount) stored for forwarding", tableName: "WatchMain")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                    }
                 }
                 .padding(.horizontal, 4)
                 .padding(.top, 4)
@@ -1701,10 +1694,14 @@ private extension TeamColor {
 private extension ManualAlertType {
     var watchMainLabel: String {
         switch self {
+        case .alert911: return String(localized: "911 Alert", table: "WatchMain")
         case .gateRunner: return String(localized: "Gate Runner", table: "WatchMain")
+        case .geofenceBreached: return String(localized: "Geofence Breached", table: "WatchMain")
         case .gunshot: return String(localized: "Gunshot", table: "WatchMain")
         case .gunshotInjury: return String(localized: "Gunshot Injury", table: "WatchMain")
+        case .inContact: return String(localized: "In Contact", table: "WatchMain")
         case .injury: return String(localized: "Injury", table: "WatchMain")
+        case .ringTheBell: return String(localized: "Ring The Bell", table: "WatchMain")
         case .uas: return rawValue
         case .vehicle: return String(localized: "Vehicle", table: "WatchMain")
         }
@@ -2034,7 +2031,9 @@ private struct ManualAlertView: View {
                     Label(String(localized: "Clear Manual Alert", table: "WatchMain"), systemImage: "xmark.circle.fill")
                 }
             } else {
-                ForEach(ManualAlertType.allCases) { type in
+                ForEach(ManualAlertType.allCases.sorted {
+                    $0.watchMainLabel.localizedStandardCompare($1.watchMainLabel) == .orderedAscending
+                }) { type in
                     Button(type.watchMainLabel) {
                         model.startEmergencyAlert(type: type)
                         dismiss()

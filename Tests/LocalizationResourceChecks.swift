@@ -28,7 +28,8 @@ struct LocalizationResourceChecks {
             let injury = watch.localizedString(forKey: "Injury", value: nil, table: "WatchMain")
             precondition(injury != "Injury" && !injury.isEmpty)
             if language == "es" { precondition(injury == "Lesión") }
-            for key in ["Bloodhound to Alert", "Dismiss locally", "Stale", "Last-known location",
+            for key in ["911 Alert", "Ring The Bell", "Geofence Breached", "In Contact",
+                        "Bloodhound to Alert", "Dismiss locally", "Stale", "Last-known location",
                         "Alert location unavailable", "Stale alert, last-known location",
                         "Stale does not mean the emergency ended.", "Location updated: %@"] {
                 let value = watch.localizedString(forKey: key, value: nil, table: "WatchMain")

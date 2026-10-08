@@ -567,6 +567,15 @@ struct SitxProtocolChecks {
         print("PASS: group discovery, refresh rotation, access-token form and WebSocket authentication")
 
         client.currentLocation = CLLocation(latitude: 38, longitude: -77)
+        for category in ["911 Alert", "Ring The Bell", "Geofence Breached", "In Contact"] {
+            let activation = try fields(client.emergencyXML(state: .alert, type: category))
+            let cancellation = try fields(client.emergencyXML(state: .cancel, type: category))
+            precondition(activation.attributes["emergency"]?.first?["type"] == category)
+            precondition(activation.attributes["event"]?.first?["type"] == "b-a-o")
+            precondition(cancellation.attributes["event"]?.first?["type"] == "b-a-o-can")
+            precondition(cancellation.attributes["emergency"]?.first?["cancel"] == "true")
+            precondition(activation.attributes["event"]?.first?["uid"] == cancellation.attributes["event"]?.first?["uid"])
+        }
         try? await client.sendEmergencyAlert(state: .alert, type: "Injury & <help>")
         precondition(client.pendingEvents.count == 1)
         let alertXML = client.pendingEvents.values.first!

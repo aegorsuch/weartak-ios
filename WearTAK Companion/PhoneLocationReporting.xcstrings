@@ -1,0 +1,230 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Background location reporting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background location reporting"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Informes de ubicación en segundo plano"
+          }
+        }
+      }
+    },
+    "Details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Detalles"
+          }
+        }
+      }
+    },
+    "Always" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Always"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siempre"
+          }
+        }
+      }
+    },
+    "Companion uses this iPhone's GPS to send your paired watch's position to configured TAK servers while this phone is locked. Reporting starts automatically when a paired watch selects Companion as its relay and an enabled server with a client certificate is available. Background reporting requires Location Services, Precise Location, and Always permission; While Using access supports reporting only while Companion is open." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Companion uses this iPhone's GPS to send your paired watch's position to configured TAK servers while this phone is locked. Reporting starts automatically when a paired watch selects Companion as its relay and an enabled server with a client certificate is available. Background reporting requires Location Services, Precise Location, and Always permission; While Using access supports reporting only while Companion is open."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Companion usa el GPS de este iPhone para enviar la posición de tu reloj enlazado a los servidores TAK configurados mientras el teléfono está bloqueado. Los informes se inician automáticamente cuando un reloj enlazado selecciona Companion como retransmisor y hay disponible un servidor habilitado con un certificado de cliente. Los informes en segundo plano requieren los servicios de ubicación, la ubicación precisa y el permiso Siempre; el permiso Mientras se usa solo permite informar cuando Companion está abierto."
+          }
+        }
+      }
+    },
+    "Denied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denied"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Denegado"
+          }
+        }
+      }
+    },
+    "Last position sent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last position sent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Última posición enviada"
+          }
+        }
+      }
+    },
+    "Location permission" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Location permission"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Permiso de ubicación"
+          }
+        }
+      }
+    },
+    "Not requested" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not requested"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No solicitado"
+          }
+        }
+      }
+    },
+    "No positions sent yet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No positions sent yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no se han enviado posiciones"
+          }
+        }
+      }
+    },
+    "Open Location Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Location Settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir ajustes de ubicación"
+          }
+        }
+      }
+    },
+    "Restricted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restricted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Restringido"
+          }
+        }
+      }
+    },
+    "Reporting status" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reporting status"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estado de los informes"
+          }
+        }
+      }
+    },
+    "Sends your paired watch's position to TAK while this iPhone is locked." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sends your paired watch's position to TAK while this iPhone is locked."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Envía la posición de tu reloj enlazado a TAK mientras el iPhone está bloqueado."
+          }
+        }
+      }
+    },
+    "While Using (starts only while Companion is open)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While Using (starts only while Companion is open)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Al usar la app (solo se inicia con Companion abierto)"
+          }
+        }
+      }
+    }
+  },
+  "version" : 1
+}

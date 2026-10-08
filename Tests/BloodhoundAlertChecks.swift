@@ -35,6 +35,16 @@ struct BloodhoundAlertChecks {
         precondition(parse(detail: "<link uid=\"self\" relation=\"p-p\"/><link uid=\"other\" relation=\"p-p\"/>").isEmpty)
         let atak = parse(detail: "<emergency type=\"911 Alert\">ATAK ALPHA</emergency>", uid: "alpha-9-1-1")
         precondition(atak.first?.senderUID == "alpha" && atak.first?.callSign == "ATAK ALPHA")
+        for category in ["911 Alert", "Ring The Bell", "Geofence Breached", "In Contact"] {
+            let detail = "<link uid=\"alpha\" relation=\"p-p\"/><emergency type=\"\(category)\">ALPHA</emergency>"
+            let received = parse(detail: detail)
+            precondition(received.first?.emergencyState == .alert && received.first?.alertCategory == category)
+            let cancelled = parse(type: "b-a-o-can", detail: detail)
+            precondition(cancelled.first?.emergencyState == .cancel && cancelled.first?.alertCategory == category)
+            let restored = try JSONDecoder().decode(EntityRelayPayload.self,
+                from: JSONEncoder().encode(received[0]))
+            precondition(restored.alertCategory == category)
+        }
         precondition(parse(detail: "<link uid=\"alpha\" relation=\"p-c\" parent_callsign=\"ALPHA\"/><remarks>Pressure Alert</remarks>").first?.alertCategory == "Pressure Alert")
         precondition(parse(point: "").first?.hasUsableLocation == false)
         precondition(parse(point: "<point lat=\"9999999\" lon=\"9999999\"/>").first?.hasUsableLocation == false)
