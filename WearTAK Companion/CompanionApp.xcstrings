@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Server Name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "Server Name" }
+        },
+        "es" : {
+          "stringUnit" : { "state" : "translated", "value" : "Nombre del servidor" }
+        }
+      }
+    },
+    "Optional" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "Optional" }
+        },
+        "es" : {
+          "stringUnit" : { "state" : "translated", "value" : "Opcional" }
+        }
+      }
+    },
     "Add Server" : {
       "localizations" : {
         "ar" : {

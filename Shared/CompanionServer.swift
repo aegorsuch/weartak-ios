@@ -2,6 +2,7 @@ import Foundation
 
 struct CompanionServer: Codable, Identifiable, Equatable {
     let id: UUID
+    var name: String?
     var host: String
     var port: Int
     var enrollmentPort: Int
@@ -14,8 +15,9 @@ struct CompanionServer: Codable, Identifiable, Equatable {
     }
 
     init(id: UUID = UUID(), endpoint: CompanionEndpoint, enabled: Bool = false, streamTLSName: String? = nil,
-         apiTLSName: String? = nil) {
+         apiTLSName: String? = nil, name: String? = nil) {
         self.id = id
+        self.name = name
         host = endpoint.host
         port = endpoint.streamPort
         enrollmentPort = endpoint.enrollmentPort
@@ -26,6 +28,14 @@ struct CompanionServer: Codable, Identifiable, Equatable {
 
     var expectedStreamTLSName: String { streamTLSName ?? host }
     var expectedAPITLSName: String { apiTLSName ?? host }
+    var addressLabel: String { "\(host):\(port)" }
+    var displayName: String {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? addressLabel : trimmed
+    }
+    var displayLabel: String {
+        displayName == addressLabel ? addressLabel : "\(displayName) (\(addressLabel))"
+    }
 
     nonisolated static func validatedStreamTLSName(_ input: String) throws -> String? {
         let name = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -40,6 +50,8 @@ struct CompanionServer: Codable, Identifiable, Equatable {
 
     static func saving(_ server: Self, into servers: [Self]) throws -> [Self] {
         var server = server
+        let name = server.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        server.name = name.isEmpty ? nil : name
         server.streamTLSName = try validatedStreamTLSName(server.streamTLSName ?? "")
         server.apiTLSName = try validatedStreamTLSName(server.apiTLSName ?? "")
         guard !servers.contains(where: { $0.id != server.id && $0.endpoint.key == server.endpoint.key }) else {

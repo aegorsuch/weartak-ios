@@ -145,7 +145,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 let endpoint = try CompanionEndpoint.parse(address: record.host, streamPort: "\(record.port)", enrollmentPort: "\(record.enrollmentPort)")
                 checked = try CompanionServer.saving(CompanionServer(id: record.id, endpoint: endpoint,
                     enabled: record.enabled, streamTLSName: record.streamTLSName,
-                    apiTLSName: record.apiTLSName), into: checked)
+                    apiTLSName: record.apiTLSName, name: record.name), into: checked)
             }
             servers = checked
             synchronize()
@@ -872,7 +872,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     private func channelReply(to message: BridgeWire.Message) async -> BridgeWire.Message {
         var snapshots = servers.filter(\.enabled).map { record in
-            TAKChannelServer(id: record.id, name: "\(record.host):\(record.port)",
+            TAKChannelServer(id: record.id, name: record.displayLabel,
                              state: serverStates[record.id]?.connected == true ? "Select server to load channels" : "Server not connected")
         }
         guard let id = message.serverID else {
@@ -930,7 +930,7 @@ extension PhoneBridgeModel {
     /// subscribed missions. Subscriptions use the watch UID, the identity this phone streams to the server.
     fileprivate func missionReply(to message: BridgeWire.Message) async -> BridgeWire.Message {
         var snapshots = servers.filter(\.enabled).map { record in
-            TAKMissionServer(id: record.id, name: "\(record.host):\(record.port)",
+            TAKMissionServer(id: record.id, name: record.displayLabel,
                              state: serverStates[record.id]?.connected == true ? TAKMissionServer.selectState : "Server not connected")
         }
         if sitx.isConfigured {
@@ -1115,8 +1115,9 @@ private final class CompanionServerSession {
 
     func configure(_ record: CompanionServer, active: Bool) {
         var previous = self.record
-        // API identity changes do not require interrupting the independent CoT stream.
+        // API identity and display-name changes do not interrupt the CoT stream.
         previous?.apiTLSName = record.apiTLSName
+        previous?.name = record.name
         let changed = previous != record || self.active != active
         self.record = record
         self.active = active

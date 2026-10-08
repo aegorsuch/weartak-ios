@@ -5,6 +5,21 @@ struct CompanionServerChecks {
     static func main() throws {
         let endpoint = CompanionEndpoint(host: "tak.example.gov", streamPort: 8089, enrollmentPort: 8446)
         let original = CompanionServer(endpoint: endpoint)
+        precondition(original.displayName == "tak.example.gov:8089")
+        precondition(original.displayLabel == original.addressLabel)
+        let named = try CompanionServer.saving(
+            CompanionServer(id: original.id, endpoint: endpoint, name: " Training \n"), into: [original])
+        precondition(named[0].name == "Training")
+        precondition(named[0].displayName == "Training")
+        precondition(named[0].displayLabel == "Training (tak.example.gov:8089)")
+        precondition(named[0].endpoint.key == original.endpoint.key &&
+                     named[0].enrollmentPort == original.enrollmentPort && named[0].id == original.id)
+        let namedRestored = try JSONDecoder().decode([CompanionServer].self, from: JSONEncoder().encode(named))
+        precondition(namedRestored == named)
+        var unnamed = named[0]
+        unnamed.name = " \n"
+        let unnamedSaved = try CompanionServer.saving(unnamed, into: named)
+        precondition(unnamedSaved[0].name == nil && unnamedSaved[0].displayLabel == original.addressLabel)
         precondition(original.expectedStreamTLSName == endpoint.host)
         precondition(original.expectedAPITLSName == endpoint.host)
         let blank = try CompanionServer.validatedStreamTLSName(" \n")
@@ -26,9 +41,11 @@ struct CompanionServerChecks {
         precondition(restored == saved)
         var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(override)) as! [String: Any]
         legacy.removeValue(forKey: "streamTLSName")
+        legacy.removeValue(forKey: "name")
         let legacyServer = try JSONDecoder().decode(CompanionServer.self,
             from: JSONSerialization.data(withJSONObject: legacy))
         precondition(legacyServer.streamTLSName == nil && legacyServer.expectedStreamTLSName == endpoint.host)
+        precondition(legacyServer.name == nil && legacyServer.displayName == original.addressLabel)
         precondition(legacyServer.apiTLSName == nil && legacyServer.expectedAPITLSName == endpoint.host)
         let apiOverride = CompanionServer(id: original.id, endpoint: endpoint,
                                           streamTLSName: "stream.example", apiTLSName: " TAKSERVER2 ")
@@ -59,6 +76,6 @@ struct CompanionServerChecks {
         cleared.streamTLSName = ""
         let reset = try CompanionServer.saving(cleared, into: saved)
         precondition(reset[0].streamTLSName == nil && reset[0].expectedStreamTLSName == endpoint.host)
-        print("PASS: stream TLS override validation, persistence, legacy records, clearing and unchanged connection address")
+        print("PASS: server names, TLS overrides, persistence, legacy records, clearing and unchanged connection address")
     }
 }

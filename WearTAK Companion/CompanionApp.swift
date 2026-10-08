@@ -108,28 +108,31 @@ struct CompanionSetupView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(bridge.servers.sorted {
-                        let order = $0.host.localizedStandardCompare($1.host)
-                        return order == .orderedSame ? $0.port < $1.port : order == .orderedAscending
+                        let order = $0.displayName.localizedStandardCompare($1.displayName)
+                        if order != .orderedSame { return order == .orderedAscending }
+                        let hostOrder = $0.host.localizedStandardCompare($1.host)
+                        return hostOrder == .orderedSame ? $0.port < $1.port : hostOrder == .orderedAscending
                     }) { server in
                         HStack(spacing: 12) {
                             Button { editor = ServerEditorRoute(server: server) } label: {
                                 CompanionServerRowStatus(
-                                    title: "\(server.host):\(server.port)",
+                                    title: server.displayName,
+                                    address: server.displayName == server.addressLabel ? nil : server.addressLabel,
                                     enabled: server.enabled,
                                     state: bridge.serverStates[server.id]
                                 )
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(String(localized: bridge.adminLockEnabled ? "View server status for \(server.host)" : "Edit server \(server.host)", table: "CompanionApp"))
+                            .accessibilityLabel(String(localized: bridge.adminLockEnabled ? "View server status for \(server.displayLabel)" : "Edit server \(server.displayLabel)", table: "CompanionApp"))
                             if server.enabled, bridge.serverStates[server.id]?.detail != "Connecting" {
                                 Button { bridge.reconnect(id: server.id) } label: {
                                     Image(systemName: "arrow.clockwise")
                                 }
                                 .buttonStyle(.borderless)
-                                .accessibilityLabel(String(localized: "Reconnect \(server.host)", table: "CompanionApp"))
+                                .accessibilityLabel(String(localized: "Reconnect \(server.displayLabel)", table: "CompanionApp"))
                             }
-                            Toggle(String(localized: "Enable \(server.host)", table: "CompanionApp"), isOn: Binding(
+                            Toggle(String(localized: "Enable \(server.displayLabel)", table: "CompanionApp"), isOn: Binding(
                                 get: { bridge.servers.first { $0.id == server.id }?.enabled ?? false },
                                 set: { enabled in
                                     guard !bridge.adminLockEnabled else { return }
@@ -147,7 +150,7 @@ struct CompanionSetupView: View {
                                     Image(systemName: "trash")
                                 }
                                 .buttonStyle(.borderless)
-                                .accessibilityLabel(String(localized: "Remove server \(server.host)", table: "CompanionApp"))
+                                .accessibilityLabel(String(localized: "Remove server \(server.displayLabel)", table: "CompanionApp"))
                             }
                         }
                     }
@@ -231,6 +234,7 @@ private struct CompanionBetaFeaturesView: View {
 /// Server row body: status dot, connection time or plain-language error and certificate expiry.
 private struct CompanionServerRowStatus: View {
     let title: String
+    let address: String?
     let enabled: Bool
     let state: PhoneBridgeModel.ServerState?
 
@@ -248,6 +252,11 @@ private struct CompanionServerRowStatus: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .truncationMode(.middle)
+                }
+                if let address {
+                    Text(verbatim: address)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 Text(status.summary)
                     .font(.caption)
@@ -342,7 +351,7 @@ private struct CompanionServerStatusSection: View {
     private func report(status: CompanionServerStatus, state: PhoneBridgeModel.ServerState?, now: Date) -> String {
         let server = bridge.servers.first { $0.id == serverID }
         var lines = ["WearTAK Companion server status"]
-        if let server { lines.append("Server: \(server.host):\(server.port)") }
+        if let server { lines.append("Server: \(server.displayLabel)") }
         lines.append("Status: \(status.summary)")
         if let since = state?.connectedSince, state?.connected == true {
             lines.append("Connected since: \(since.formatted(.iso8601))")
@@ -381,6 +390,7 @@ private struct CompanionServerEditor: View {
     @Environment(\.scenePhase) private var scenePhase
     let original: CompanionServer?
     let serverID: UUID
+    @State private var name: String
     @State private var host: String
     @State private var port: String
     @State private var enrollmentPort: String
@@ -404,6 +414,7 @@ private struct CompanionServerEditor: View {
         self.bridge = bridge
         original = server
         serverID = server?.id ?? UUID()
+        _name = State(initialValue: server?.name ?? "")
         _host = State(initialValue: server?.host ?? "")
         _port = State(initialValue: "\(server?.port ?? 8089)")
         _enrollmentPort = State(initialValue: "\(server?.enrollmentPort ?? 8446)")
@@ -417,6 +428,14 @@ private struct CompanionServerEditor: View {
         NavigationStack {
             Form {
                 TLSApprovalSection(bridge: bridge)
+                Section {
+                    LabeledContent(String(localized: "Server Name", table: "CompanionApp")) {
+                        TextField(String(localized: "Optional", table: "CompanionApp"), text: $name)
+                            .autocorrectionDisabled()
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+                .disabled(busy || bridge.adminLockEnabled)
                 if original != nil {
                     Section {
                         Toggle(String(localized: "Server enabled", table: "CompanionApp"), isOn: Binding(
@@ -654,7 +673,7 @@ private struct CompanionServerEditor: View {
             let sameEndpoint = current?.endpoint.key == endpoint.key
             let record = CompanionServer(id: serverID, endpoint: endpoint, enabled: original == nil ? true : enabled,
                                          streamTLSName: sameEndpoint ? current?.streamTLSName : nil,
-                                         apiTLSName: sameEndpoint ? current?.apiTLSName : nil)
+                                         apiTLSName: sameEndpoint ? current?.apiTLSName : nil, name: name)
             try bridge.save(record)
             saved = true
             dismiss()
