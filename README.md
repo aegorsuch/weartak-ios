@@ -52,6 +52,29 @@ Beta builds expire after 90 days. Install a newer TestFlight build when one is
 available. WearTAK Companion is optional; see its setup below. Selecting iTAK
 or TAK Aware does not yet connect the watch to those partner apps.
 
+#### Keep WearTAK easy to return to
+
+No separate watch face is needed. To keep WearTAK as the app you return to
+when you wake the watch:
+
+1. On the watch, open **Settings > General > Return to Clock**.
+2. Scroll down and select **WearTAK**, choose **Custom**, then select
+  **After 1 hour** to use the longest return-to-clock timeout.
+3. Open WearTAK again. While it remains the last app, raise your wrist or tap
+  the display to wake the watch and return to it.
+
+You can also find Return to Clock in the iPhone's **Watch app > My Watch >
+General**. If the watch has already returned to its clock face, press the
+Digital Crown and select WearTAK from your apps.
+
+This setting delays returning to the clock; it does not pin WearTAK
+indefinitely, keep the screen lit, or guarantee background execution.
+watchOS still controls display sleep and app suspension. Sensor monitoring
+and direct watch reporting stop when WearTAK is backgrounded, so reopening
+it is still necessary. WearTAK does not currently include a watch-face
+complication. See Apple's
+[display and Return to Clock guidance](https://support.apple.com/guide/watch/adjust-the-display-settings-apd127ec93ac/watchos).
+
 #### Build 12: tester message / What to Test
 
 WearTAK 5.8.0 (12) includes draft Watch and Companion translations in all
@@ -534,7 +557,8 @@ Dynamic/Constant behavior. The phone's Wi-Fi battery multiplier is not applied.
 Fixes are rejected if
 they are invalid or `0,0`, have accuracy worse than 100 m, are older than 30
 seconds, or are dated more than 5 seconds in the future. `time` is the send
-time, `start` is the fix time, and `stale` is three intervals plus 60 seconds.
+time, `start` is the fix time, and `stale` is two reporting intervals plus
+15 seconds, matching ATAK.
 Phone GPS is preferred on the Companion relay. After a server accepts a phone
 report, Companion suppresses the watch's own PLI for the same UID on that server
 only, while the latest phone fix remains valid and the last accepted report is
