@@ -14,11 +14,6 @@ enum ConnectionState: String {
     case failed = "Connection failed"
 }
 
-enum EmergencyState: String, Codable {
-    case alert = "ALERT"
-    case cancel = "CANCEL"
-}
-
 enum ManualAlertType: String, CaseIterable, Identifiable {
     case gateRunner = "Gate Runner"
     case gunshot = "Gunshot"
@@ -77,6 +72,16 @@ struct IncomingMapEntity: Identifiable {
     var missionName: String? = nil
     var alertCategory: String? = nil
     var isAlert: Bool = false
+    var hasUsableLocation: Bool = true
+    var isStaleAlert: Bool = false
+    var isLastKnownAlertLocation: Bool = false
+    var alertUID: String? = nil
+    var alertLocationObservedAt: Date? = nil
+
+    var displayTitle: String {
+        callSign.flatMap { $0.isEmpty ? nil : $0 } ??
+            (isAlert ? (senderUID ?? alertUID ?? id) : id)
+    }
 
     var chatRoute: ContactChatRoute? {
         if let sourceServerID { return .companion(sourceServerID) }
@@ -235,6 +240,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private static let pointSendTimesKey = "WearTAK.incomingPointSendTimes"
     private var clearedAlertSendTimes: [String: Date] = [:]
     private static let clearedAlertSendTimesKey = "WearTAK.clearedAlertSendTimes"
+    private static let remoteAlertsKey = "WearTAK.remoteAlertLifecycle"
+    private var remoteAlerts = RemoteAlertLifecycle()
+    private var connectedRemoteAlertServers: Set<UUID>?
+    @Published private(set) var remoteAlertEntities: [IncomingMapEntity] = []
+    @Published private(set) var remoteAlertError: String?
     private static let mapItemReplyLifetime: TimeInterval = 24 * 60 * 60
     @Published private var chatInbox = TAKChatInbox<ContactConversation>()
 
@@ -243,11 +253,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     var unreadChatCount: Int { chatInbox.unreadCount }
 
     var chatConversations: [ContactConversation] { chatInbox.conversations }
-    var incomingMapPoints: [IncomingMapEntity] { incomingEntities.filter { !$0.isUser } }
+    var incomingMapPoints: [IncomingMapEntity] { remoteAlertEntities + incomingEntities.filter { !$0.isUser } }
     /// Points offered in the Bloodhound order list; Data Sync items stay on the map only.
     var bloodhoundOrderPoints: [IncomingMapEntity] {
         let points = incomingEntities.filter { !$0.isUser && $0.missionName == nil }
-        return points.filter(\.isAlert).sorted { $0.lastSeen > $1.lastSeen } + points.filter { !$0.isAlert }
+        return remoteAlertEntities + points
     }
 
     func chatTitle(for conversation: ContactConversation) -> String {
@@ -331,7 +341,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         sitxClient.onReady = { [weak self] in self?.connect() }
         sitxClient.onDisconnected = { [weak self] in
-            guard let self, !self.sitxClient.hasReadyOutput else { return }
+            guard let self else { return }
+            self.remoteAlerts.remove(source: .sitx)
+            self.publishRemoteAlerts()
+            guard !self.sitxClient.hasReadyOutput else { return }
             self.connectionTask?.cancel()
             self.connectionState = .disconnected
             self.stopLocationUpdatesIfIdle()
@@ -344,6 +357,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
             } else if !self.sitxClient.hasReadyOutput {
                 self.connectionState = .disconnected
                 self.stopLocationUpdatesIfIdle()
+            }
+            if !self.multicastClient.isReady {
+                self.remoteAlerts.remove(source: .multicast)
+                self.publishRemoteAlerts()
             }
         }
         multicastClient.onEntity = { [weak self] entity in
@@ -397,7 +414,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 self.companionMapCacheWrites.schedule()
             }
             for entity in SitxCoT.parse(Data(xml.utf8), excluding: SitxClient.deviceID()) {
-                self.receiveEntity(entity, at: seen, sourceServerID: message.sourceServerID,
+                self.receiveEntity(entity, at: entity.emergencyState != nil ? now : seen, sourceServerID: message.sourceServerID,
                                    sourceGeneration: message.sourceGeneration ?? 0, expiresAt: header?.stale,
                                    notifyNewPoint: true)
             }
@@ -407,11 +424,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
             guard let self else { return }
             let ids = Set(enabled)
             self.incomingEntities.removeAll { $0.sourceServerID.map { !ids.contains($0) } ?? false }
+            self.remoteAlerts.retainServers(ids)
+            self.publishRemoteAlerts()
             self.companionMapCache.prune(enabledServerIDs: ids)
             for event in events where ids.contains(event.sourceServerID) && event.isCurrent(at: Date()) {
                 self.companionMapCache.receive(event)
                 for entity in SitxCoT.parse(Data(event.xml.utf8), excluding: SitxClient.deviceID()) {
-                    self.receiveEntity(entity, at: event.lastSeen, sourceServerID: event.sourceServerID,
+                    self.receiveEntity(entity, at: entity.emergencyState != nil ? Date() : event.lastSeen, sourceServerID: event.sourceServerID,
                                        sourceGeneration: event.sourceGeneration, expiresAt: event.header?.stale)
                 }
             }
@@ -421,9 +440,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
         companionClient.onSourceRefresh = { [weak self] id, generation in
             self?.refreshSource(id, generation: generation)
         }
+        companionClient.onRemoteAlertSources = { [weak self] ids in
+            guard let self else { return }
+            self.connectedRemoteAlertServers = Set(ids)
+            self.remoteAlerts.retainServers(Set(ids))
+            self.publishRemoteAlerts()
+            if self.companionMapCache.retainEmergencySources(Set(ids)) { self.saveCompanionMapCache() }
+        }
         companionClient.onBridgeRestart = { [weak self] in
             guard let self else { return }
             self.sourceGenerations = [:]
+            self.remoteAlerts.resetServerGenerations()
+            self.publishRemoteAlerts()
             self.companionMapCache.resetGenerations()
             self.incomingEntities = self.incomingEntities.map { entity in
                 guard entity.sourceServerID != nil else { return entity }
@@ -450,10 +478,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         }
         if let stored = UserDefaults.standard.dictionary(forKey: Self.clearedAlertSendTimesKey) as? [String: Double] {
-            let now = Date()
             clearedAlertSendTimes = stored.mapValues { Date(timeIntervalSince1970: $0) }
-                .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         }
+        if let data = UserDefaults.standard.data(forKey: Self.remoteAlertsKey) {
+            do { remoteAlerts = try JSONDecoder().decode(RemoteAlertLifecycle.self, from: data) }
+            catch {
+                remoteAlertError = String(localized: "Unable to restore remote alerts: \(error.localizedDescription)", table: "WatchMain")
+                chatLogger.error("Remote alert restore failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        remoteAlerts.importCancellations(clearedAlertSendTimes)
+        publishRemoteAlerts()
+        chatLogger.notice("Remote alert lifecycle restored; awaiting CoT ingress (parser diagnostics use RemoteAlerts)")
         if let stored = Self.loadStoredMissions() {
             storedMissions = stored
             for serverID in Set(stored.map(\.serverID)) { installMissionItems(serverID: serverID) }
@@ -466,7 +502,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 companionMapCache.prune()
                 for event in companionMapCache.events {
                     for entity in SitxCoT.parse(Data(event.xml.utf8), excluding: SitxClient.deviceID()) {
-                        receiveEntity(entity, at: event.lastSeen, sourceServerID: event.sourceServerID,
+                        receiveEntity(entity, at: entity.emergencyState != nil ? Date() : event.lastSeen, sourceServerID: event.sourceServerID,
                                       sourceGeneration: event.sourceGeneration, expiresAt: event.header?.stale)
                     }
                 }
@@ -739,9 +775,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     var bloodhoundTarget: BloodhoundDestination? {
-        if let id = bloodhoundMapItemID, let item = incomingEntities.first(where: { $0.id == id && !$0.isUser }) {
+        if let id = bloodhoundMapItemID, let item = incomingMapPoints.first(where: { $0.id == id && $0.hasUsableLocation }) {
             return BloodhoundDestination(latitude: item.latitude, longitude: item.longitude,
-                displayTitle: item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
+                displayTitle: item.displayTitle)
         }
         if let uid = bloodhoundContactID, let contact = incomingEntities.first(where: { $0.id == uid && $0.isUser }) {
             return BloodhoundDestination(latitude: contact.latitude, longitude: contact.longitude,
@@ -751,12 +787,25 @@ final class WatchSessionModel: NSObject, ObservableObject {
         return BloodhoundDestination(latitude: marker.latitude, longitude: marker.longitude, displayTitle: marker.displayTitle)
     }
 
+    var alertNavigationNotice: String? {
+        guard let id = bloodhoundMapItemID, let alert = remoteAlertEntities.first(where: { $0.id == id }),
+              alert.isLastKnownAlertLocation else { return nil }
+        return alert.isStaleAlert
+            ? String(localized: "Stale alert, last-known location", table: "WatchMain")
+            : String(localized: "Last-known location", table: "WatchMain")
+    }
+
     func markIncomingPointsSeen() {
         if !unseenIncomingPointIDs.isEmpty { unseenIncomingPointIDs = [] }
     }
 
     /// Hides a received point locally; later copies of the same UID stay hidden for a day.
     func removeIncomingPoint(_ id: String) {
+        if let uid = remoteAlertEntities.first(where: { $0.id == id })?.alertUID {
+            remoteAlerts.dismiss(uid: uid)
+            publishRemoteAlerts()
+            return
+        }
         let now = Date()
         dismissedPointIDs = dismissedPointIDs.filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
         dismissedPointIDs[id] = now
@@ -773,7 +822,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let item = incomingMapPoints.first(where: { $0.id == id }) else {
             throw ContactChatFailure.message("This map item is no longer available.")
         }
-        if !item.isAlert || item.senderUID?.isEmpty == false {
+        guard item.hasUsableLocation else {
+            throw ContactChatFailure.message(String(localized: "Alert location unavailable", table: "WatchMain"))
+        }
+        if !item.isAlert {
             try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
         }
         bloodhoundTargetID = nil
@@ -794,6 +846,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let item = incomingMapPoints.first(where: { $0.id == id }) else {
             throw ContactChatFailure.message("This map item is no longer available.")
         }
+        if item.isAlert {
+            try await startBloodhound(toMapItem: id)
+            return
+        }
         if item.missionName == nil, let sender = item.senderUID, !sender.isEmpty, sender != SitxClient.deviceID() {
             try await startBloodhound(toMapItem: id)
             return
@@ -807,7 +863,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func markInPosition() async throws {
         let item = bloodhoundMapItemID.flatMap { id in incomingMapPoints.first { $0.id == id } }
-        if let item, !item.isAlert || item.senderUID?.isEmpty == false {
+        if let item, !item.isAlert {
             try await sendMapItemReply(item, text: "In Position at \(mapItemTitle(item))")
         }
         bloodhoundTargetID = nil
@@ -838,7 +894,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private func mapItemTitle(_ item: IncomingMapEntity) -> String {
-        item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id
+        item.displayTitle
     }
 
     func chatUnavailableReason(for contact: IncomingMapEntity) -> String? {
@@ -920,29 +976,52 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func receiveEntity(_ payload: EntityRelayPayload, at now: Date = Date(), sourceServerID: UUID? = nil,
                        sourceGeneration: Int = 0, expiresAt: Date? = nil, sourceTransport: ContactChatRoute? = nil,
                        notifyNewPoint: Bool = false) {
-        if let sourceServerID, sourceGeneration < sourceGenerations[sourceServerID, default: 0] { return }
+        if let sourceServerID, sourceGeneration < sourceGenerations[sourceServerID, default: 0] {
+            chatLogger.debug("Rejected entity from obsolete source generation")
+            return
+        }
+        if let state = payload.emergencyState {
+            if let sourceServerID, let connectedRemoteAlertServers,
+               !connectedRemoteAlertServers.contains(sourceServerID) {
+                chatLogger.debug("Remote alert rejected: source is disconnected or removed")
+                return
+            }
+            if let sourceServerID { refreshSource(sourceServerID, generation: sourceGeneration) }
+            let source: RemoteAlertSource
+            if let sourceServerID { source = .server(sourceServerID) }
+            else {
+                switch sourceTransport {
+                case .multicast: source = .multicast
+                case .sitx: source = .sitx
+                case .companion(let id): source = .server(id)
+                case nil: source = .relay
+                }
+            }
+            guard let sentAt = payload.sentAt else {
+                chatLogger.notice("Remote alert rejected: missing or invalid CoT time")
+                return
+            }
+            let coordinate = CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)
+            let location = payload.hasUsableLocation != false && CLLocationCoordinate2DIsValid(coordinate)
+                ? RemoteAlertLocation(latitude: payload.lat, longitude: payload.lon, observedAt: sentAt,
+                                      staleAt: expiresAt ?? payload.staleAt) : nil
+            let wasVisible = remoteAlertEntities.contains { $0.alertUID == payload.uid }
+            let outcome = remoteAlerts.receive(RemoteAlertUpdate(uid: payload.uid, state: state,
+                sentAt: sentAt, staleAt: expiresAt ?? payload.staleAt, type: payload.type,
+                senderUID: payload.senderUID, callSign: payload.callSign, category: payload.alertCategory,
+                location: location), source: source, generation: sourceGeneration, ownUID: SitxClient.deviceID())
+            chatLogger.notice("Remote alert ingress from \(String(describing: source), privacy: .public): \(outcome.rawValue, privacy: .public)")
+            publishRemoteAlerts(now: now)
+            if notifyNewPoint, outcome == .accepted, !wasVisible,
+               let alert = remoteAlertEntities.first(where: { $0.alertUID == payload.uid }), !alert.isStaleAlert {
+                unseenIncomingPointIDs.insert(alert.id)
+                WKInterfaceDevice.current().play(.notification)
+            }
+            return
+        }
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
         let previousSend = pointSendTimes[payload.uid] ?? incomingEntities.first(where: { $0.id == payload.uid })?.lastSeen
-        if payload.emergencyState != nil {
-            if let sent = payload.sentAt, let previousSend, sent < previousSend { return }
-            if payload.emergencyState == .cancel {
-                incomingEntities.removeAll { $0.id == payload.uid }
-                unseenIncomingPointIDs.remove(payload.uid)
-                let clearedAt = max(payload.sentAt ?? now, clearedAlertSendTimes[payload.uid] ?? .distantPast)
-                clearedAlertSendTimes[payload.uid] = clearedAt
-                clearedAlertSendTimes = Dictionary(uniqueKeysWithValues: clearedAlertSendTimes
-                    .filter { now.timeIntervalSince($0.value) < Self.mapItemReplyLifetime }
-                    .sorted { $0.value > $1.value }.prefix(200).map { ($0.key, $0.value) })
-                UserDefaults.standard.set(clearedAlertSendTimes.mapValues(\.timeIntervalSince1970),
-                                          forKey: Self.clearedAlertSendTimesKey)
-                pruneIncomingEntities(now: now)
-                return
-            }
-            // A snapshot must not resurrect an alert already cleared at the same event time.
-            if let clearedAt = clearedAlertSendTimes[payload.uid],
-               (payload.sentAt ?? now) <= clearedAt { return }
-        }
         let isNewerSend = payload.sentAt.map { sent in previousSend.map { sent > $0 } ?? true } ?? false
         let isResend = notifyNewPoint && payload.isHumanEntered && isNewerSend
         if let dismissedAt = dismissedPointIDs[payload.uid] {
@@ -1002,6 +1081,47 @@ final class WatchSessionModel: NSObject, ObservableObject {
         incomingEntities.removeAll { dropped.contains($0.id) }
     }
 
+    private func publishRemoteAlerts(now: Date = Date(), persist: Bool = true) {
+        let alertTargetID = bloodhoundMapItemID.flatMap { id in
+            remoteAlertEntities.contains(where: { $0.id == id }) ? id : nil
+        }
+        remoteAlertEntities = remoteAlerts.visibleAlerts.map { alert in
+            let copy = alert.copy
+            let serverID: UUID?
+            let route: ContactChatRoute?
+            switch copy.source {
+            case .server(let id): serverID = id; route = .companion(id)
+            case .sitx: serverID = nil; route = .sitx
+            case .multicast: serverID = nil; route = .multicast
+            case .relay: serverID = nil; route = nil
+            }
+            return IncomingMapEntity(id: "remote-alert:" + alert.uid,
+                latitude: copy.location?.latitude ?? 0, longitude: copy.location?.longitude ?? 0,
+                type: copy.type, lastSeen: copy.sentAt, callSign: copy.callSign, team: nil, role: nil,
+                senderUID: copy.senderUID, sourceServerID: serverID, sourceGeneration: copy.generation,
+                expiresAt: copy.staleAt, isUser: false, sourceTransport: route,
+                alertCategory: copy.category, isAlert: true, hasUsableLocation: copy.location != nil,
+                isStaleAlert: copy.isStale(at: now),
+                isLastKnownAlertLocation: copy.isLastKnown || copy.isStale(at: now), alertUID: alert.uid,
+                alertLocationObservedAt: copy.location?.observedAt)
+        }
+        if !unseenIncomingPointIDs.isEmpty {
+            unseenIncomingPointIDs.formIntersection(Set(incomingMapPoints.map(\.id)))
+        }
+        if let id = alertTargetID,
+           !remoteAlertEntities.contains(where: { $0.id == id && $0.hasUsableLocation }) {
+            bloodhoundMapItemID = nil
+            bloodhoundProximityNotified = false
+        }
+        guard persist else { return }
+        do {
+            UserDefaults.standard.set(try JSONEncoder().encode(remoteAlerts), forKey: Self.remoteAlertsKey)
+        } catch {
+            remoteAlertError = String(localized: "Unable to save remote alerts: \(error.localizedDescription)", table: "WatchMain")
+            chatLogger.error("Remote alert save failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     private func recordPointSend(_ uid: String, at sent: Date) {
         let now = Date()
         pointSendTimes[uid] = sent
@@ -1015,6 +1135,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func pruneIncomingEntities(now: Date = Date()) {
+        publishRemoteAlerts(now: now, persist: false)
         incomingEntities.removeAll {
             $0.missionName == nil &&
                 ((!$0.isAlert || $0.expiresAt == nil) && now.timeIntervalSince($0.lastSeen) > 300 ||
@@ -1029,7 +1150,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             bloodhoundContactID = nil
             bloodhoundProximityNotified = false
         }
-        if let id = bloodhoundMapItemID, !incomingEntities.contains(where: { $0.id == id && !$0.isUser }) {
+        if let id = bloodhoundMapItemID, !incomingMapPoints.contains(where: { $0.id == id }) {
             bloodhoundMapItemID = nil
             bloodhoundProximityNotified = false
         }
@@ -1165,7 +1286,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var drawnMissionAnchor: CLLocation?
 
     var mapEntities: [IncomingMapEntity] {
-        incomingEntities.filter { $0.missionName == nil || drawnMissionItemIDs.contains($0.id) || $0.id == bloodhoundMapItemID }
+        remoteAlertEntities.filter(\.hasUsableLocation) +
+            incomingEntities.filter { $0.missionName == nil || drawnMissionItemIDs.contains($0.id) || $0.id == bloodhoundMapItemID }
     }
 
     func refreshDrawnMissionItems() {
@@ -1245,6 +1367,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private func refreshSource(_ id: UUID, generation: Int) {
         guard generation > sourceGenerations[id, default: 0] else { return }
         sourceGenerations[id] = generation
+        remoteAlerts.remove(source: .server(id), beforeGeneration: generation)
+        publishRemoteAlerts()
         incomingEntities.removeAll { $0.sourceServerID == id && $0.sourceGeneration < generation && $0.missionName == nil }
         companionMapCache.remove(sourceID: id, beforeGeneration: generation)
         saveCompanionMapCache()
@@ -1287,15 +1411,20 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let now = Date()
         let prefix = "bloodhound-alert-check-\(UUID())"
         let pointID = prefix + "-point"
-        let alertID = prefix + "-alert"
-        let newerAlertID = prefix + "-newer"
+        let alertUID = prefix + "-alert"
+        let newerAlertUID = prefix + "-newer"
+        let alertID = "remote-alert:" + alertUID
+        let newerAlertID = "remote-alert:" + newerAlertUID
+        let savedRemoteAlerts = remoteAlerts
+        let savedRemoteAlertServers = connectedRemoteAlertServers
+        connectedRemoteAlertServers = nil
         defer {
+            connectedRemoteAlertServers = savedRemoteAlertServers
+            remoteAlerts = savedRemoteAlerts
+            publishRemoteAlerts()
             incomingEntities.removeAll { $0.id.hasPrefix(prefix) }
-            for id in [pointID, alertID, newerAlertID] { pointSendTimes.removeValue(forKey: id) }
+            for id in [pointID, alertUID, newerAlertUID] { pointSendTimes.removeValue(forKey: id) }
             UserDefaults.standard.set(pointSendTimes.mapValues(\.timeIntervalSince1970), forKey: Self.pointSendTimesKey)
-            clearedAlertSendTimes.removeValue(forKey: alertID)
-            UserDefaults.standard.set(clearedAlertSendTimes.mapValues(\.timeIntervalSince1970),
-                                      forKey: Self.clearedAlertSendTimesKey)
             bloodhoundMapItemID = nil
         }
         func require(_ condition: Bool, _ message: String) throws {
@@ -1305,19 +1434,24 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
         }
         let point = EntityRelayPayload(uid: pointID, lat: 38, lon: -77, type: "a-n-G", sentAt: now)
-        let alert = EntityRelayPayload(uid: alertID, lat: 38, lon: -77, type: "b-a-o",
+        let alert = EntityRelayPayload(uid: alertUID, lat: 38, lon: -77, type: "b-a-o", senderUID: "remote-sender",
             sentAt: now, emergencyState: .alert, alertCategory: "Injury", staleAt: now.addingTimeInterval(600))
-        let newerAlert = EntityRelayPayload(uid: newerAlertID, lat: 39, lon: -77, type: "b-a-o-tbl",
+        let newerAlert = EntityRelayPayload(uid: newerAlertUID, lat: 39, lon: -77, type: "b-a-o-tbl",
             sentAt: now.addingTimeInterval(1), emergencyState: .alert, staleAt: now.addingTimeInterval(600))
         receiveEntity(point, at: now)
         receiveEntity(alert, at: now)
         receiveEntity(newerAlert, at: now.addingTimeInterval(1))
-        let ids = bloodhoundOrderPoints.filter { $0.id.hasPrefix(prefix) }.map(\.id)
+        receiveEntity(EntityRelayPayload(uid: alertUID, lat: 38, lon: -77, type: "a-f-G-U-C"), at: now)
+        let ids = bloodhoundOrderPoints.filter { $0.id.contains(prefix) }.map(\.id)
         try require(ids == [newerAlertID, alertID, pointID], "Bloodhound alerts must precede ordinary points, newest first")
         try require(mapEntities.contains { $0.id == alertID && $0.isAlert }, "Remote alerts must appear on the map")
+        let queuedBeforeNavigation = queuedEventCount
         try await toggleMapItemBloodhound(id: alertID)
         try require(bloodhoundMapItemID == alertID && bloodhoundTarget?.latitude == alert.lat,
                     "The point menu must navigate to an alert without a reply address")
+        try await markInPosition()
+        try require(queuedEventCount == queuedBeforeNavigation, "Alert navigation and In Position must not send automated chat")
+        try await toggleMapItemBloodhound(id: alertID)
         var cancel = alert
         cancel.emergencyState = .cancel
         cancel.sentAt = now.addingTimeInterval(2)
@@ -1325,6 +1459,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
         try require(!bloodhoundOrderPoints.contains { $0.id == alertID } && bloodhoundMapItemID == nil,
                     "Cancellation must remove the alert and stop Bloodhound")
         try require(!mapEntities.contains { $0.id == alertID }, "Cancellation must remove the alert from the map")
+        try require(incomingEntities.contains { $0.id == alertUID && $0.isUser },
+                    "Emergency cancellation must preserve the sender's ordinary contact")
         receiveEntity(alert, at: now.addingTimeInterval(3))
         try require(!bloodhoundOrderPoints.contains { $0.id == alertID }, "A replay must not resurrect a cancelled alert")
         var reactivated = alert
@@ -1335,8 +1471,50 @@ final class WatchSessionModel: NSObject, ObservableObject {
         pruneIncomingEntities(now: now.addingTimeInterval(301))
         try require(bloodhoundOrderPoints.contains { $0.id == newerAlertID }, "An active alert must remain until its stale time")
         pruneIncomingEntities(now: now.addingTimeInterval(600))
-        try require(!bloodhoundOrderPoints.contains { $0.id == newerAlertID }, "An expired alert must leave the picker")
-        try require(!mapEntities.contains { $0.id == newerAlertID }, "An expired alert must leave the map")
+        try require(bloodhoundOrderPoints.contains { $0.id == newerAlertID && $0.isStaleAlert },
+                    "An expired alert must remain Stale in the picker")
+        try require(mapEntities.contains { $0.id == newerAlertID && $0.isStaleAlert },
+                    "An expired alert must remain Stale on the map")
+        var fresh = newerAlert
+        fresh.sentAt = now.addingTimeInterval(601)
+        fresh.staleAt = now.addingTimeInterval(900)
+        receiveEntity(fresh, at: now.addingTimeInterval(601))
+        try require(mapEntities.contains { $0.id == newerAlertID && !$0.isStaleAlert }, "A fresh location update clears Stale")
+        let sourceA = UUID()
+        let sourceB = UUID()
+        receiveEntity(fresh, at: now.addingTimeInterval(601), sourceServerID: sourceA)
+        receiveEntity(fresh, at: now.addingTimeInterval(601), sourceServerID: sourceB)
+        remoteAlerts.remove(source: .relay)
+        refreshSource(sourceA, generation: 1)
+        try require(remoteAlertEntities.filter { $0.id == newerAlertID }.count == 1 &&
+                    remoteAlertEntities.first { $0.id == newerAlertID }?.sourceServerID == sourceB,
+                    "Disconnecting one source must preserve the other source's alert")
+        let missingUID = prefix + "-missing"
+        let missingID = "remote-alert:" + missingUID
+        receiveEntity(EntityRelayPayload(uid: missingUID, lat: 0, lon: 0, type: "b-a-o",
+            sentAt: now, emergencyState: .alert, hasUsableLocation: false), at: now)
+        try require(bloodhoundOrderPoints.contains { $0.id == missingID } &&
+                    !mapEntities.contains { $0.id == missingID }, "A location-less alert belongs only in the picker")
+        do {
+            try await startBloodhound(toMapItem: missingID)
+            try require(false, "Location-less alert navigation must be rejected")
+        } catch ContactChatFailure.message(let message) {
+            try require(message == String(localized: "Alert location unavailable", table: "WatchMain") &&
+                        bloodhoundMapItemID == nil, "Missing coordinates must disable navigation with an explicit error")
+        }
+        removeIncomingPoint(newerAlertID)
+        remoteAlerts = try JSONDecoder().decode(RemoteAlertLifecycle.self, from: JSONEncoder().encode(remoteAlerts))
+        fresh.sentAt = now.addingTimeInterval(602)
+        receiveEntity(fresh, at: now.addingTimeInterval(602), sourceServerID: sourceB)
+        try require(!bloodhoundOrderPoints.contains { $0.id == newerAlertID } &&
+                    !mapEntities.contains { $0.id == newerAlertID }, "Dismissal persists across refreshes and restores")
+        var latestCancel = fresh
+        latestCancel.emergencyState = .cancel
+        receiveEntity(latestCancel, at: now.addingTimeInterval(602), sourceServerID: sourceB)
+        fresh.sentAt = now.addingTimeInterval(603)
+        receiveEntity(fresh, at: now.addingTimeInterval(603), sourceServerID: sourceB)
+        try require(bloodhoundOrderPoints.contains { $0.id == newerAlertID } &&
+                    mapEntities.contains { $0.id == newerAlertID }, "Cancel/reactivate with a reused UID restores both surfaces")
     }
 
     func runSimulatorLoadTest() async {

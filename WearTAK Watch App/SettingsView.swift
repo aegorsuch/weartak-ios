@@ -639,6 +639,9 @@ private struct MulticastPreferencesView: View {
                     if let error = client.lastSendError {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
+                    if let error = client.lastReceiveError {
+                        Text(error).font(.caption).foregroundStyle(.orange)
+                    }
                     LabeledContent(String(localized: "Stored events", table: "WatchSettings"), value: "\(model.queuedEventCount)")
                     Toggle(String(localized: "Developer mode", table: "WatchSettings"), isOn: $settings.developerMode)
                 }

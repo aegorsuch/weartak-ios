@@ -31,6 +31,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     var onSourceRefresh: ((UUID, Int) -> Void)?
     var onBridgeRestart: (() -> Void)?
     var onMapSnapshot: (([CompanionMapEvent], [UUID]) -> Void)?
+    var onRemoteAlertSources: (([UUID]) -> Void)?
     /// A server's mission list loaded; its subscribed missions carry their current map items.
     var onMissions: ((TAKMissionServer) -> Void)?
     /// The watch position sent with Data Sync requests so oversized missions keep their nearest items.
@@ -257,6 +258,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
 
     private func apply(_ message: BridgeWire.Message) {
         applySession(message)
+        if let ids = message.remoteAlertSourceIDs { onRemoteAlertSources?(ids) }
         if let configured = message.configured { self.configured = configured }
         serverReady = message.ready == true
         if let reporting = message.phoneReporting { phoneReportingStatus = reporting }

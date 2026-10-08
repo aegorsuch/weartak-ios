@@ -43,8 +43,9 @@ struct CompanionMapEvent: Codable {
     var lastSeen: Date { min(header?.time ?? receivedAt, receivedAt) }
 
     func isCurrent(at now: Date) -> Bool {
-        guard let header, lastSeen <= now.addingTimeInterval(30),
-              now.timeIntervalSince(lastSeen) <= CompanionMapCache.maximumAge else { return false }
+        guard let header, lastSeen <= now.addingTimeInterval(30) else { return false }
+        if header.isEmergency { return true }
+        guard now.timeIntervalSince(lastSeen) <= CompanionMapCache.maximumAge else { return false }
         return header.stale.map { $0 > now } ?? true
     }
 }
@@ -95,6 +96,13 @@ struct CompanionMapCache: Codable {
             CompanionMapEvent(xml: $0.xml, sourceServerID: $0.sourceServerID,
                               sourceGeneration: 0, receivedAt: $0.receivedAt)
         }
+    }
+
+    @discardableResult
+    mutating func retainEmergencySources(_ ids: Set<UUID>) -> Bool {
+        let count = events.count
+        events.removeAll { $0.header?.isEmergency == true && !ids.contains($0.sourceServerID) }
+        return events.count != count
     }
 
     func filling(_ message: BridgeWire.Message) throws -> BridgeWire.Message {
@@ -152,6 +160,7 @@ struct CoTMapHeader {
     let type: String?
     let time: Date?
     let stale: Date?
+    let isEmergency: Bool
 
     static func parse(_ xml: String) -> Self? {
         guard CoTStreamFramer.isEvent(Data(xml.utf8)) else { return nil }
@@ -159,7 +168,8 @@ struct CoTMapHeader {
         let parser = XMLParser(data: Data(xml.utf8))
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
-        guard parser.parse(), delegate.hasPoint, let attributes = delegate.attributes,
+        guard parser.parse(), let attributes = delegate.attributes,
+              delegate.hasPoint || delegate.isEmergency,
               let uid = attributes["uid"], !uid.isEmpty else { return nil }
         func date(_ value: String?) -> Date? {
             guard let value else { return nil }
@@ -173,19 +183,26 @@ struct CoTMapHeader {
         let stale = date(attributes["stale"])
         guard attributes["time"] == nil || time != nil,
               attributes["stale"] == nil || stale != nil else { return nil }
-        return Self(uid: uid, type: attributes["type"], time: time, stale: stale)
+        return Self(uid: uid, type: attributes["type"], time: time, stale: stale,
+                    isEmergency: delegate.isEmergency)
     }
 }
 
 private final class CoTMapHeaderParser: NSObject, XMLParserDelegate {
     var attributes: [String: String]?
     var hasPoint = false
+    var isEmergency = false
     private var depth = 0
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName: String?, attributes: [String: String]) {
         depth += 1
-        if depth == 1, elementName == "event" { self.attributes = attributes }
+        if depth == 1, elementName == "event" {
+            self.attributes = attributes
+            let type = attributes["type"] ?? ""
+            isEmergency = type == "b-a-o" || type.hasPrefix("b-a-o-")
+        }
+        if depth == 3, elementName == "emergency" { isEmergency = true }
         if depth == 2, elementName == "point",
            let lat = attributes["lat"].flatMap(Double.init),
            let lon = attributes["lon"].flatMap(Double.init),

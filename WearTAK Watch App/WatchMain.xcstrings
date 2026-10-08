@@ -1,6 +1,112 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Bloodhound to Alert" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Bloodhound to Alert" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Bloodhound hacia la alerta" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Bloodhound vers l'alerte" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Bloodhound zum Alarm" } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "Bloodhound إلى التنبيه" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "アラートへBloodhound" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "Bloodhound 导航至警报" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "Bloodhound 導航至警報" } }
+      }
+    },
+    "Dismiss locally" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dismiss locally" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Ocultar localmente" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Masquer localement" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Lokal ausblenden" } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "إخفاء محليًا" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "この端末で非表示" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "仅在本机隐藏" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "僅在本機隱藏" } }
+      }
+    },
+    "Stale" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stale" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Desactualizada" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Périmée" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Veraltet" } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "غير محدّث" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "更新なし" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "已过期" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "已過期" } }
+      }
+    },
+    "Last-known location" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Last-known location" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Última ubicación conocida" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Dernière position connue" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Letzter bekannter Standort" } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "آخر موقع معروف" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "最後に確認した位置" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "最后已知位置" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "最後已知位置" } }
+      }
+    },
+    "Stale alert, last-known location" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stale alert, last-known location" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Alerta desactualizada, última ubicación conocida" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Alerte périmée, dernière position connue" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Veralteter Alarm, letzter bekannter Standort" } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "تنبيه غير محدّث، آخر موقع معروف" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "更新のないアラート、最後に確認した位置" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "警报已过期，最后已知位置" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "警報已過期，最後已知位置" } }
+      }
+    },
+    "Alert location unavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Alert location unavailable" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Ubicación de la alerta no disponible" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Position de l'alerte indisponible" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Alarmstandort nicht verfügbar" } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "موقع التنبيه غير متاح" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "アラートの位置を取得できません" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "警报位置不可用" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "警報位置無法取得" } }
+      }
+    },
+    "Stale does not mean the emergency ended." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stale does not mean the emergency ended." } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Una alerta desactualizada no significa que la emergencia haya terminado." } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Une alerte périmée ne signifie pas que l'urgence est terminée." } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Veraltet bedeutet nicht, dass der Notfall beendet ist." } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "عدم التحديث لا يعني انتهاء حالة الطوارئ." } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "更新がなくても、緊急事態が終了したとは限りません。" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "过期并不意味着紧急情况已结束。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "過期並不代表緊急情況已結束。" } }
+      }
+    },
+    "Location updated: %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Location updated: %@" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Ubicación actualizada: %@" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Position mise à jour : %@" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Standort aktualisiert: %@" } },
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "تحديث الموقع: %@" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "位置の更新: %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "位置更新时间：%@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "位置更新時間：%@" } }
+      }
+    },
+    "Unable to save remote alerts: %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unable to save remote alerts: %@" } }
+      }
+    },
+    "Unable to restore remote alerts: %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unable to restore remote alerts: %@" } }
+      }
+    },
     "%@ m relative" : {
       "localizations" : {
         "ar" : {

@@ -125,6 +125,24 @@ struct CompanionMapChecks {
         precondition(Set(persistedEvent.keys) == ["xml", "sourceServerID", "sourceGeneration", "receivedAt"])
         restored.prune(now: now.addingTimeInterval(121))
         precondition(restored.events.isEmpty)
+        let staleAlertXML = """
+        <event uid="atak-9-1-1" type="b-a-o" time="\(formatter.string(from: now.addingTimeInterval(-600)))" stale="\(formatter.string(from: now.addingTimeInterval(-590)))">
+        <detail><emergency type="911 Alert">ALPHA</emergency></detail></event>
+        """
+        var alerts = CompanionMapCache()
+        let staleAlert = CompanionMapEvent(xml: staleAlertXML, sourceServerID: server,
+            sourceGeneration: 0, receivedAt: now)
+        precondition(staleAlert.isValid && staleAlert.header?.isEmergency == true)
+        alerts.receive(staleAlert, now: now)
+        alerts.prune(now: now.addingTimeInterval(86_400))
+        precondition(alerts.events.count == 1, "Location-less stale emergencies must survive Companion snapshots")
+        let emergencySnapshot = try alerts.filling(BridgeWire.Message(kind: .mapSnapshot,
+            remoteAlertSourceIDs: [server]))
+        let emergencyReply = try BridgeWire.Message.decode(emergencySnapshot.encoded())
+        precondition(emergencyReply.mapEvents?.count == 1 && emergencyReply.remoteAlertSourceIDs == [server])
+        let sensorXML = staleAlertXML.replacingOccurrences(of: "b-a-o", with: "a-f-G-U-C")
+        precondition(CoTMapHeader.parse(sensorXML)?.isEmergency == true)
+        precondition(alerts.retainEmergencySources([]) && alerts.events.isEmpty)
         cache.receive(event("other", source: UUID()), now: now)
         cache.prune(now: now, enabledServerIDs: [server])
         precondition(cache.events.count == 1)

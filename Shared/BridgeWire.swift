@@ -52,6 +52,8 @@ enum BridgeWire {
         /// Set when Companion is in the background without phone location reporting, so iOS only lets it
         /// hold TAK connections briefly per watch request. Carries the reason reporting is off.
         var relayPaused: String?
+        /// Connected emergency ingress sources; nil on older Companion versions.
+        var remoteAlertSourceIDs: [UUID]?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)

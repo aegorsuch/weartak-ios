@@ -98,6 +98,9 @@ struct ContentView: View {
         .onChange(of: model.offlineNotice) { _, notice in
             if let notice { showToast(notice) }
         }
+        .onChange(of: model.remoteAlertError) { _, error in
+            if let error { showToast(error) }
+        }
         .alert(String(localized: "Stored events", table: "WatchMain"), isPresented: Binding(
             get: { model.offlineExpiryNotice != nil },
             set: { if !$0 { model.offlineExpiryNotice = nil } }
@@ -440,6 +443,13 @@ private struct WatchDashboardView: View {
                         Text(model.bloodhoundTarget?.displayTitle ?? String(localized: "Compass", table: "WatchMain"))
                             .font(.system(size: small ? 10 : 11, weight: .medium))
                             .lineLimit(1)
+                        if let notice = model.alertNavigationNotice {
+                            Text(notice)
+                                .font(.system(size: 8))
+                                .foregroundStyle(.yellow)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
                         Text(reading.map { "\(Int($0.rangeMeters)) m" } ?? "___")
                             .font(.system(size: small ? 13 : 15, weight: .semibold))
                             .monospacedDigit()
@@ -451,6 +461,7 @@ private struct WatchDashboardView: View {
             }
             .accessibilityLabel((model.bloodhoundTarget == nil ? String(localized: "Compass", table: "WatchMain")
                 : String(localized: "Bloodhound navigation", table: "WatchMain")) +
+                (model.alertNavigationNotice.map { ", " + $0 } ?? "") +
                 (model.unseenIncomingPointIDs.isEmpty ? ""
                     : String(localized: ", \(model.unseenIncomingPointIDs.count) new points", table: "WatchMain")))
             NavigationLink {
@@ -1090,7 +1101,7 @@ private struct TacticalMapView: View {
         ForEach(model.mapEntities) { entity in
             if entity.isAlert {
                 Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
-                    IncomingAlertMarker()
+                    IncomingAlertMarker(stale: entity.isStaleAlert)
                 }
                 .tag(MapPointSelection.incoming(entity.id))
             } else if entity.isUser {
@@ -1129,6 +1140,9 @@ private struct TacticalMapView: View {
                         .frame(width: 40, height: 40)
                         .accessibilityLabel(String(localized: "Direction to Bloodhound target", table: "WatchMain"))
                     VStack(alignment: .leading, spacing: 2) {
+                        if let notice = model.alertNavigationNotice {
+                            Text(notice).font(.caption2).foregroundStyle(.yellow)
+                        }
                         Text(reading.rangeMeters < 1000
                              ? "\(Int(reading.rangeMeters)) m"
                              : "\((reading.rangeMeters / 1000).formatted(.number.precision(.fractionLength(2)))) km")
@@ -1154,7 +1168,7 @@ private struct TacticalMapView: View {
     }
 
     private func incomingMapTitle(_ entity: IncomingMapEntity) -> String {
-        entity.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? entity.id
+        entity.displayTitle
     }
 
     private func mapControl(_ systemName: String, label: String) -> some View {
@@ -1745,31 +1759,27 @@ struct MapPointSymbol: View {
 }
 
 private struct IncomingAlertMarker: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.isLuminanceReduced) private var luminanceReduced
-    @Environment(\.scenePhase) private var scenePhase
-
-    private var flashing: Bool { !reduceMotion && !luminanceReduced && scenePhase == .active }
+    let stale: Bool
 
     var body: some View {
-        if flashing {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                circle(bright: Int(context.date.timeIntervalSinceReferenceDate) % 2 == 0)
+        VStack(spacing: 0) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.black, .yellow)
+                .font(.system(size: 24, weight: .bold))
+                .shadow(color: .black, radius: 2)
+            if stale {
+                Text("Stale", tableName: "WatchMain")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.yellow)
+                    .padding(2)
+                    .background(.black, in: Capsule())
             }
-        } else {
-            circle(bright: true)
         }
-    }
-
-    private func circle(bright: Bool) -> some View {
-        Circle()
-            .fill(Color.white.opacity(bright ? 1 : 0.35))
-            .overlay(Circle().stroke(.black, lineWidth: 2))
-            .frame(width: 24, height: 24)
-            .shadow(color: .black.opacity(0.7), radius: 2)
-            .frame(width: 32, height: 32)
-            .contentShape(Circle())
-            .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
+        .frame(minWidth: 32, minHeight: 32)
+        .contentShape(Rectangle())
+        .accessibilityLabel(stale ? String(localized: "Stale alert, last-known location", table: "WatchMain")
+                            : String(localized: "Active Alert", table: "WatchMain"))
     }
 }
 
@@ -1842,13 +1852,16 @@ private struct BloodhoundView: View {
     @State private var confirmRemoveAll = false
 
     private func pointTitle(_ item: IncomingMapEntity) -> String {
-        item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id
+        item.displayTitle
     }
 
     private func pointDetail(_ item: IncomingMapEntity) -> String {
         let affiliation: String
         if item.isAlert {
-            affiliation = incomingAlertCategoryLabel(item.alertCategory)
+            affiliation = incomingAlertCategoryLabel(item.alertCategory) +
+                (item.isStaleAlert ? " · " + String(localized: "Stale", table: "WatchMain") : "") +
+                (item.isLastKnownAlertLocation ? "\n" + String(localized: "Last-known location", table: "WatchMain") : "") +
+                (!item.hasUsableLocation ? "\n" + String(localized: "Alert location unavailable", table: "WatchMain") : "")
         } else {
             switch item.type.split(separator: "-").dropFirst().first {
             case "f": affiliation = String(localized: "Friendly", table: "WatchMain")
@@ -1859,27 +1872,40 @@ private struct BloodhoundView: View {
             }
         }
         let mission = item.missionName.map { "\n" + String(localized: "Mission: \($0)", table: "WatchMain") } ?? ""
-        guard let location = model.lastLocation else { return affiliation + mission }
+        guard item.hasUsableLocation, let location = model.lastLocation else { return affiliation + mission }
         let meters = Int(location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)))
         return "\(affiliation) · \(meters) m" + mission
     }
 
+    @ViewBuilder
     private func pointRow(_ item: IncomingMapEntity) -> some View {
-        Button { selectedPoint = item } label: {
-            HStack {
-                if item.isAlert {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .red)
-                        .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(pointTitle(item))
-                        .lineLimit(2)
-                    Text(pointDetail(item))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+        if item.isAlert {
+            NavigationLink {
+                IncomingPointDetailView(model: model, id: item.id)
+            } label: {
+                pointRowContent(item)
+            }
+        } else {
+            Button { selectedPoint = item } label: {
+                pointRowContent(item)
+            }
+        }
+    }
+
+    private func pointRowContent(_ item: IncomingMapEntity) -> some View {
+        HStack {
+            if item.isAlert {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.black, .yellow)
+                    .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(pointTitle(item))
+                    .lineLimit(2)
+                Text(pointDetail(item))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -1888,6 +1914,9 @@ private struct BloodhoundView: View {
         Group {
             if let target = model.bloodhoundTarget {
                 VStack(spacing: 8) {
+                    if let notice = model.alertNavigationNotice {
+                        Text(notice).font(.caption2).foregroundStyle(.yellow)
+                    }
                     if let location = model.lastLocation,
                        let reading = model.bloodhoundCompassReading(from: location) {
                         Image(systemName: "location.north.fill")
@@ -1918,6 +1947,9 @@ private struct BloodhoundView: View {
                 }
             } else {
                 List {
+                    if let error = model.remoteAlertError {
+                        Text(error).font(.caption2).foregroundStyle(.orange)
+                    }
                     if model.bloodhoundOrderPoints.isEmpty {
                         Text("No incoming points")
                             .foregroundStyle(.secondary)
@@ -1963,7 +1995,7 @@ private struct BloodhoundView: View {
         }
         .confirmationDialog("Remove all incoming points?", isPresented: $confirmRemoveAll) {
             Button("Remove All", role: .destructive) {
-                for id in model.bloodhoundOrderPoints.map(\.id) {
+                for id in model.bloodhoundOrderPoints.filter({ !$0.isAlert }).map(\.id) {
                     model.removeIncomingPoint(id)
                 }
             }
@@ -2343,10 +2375,10 @@ private struct IncomingPointDetailView: View {
                         if item.isAlert {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .red)
+                                .foregroundStyle(.black, .yellow)
                                 .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
                         }
-                        Text(item.callSign.flatMap { $0.isEmpty ? nil : $0 } ?? item.id)
+                        Text(item.displayTitle)
                             .font(.headline)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -2360,6 +2392,25 @@ private struct IncomingPointDetailView: View {
                         Text(MapCoordinateFormatter.droppedTime(item.lastSeen))
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
+                    }
+                }
+                if item.isAlert {
+                    Section {
+                        if item.isStaleAlert {
+                            Text("Stale", tableName: "WatchMain").foregroundStyle(.yellow)
+                        }
+                        if item.isLastKnownAlertLocation {
+                            Text("Last-known location", tableName: "WatchMain")
+                            Text("Stale does not mean the emergency ended.", tableName: "WatchMain")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        if let observedAt = item.alertLocationObservedAt {
+                            Text("Location updated: \(MapCoordinateFormatter.droppedTime(observedAt))", tableName: "WatchMain")
+                                .font(.caption2)
+                        }
+                        if !item.hasUsableLocation {
+                            Text("Alert location unavailable", tableName: "WatchMain")
+                        }
                     }
                 }
                 if let missionName = item.missionName {
@@ -2385,59 +2436,63 @@ private struct IncomingPointDetailView: View {
                         Label(String(localized: "Bloodhounding", table: "WatchMain"), systemImage: "location.north.fill")
                     }
                 }
-                Section {
-                    HStack(alignment: .top, spacing: 6) {
-                        VStack(spacing: 4) {
-                            Text("From You", tableName: "WatchMain")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            if let location = model.lastLocation {
-                                let reading = model.mapPointReading(to: item.coordinate, from: location)
-                                Image(systemName: "location.north.fill")
-                                    .font(.title3)
-                                    .rotationEffect(.degrees(reading.relativeBearingDegrees))
-                                Text("\(Int(reading.bearingDegrees.rounded()))° \(MapCoordinateFormatter.cardinalDirection(reading.bearingDegrees))")
-                                    .font(.caption2.monospacedDigit())
-                                    .multilineTextAlignment(.center)
-                            } else {
-                                Image(systemName: "location.slash")
-                                    .font(.title3)
-                                Text("Unavailable", tableName: "WatchMain")
+                if item.hasUsableLocation {
+                    Section {
+                        HStack(alignment: .top, spacing: 6) {
+                            VStack(spacing: 4) {
+                                Text("From You", tableName: "WatchMain")
                                     .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                if let location = model.lastLocation {
+                                    let reading = model.mapPointReading(to: item.coordinate, from: location)
+                                    Image(systemName: "location.north.fill")
+                                        .font(.title3)
+                                        .rotationEffect(.degrees(reading.relativeBearingDegrees))
+                                    Text("\(Int(reading.bearingDegrees.rounded()))° \(MapCoordinateFormatter.cardinalDirection(reading.bearingDegrees))")
+                                        .font(.caption2.monospacedDigit())
+                                        .multilineTextAlignment(.center)
+                                } else {
+                                    Image(systemName: "location.slash")
+                                        .font(.title3)
+                                    Text("Unavailable", tableName: "WatchMain")
+                                        .font(.caption2)
+                                }
                             }
-                        }
-                        .frame(width: 58)
+                            .frame(width: 58)
 
-                        Divider()
+                            Divider()
 
-                        VStack(alignment: .leading, spacing: 3) {
-                            if let location = model.lastLocation {
-                                Text(String(format: "%.2f km", location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)) / 1000))
-                                    .font(.caption.bold())
+                            VStack(alignment: .leading, spacing: 3) {
+                                if let location = model.lastLocation {
+                                    Text(String(format: "%.2f km", location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)) / 1000))
+                                        .font(.caption.bold())
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                } else {
+                                    Text("Distance unavailable", tableName: "WatchMain")
+                                        .font(.caption.bold())
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                }
+                                Text(String(format: "%.5f", item.latitude))
+                                Text(String(format: "%.5f", item.longitude))
+                                Text(MapCoordinateFormatter.mgrs(item.coordinate) ?? String(localized: "Unavailable", table: "WatchMain"))
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                            } else {
-                                Text("Distance unavailable", tableName: "WatchMain")
-                                    .font(.caption.bold())
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
+                                    .minimumScaleFactor(0.55)
                             }
-                            Text(String(format: "%.5f", item.latitude))
-                            Text(String(format: "%.5f", item.longitude))
-                            Text(MapCoordinateFormatter.mgrs(item.coordinate) ?? String(localized: "Unavailable", table: "WatchMain"))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.55)
+                            .font(.caption2.monospacedDigit())
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .font(.caption2.monospacedDigit())
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
 
                 Section {
                     Button(model.bloodhoundMapItemID == id ? String(localized: "Stop Bloodhound", table: "WatchMain")
+                       : item.isAlert ? String(localized: "Bloodhound to Alert", table: "WatchMain")
                        : String(localized: "Bloodhound to Marker", table: "WatchMain")) {
                         run { try await model.toggleMapItemBloodhound(id: id) }
                     }
+                    .disabled(!item.hasUsableLocation)
 
                     if let mission {
                         NavigationLink(String(localized: "Change Title", table: "WatchMain")) {
@@ -2476,8 +2531,14 @@ private struct IncomingPointDetailView: View {
                         .disabled(!canEdit || model.lastLocation == nil)
                     }
 
-                    Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
-                        confirmDelete = true
+                    Button(item.isAlert ? String(localized: "Dismiss locally", table: "WatchMain")
+                           : String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
+                        if item.isAlert {
+                            model.removeIncomingPoint(item.id)
+                            dismiss()
+                        } else {
+                            confirmDelete = true
+                        }
                     }
                     .disabled(mission?.canEdit == false || working)
 

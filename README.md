@@ -84,9 +84,10 @@ Traditional Chinese**.
 
 Build 13 adds physiology/network admin controls and remote emergency alerts.
 Test live alerts from another TAK device: alerts should appear first in
-Bloodhound and as pulsing white map markers. Check point details, navigation,
-In Position, sender cancellation, and stale-time expiry. Reduce Motion and
-Always On dimming should keep alert markers solid. Known manual alert categories
+Bloodhound and as yellow warning triangles on the map. Check alert details,
+silent navigation, In Position, sender cancellation, local dismissal, and stale
+retention. Missing coordinates must disable navigation without hiding the alert
+from the picker. Known manual alert categories
 should translate (Injury is Lesión in Spanish); custom categories stay unchanged.
 Check admin controls and reporting behavior on real paired devices.
 Simulator demo alerts are excluded from release builds.
@@ -652,20 +653,57 @@ listed points on this watch. During that Bloodhound, **nPos** stops navigation,
 removes the point and sends "In Position at TITLE".
 
 Active CoT emergency alerts from other devices appear above ordinary incoming
-points, newest first, with a red triangle/exclamation icon, sender callsign,
-alert category and range. Cancellation removes the alert immediately, including
-any active Bloodhound target; alerts also expire at their CoT stale time.
+points, newest first, with a yellow warning triangle, sender callsign/identity,
+emergency category, range when available, and **Stale** status. The map and
+picker use the same emergency state, deduplicated by CoT alert UID while keeping
+ownership by each ingress source. Ordinary contact/point visibility filters do
+not hide alerts. ATAK's reused `*-9-1-1` UIDs, standard `b-a-o` descendants,
+`b-a-o-can`, and `<emergency cancel="true">` / `cancel="1"` are supported.
+The watch suppresses its own emergencies.
+
+The CoT stale deadline marks an alert **Stale**, not ended. Already-stale
+emergencies are accepted as last-known reports; a newer fresh location update
+clears Stale. Stale coordinates are explicitly labelled **Last-known location**
+in details and navigation, with their location-update time in details.
+Location-less updates can retain the same source's last valid coordinates, but
+cannot make those coordinates live again. Without usable coordinates, the
+alert remains readable in the picker, with no map marker or navigation action.
+
+An explicit sender cancellation removes the emergency and stops its Bloodhound
+navigation, without removing the sender's ordinary contact or unrelated points.
+Ordering and cancellation records persist across restarts: delayed older
+packets cannot resurrect a cancellation, but a genuinely newer activation may
+reuse the same UID. Disconnecting/removing a source clears only its copies;
+another owning source keeps the alert visible.
+
+**Missed-cancellation limitation:** if cancellation is never received, an alert
+can remain visible indefinitely, until **Dismiss locally** or applicable source
+cleanup. Stale does not mean the emergency ended, and these alerts are not a
+safety service.
+
 Recognized manual alert categories use translated labels in the picker and
 point details (for example, Injury becomes Lesión in Spanish); custom incoming
 categories and CoT values remain unchanged.
-RGR can navigate to alerts without a reply address. nPos stops navigating to an
-alert without hiding it; the alert remains until cleared, expired or removed
-locally. Remove and Remove All still only hide items on this watch.
-On the map, alerts use a flashing white circle with a dark outline and the
-received-point menu (coordinates, range/bearing, Bloodhound and local Delete
-Marker). Cancelling or expiring an alert removes its map marker and closes its
-open point menu. Flashing dims once per second rather than disappearing,
-and stays solid with Reduce Motion, Always On dimming or an inactive app.
+Tapping either an alert's map triangle or picker row opens the same details.
+**Bloodhound to Alert** starts navigation without an acknowledgement, automated
+chat, assignment, or emergency cancellation. **nPos** stops navigation without
+messaging or hiding the alert. This is not houndmaster behavior.
+**Dismiss locally** hides the ongoing emergency from both surfaces, transmits
+nothing, and persists across restarts and newer active refreshes. Only sender
+cancellation at or after the latest observed update ends that dismissal; a
+subsequent newer activation can reappear. A delayed older cancellation cannot
+reset dismissal. **Remove All** still applies only to ordinary incoming points.
+New emergency UI strings use the existing WatchMain catalog, with draft
+translations in Arabic, French, German, Japanese, Spanish, and both Chinese
+variants; other locales fall back to English for these new strings.
+
+Diagnostics: watch OSLog category `RemoteAlerts` records CoT ingress byte counts,
+parsed entity counts and specific parser rejections; `GeoChat` records emergency lifecycle outcomes
+(`accepted`, `cancelled`, `dismissed`, `ownAlert`, `outOfOrder`, `invalid`) and
+obsolete/disconnected-source rejection. No ingress log means no packet reached
+the parser; a parse log with zero accepted entities means packets arrived but
+were rejected or were not supported map entities. Include debug-level logs when
+investigating missing alerts.
 
 #### Supported languages (36)
 
@@ -848,9 +886,19 @@ Defaults are `239.2.3.1`, `UDP`, and port `6969`.
 
 The address must be an IPv4 multicast group in `224.0.0.0/4`; the port must be
 between 1 and 65535. Output is CoT XML over UDP. TCP is not offered because it
-cannot send to an IP multicast group. The transport joins the selected group
-on the watch's WiFi interface, publishes PLI/alerts/points, and displays
-incoming nonexpired CoT users and points on the map. Enabled means the
+cannot send to an IP multicast group. The transport joins the selected SA group
+plus ATAK GeoChat (`224.10.10.1:17012`) and direct CoT
+(`224.10.10.1:6969`) on the watch's WiFi interface, without duplicate joins when
+the configured endpoint matches one of these. GeoChat sends to the chat endpoint;
+PLI, alerts, and points send to the configured SA endpoint. Only multicast PLI
+copies advertise `224.10.10.1:17012:udp`; server PLI keeps its existing endpoint.
+Reception accepts XML and TAK Protocol v1 (`bf 01 bf`) protobuf datagrams,
+including typed contact/team/device details and opaque emergency/chat XML.
+Unknown protobuf fields are skipped; malformed packets, unsupported versions,
+and DTD/entity declarations are rejected with diagnostics. Control-only TAK
+messages are not map events. Transmission remains XML.
+The watch displays incoming nonexpired users/points and retained remote
+emergencies using their shared lifecycle. Enabled means the
 preference is on, not that delivery is confirmed. UDP has no receiver
 acknowledgment. Runtime diagnostics are hidden by default. Tap the version
 number at the bottom of watch Settings seven times to enable Developer mode.
@@ -860,7 +908,11 @@ hide diagnostics again. Leaving Settings resets an unfinished tap sequence.
 Developer-only controls appear at the bottom of their respective menus, below
 normal settings. In multicast, the Runtime Status section shows readiness/errors, local
 datagrams sent/received since launch, the last local send time/error, and the
-stored-event count. A successful local send is not receiver confirmation;
+stored-event count. Receive errors appear alongside send errors; OSLog category
+`Multicast` logs the ingress endpoint, byte count, and decoder rejection reason.
+Android multicast locks and network requests are not applicable to watchOS;
+Apple's existing WiFi-only Network.framework transport remains in use.
+A successful local send is not receiver confirmation;
 use a separate TAK receiver to validate the watch-to-LAN path.
 
 Multicast and Sit(x) can run independently or together. They share the same
@@ -1131,17 +1183,49 @@ The Sit(x) protocol checks include mocked connection loss during device
 authorization, successful group discovery after retry, visible retry status,
 and expiry/cancellation while waiting to retry.
 
-Remote alert parser checks cover active/cancelled emergencies, self exclusion,
-stale-time handling and backwards-compatible relay decoding. The simulator
-load test also checks picker ordering, map visibility and point-menu Bloodhound,
-cancellation of a Bloodhound target, replay rejection and alert expiry.
+Remote alert checks cover ATAK/WearTAK formats, parent links, own-alert suppression,
+already-stale and location-less events, cancellation flags and compatible relay
+decoding. The Foundation-only lifecycle runner checks duplicate sources,
+out-of-order delivery, stale retention/refresh, missing/retained locations,
+persistent cancellation and dismissal, and cancel/reactivate with reused UIDs.
+The existing simulator load test checks consistent map/picker state, source
+cleanup, silent navigation/In Position, and preservation of ordinary contacts.
+Companion map checks include retained stale/location-less alert snapshots.
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/RemoteAlertLifecycle.swift \
   'WearTAK Watch App/RelayProtocol.swift' 'WearTAK Watch App/SitxCoT.swift' \
   Tests/BloodhoundAlertChecks.swift -o /tmp/weartak-alert-checks
 /tmp/weartak-alert-checks
+xcrun swiftc -swift-version 5 -parse-as-library \
+  Shared/RemoteAlertLifecycle.swift Tests/RemoteAlertLifecycleChecks.swift \
+  -o /tmp/weartak-alert-lifecycle-checks
+/tmp/weartak-alert-lifecycle-checks
 ```
+
+Both alert runners also work with Swift for Windows:
+
+```powershell
+swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift 'WearTAK Watch App\RelayProtocol.swift' 'WearTAK Watch App\SitxCoT.swift' Tests\BloodhoundAlertChecks.swift -o "$env:TEMP\weartak-alert-checks.exe"
+& "$env:TEMP\weartak-alert-checks.exe"
+swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift Tests\RemoteAlertLifecycleChecks.swift -o "$env:TEMP\weartak-alert-lifecycle-checks.exe"
+& "$env:TEMP\weartak-alert-lifecycle-checks.exe"
+```
+
+Multicast interoperability checks use the same standalone Swift runner pattern.
+They cover SA/chat/direct-CoT endpoint selection and deduplication, multicast-only
+UDP PLI identity, XML and TAK v1 decoding, typed/opaque detail precedence,
+control-only messages, unknown fields, malformed packets and entity rejection.
+
+```powershell
+swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift Shared\TAKMulticast.swift 'WearTAK Watch App\RelayProtocol.swift' 'WearTAK Watch App\SitxCoT.swift' Tests\TAKMulticastChecks.swift -o "$env:TEMP\weartak-multicast-checks.exe"
+& "$env:TEMP\weartak-multicast-checks.exe"
+```
+
+On macOS use the equivalent `xcrun swiftc` command with POSIX paths. A native
+watchOS build and physical-watch LAN test are still required to verify actual
+Network.framework multicast delivery, including chat and TAK v1 packets.
 
 Bridge/channel checks cover bounded XML framing, message correlation, channel
 payload preservation, endpoint parsing and multi-server record persistence:

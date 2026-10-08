@@ -57,6 +57,8 @@ struct EntityRelayPayload: Codable {
     var emergencyState: EmergencyState? = nil
     var alertCategory: String? = nil
     var staleAt: Date? = nil
+    /// False for location-less emergencies; legacy payloads infer validity from lat/lon.
+    var hasUsableLocation: Bool? = nil
 
     var isHumanEntered: Bool { how?.hasPrefix("h") == true }
 

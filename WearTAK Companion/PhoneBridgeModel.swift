@@ -400,7 +400,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         BridgeWire.Message(kind: .status, id: id, ready: canRelay && connected, configured: configured, detail: status,
                    sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary,
                    phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
-                   sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason)
+                   sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason,
+                   remoteAlertSourceIDs: Array(connectedAlertSourceIDs))
     }
 
     /// Non-nil while Companion is backgrounded without phone location reporting: iOS then only grants short
@@ -645,6 +646,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         evaluateReporting()
         configured = serverStates.values.contains { $0.configured }
         connected = canRelay && serverStates.values.contains { $0.connected }
+        if mapCache.retainEmergencySources(connectedAlertSourceIDs) { saveMapCache() }
         status = !canRelay ? String(localized: "Waiting for watch refresh", table: "PhoneBridgeStatus")
             : connected ? String(localized: "Connected", table: "PhoneBridgeStatus")
             : configured ? String(localized: "No connected servers", table: "PhoneBridgeStatus")
@@ -668,6 +670,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         if session.isReachable, let data = try? snapshot().encoded() {
             session.sendMessageData(data, replyHandler: nil, errorHandler: { _ in })
         }
+    }
+
+    private var connectedAlertSourceIDs: Set<UUID> {
+        Set(enabledSourceIDs.filter { serverStates[$0]?.connected == true })
     }
 
     private func forward(_ xml: String, sourceID: UUID) {
@@ -859,7 +865,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             configured: configured, detail: status, sessionID: bridgeSessionID,
             enabledServerIDs: Array(enabledSourceIDs), refreshError: failures.isEmpty ? nil : failures.joined(separator: "\n"),
             phoneReporting: phoneReportingSummary, phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
-            sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason)
+            sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason,
+            remoteAlertSourceIDs: Array(connectedAlertSourceIDs))
         return try mapCache.filling(reply)
     }
 
