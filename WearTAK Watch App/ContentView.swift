@@ -1274,7 +1274,9 @@ struct DataSyncMenuView: View {
                 Text("Connect to a TAK Server to use Data Sync.", tableName: "WatchMain")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(client.missionServers) { server in
+                ForEach(client.missionServers.sorted {
+                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }) { server in
                     NavigationLink {
                         DataSyncServerView(client: client, serverID: server.id)
                     } label: {
@@ -1397,7 +1399,9 @@ private struct MapChannelsMenuView: View {
                 Text("Connect to a TAK Server to configure channels.", tableName: "WatchMain")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(client.channelServers) { server in
+                ForEach(client.channelServers.sorted {
+                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }) { server in
                     NavigationLink {
                         MapServerChannelsView(client: client, serverID: server.id)
                     } label: {
