@@ -56,6 +56,8 @@ final class MockSitxHTTP: URLProtocol {
     static let lock = NSLock()
     static var requests: [URLRequest] = []
     static var failRefresh = false
+    static var authorizationFailures: [URLError.Code] = []
+    static var authorizationExpires: Double = 60
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -65,11 +67,24 @@ final class MockSitxHTTP: URLProtocol {
         Self.lock.lock()
         Self.requests.append(request)
         let failRefresh = Self.failRefresh
-        Self.lock.unlock()
+        let expires = Self.authorizationExpires
         let path = request.url!.path
+        let failure = path == "/api/v1/device/authorization/token" && !Self.authorizationFailures.isEmpty
+            ? Self.authorizationFailures.removeFirst() : nil
+        Self.lock.unlock()
+        if let failure {
+            client?.urlProtocol(self, didFailWithError: URLError(failure))
+            return
+        }
         let body: String
         let status: Int
         switch path {
+        case "/api/v1/device/authorization/code":
+            body = "{\"device_code\":\"fixture-device\",\"user_code\":\"FIXTURE\",\"interval\":1,\"expires_in\":\(expires)}"
+            status = 200
+        case "/api/v1/device/authorization/token":
+            body = "{\"access_token\":\"authorized-access\",\"refresh_token\":\"authorized-refresh\"}"
+            status = 200
         case "/api/v1/refresh/token":
             body = failRefresh ? "{}" : "{\"refresh_token\":\"rotated-refresh\"}"
             status = failRefresh ? 500 : 200
@@ -102,7 +117,7 @@ final class XMLFields: NSObject, XMLParserDelegate {
 struct SitxProtocolChecks {
     @MainActor
     static func main() async throws {
-        DispatchQueue.global().asyncAfter(deadline: .now() + 15) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 30) {
             fatalError("Sit(x) protocol checks timed out")
         }
         let suite = "WearTAK.SitxChecks.\(UUID().uuidString)"
@@ -691,7 +706,66 @@ struct SitxProtocolChecks {
         failureClient.setAppActive(false)
         precondition(tokens.values.isEmpty && client.groups.isEmpty && client.selectedGroupID.isEmpty)
         print("PASS: transient refresh failure retains credentials; host change/Clear Sit(x) remove authorization")
+        try await checkAuthorizationRecovery(session: session, suite: suite)
         print("All Sit(x) protocol checks passed")
+    }
+
+    @MainActor
+    static func checkAuthorizationRecovery(session: URLSession, suite: String) async throws {
+        for scenario in ["recover", "expire", "cancel"] {
+            let name = suite + ".authorization-" + scenario
+            let defaults = UserDefaults(suiteName: name)!
+            defer { defaults.removePersistentDomain(forName: name) }
+            let settings = AppSettings(defaults: defaults)
+            settings.sitxEnabled = true
+            settings.sitxApiHost = "https://fixture.sitx.io"
+            let tokens = MemoryTokens()
+            tokens.values = [:]
+            let client = SitxClient(settings: settings, session: session, defaults: defaults, tokenStore: tokens)
+            MockSitxHTTP.lock.withLock {
+                MockSitxHTTP.requests = []
+                MockSitxHTTP.authorizationFailures = [.networkConnectionLost]
+                MockSitxHTTP.authorizationExpires = scenario == "expire" ? 2 : 60
+            }
+            var sawRetry = false
+            let subscription = client.$status.sink { status in
+                if status.hasPrefix("Retrying authorization: ") {
+                    sawRetry = true
+                    precondition(status.contains("-1005 (connection lost)"))
+                    precondition(WatchSettingsLabels.sitx(status).contains("Retrying authorization"))
+                }
+            }
+            defer { subscription.cancel(); client.forgetAuthorization() }
+            client.refreshAuthorizationCode()
+            let deadline = Date().addingTimeInterval(10)
+            while !sawRetry, Date() < deadline {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            precondition(sawRetry)
+            precondition(client.authorizationCode == "FIXTURE")
+            if scenario == "cancel" {
+                client.forgetAuthorization()
+                try await Task.sleep(for: .milliseconds(100))
+                precondition(client.status == "Not connected")
+            } else {
+                while client.groups.isEmpty && client.status != "Code expired; retry", Date() < deadline {
+                    try await Task.sleep(for: .milliseconds(20))
+                }
+            }
+            let tokenRequests = MockSitxHTTP.lock.withLock {
+                MockSitxHTTP.requests.filter { $0.url?.path == "/api/v1/device/authorization/token" }
+            }
+            if scenario == "recover" {
+                precondition(tokenRequests.count == 2)
+                precondition(client.groups.count == 1 && client.selectedGroupID == "group&A")
+                precondition(tokens.values["refresh"] == "authorized-refresh")
+                precondition(client.authorizationCode.isEmpty)
+            } else {
+                precondition(tokenRequests.count == 1 && tokens.values.isEmpty && client.groups.isEmpty)
+                if scenario == "expire" { precondition(client.status == "Code expired; retry") }
+            }
+        }
+        print("PASS: device authorization recovers from connection loss, displays retry status, and stops on expiry/cancellation")
     }
 
     static func fields(_ xml: String) throws -> XMLFields {

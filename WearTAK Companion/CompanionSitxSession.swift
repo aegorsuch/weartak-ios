@@ -170,6 +170,8 @@ final class CompanionSitxSession: ObservableObject {
             let expiresAt = Date().addingTimeInterval(code["expires_in"] as? Double ?? 600)
             setStatus(Status.awaitingAuthorization)
             stage = "Sit(x) token exchange"
+            var retry = SitxAuthorizationRetry()
+            var retryDelay: TimeInterval?
             while true {
                 guard Date() < expiresAt else {
                     authorizationCode = ""
@@ -177,7 +179,10 @@ final class CompanionSitxSession: ObservableObject {
                     setStatus(Status.expired)
                     return
                 }
-                try await Task.sleep(for: .seconds(interval))
+                try await Task.sleep(for: .seconds(min(retryDelay ?? interval, max(0, expiresAt.timeIntervalSinceNow))))
+                try Task.checkCancellation()
+                guard Date() < expiresAt else { continue }
+                retryDelay = nil
                 do {
                     let token = try await post(host + "/api/v1/device/authorization/token", form: [
                         "client_id": SitxAPI.clientID,
@@ -198,9 +203,16 @@ final class CompanionSitxSession: ObservableObject {
                     }
                     return
                 } catch SitxHTTPError.authorizationPending {
+                    setStatus(Status.awaitingAuthorization)
                     continue
                 } catch SitxHTTPError.slowDown {
                     interval += 5
+                    setStatus(Status.awaitingAuthorization)
+                } catch {
+                    try Task.checkCancellation()
+                    guard let delay = retry.delay(for: error, pollingInterval: interval) else { throw error }
+                    retryDelay = delay
+                    setStatus(SitxAuthorizationRetry.status(Self.errorSummary(error, context: stage)))
                 }
             }
         } catch is CancellationError {

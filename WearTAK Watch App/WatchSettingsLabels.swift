@@ -194,6 +194,9 @@ enum WatchSettingsStatusText {
             let tokenText = String(codeText.dropLast())
             return String(localized: "Sit(x) device sequestered (\(tokenText))", table: "WatchSettings", comment: "Sit(x) status. The argument is a server status code and is not translated.")
         }
+        if let innerText = status.suffix(after: "Retrying authorization: ").map(sitx) {
+            return String(localized: "Retrying authorization: \(innerText)", table: "WatchSettings", comment: "Sit(x) device authorization is retrying after a transient network failure. The argument is the localized failure.")
+        }
         return failure(status) ?? status
     }
 

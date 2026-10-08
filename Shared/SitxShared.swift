@@ -1,5 +1,27 @@
 import Foundation
 
+/// Only for device-code polling; never replay requests that rotate refresh tokens.
+struct SitxAuthorizationRetry {
+    private(set) var retries = 0
+
+    mutating func delay(for error: Error, pollingInterval: TimeInterval) -> TimeInterval? {
+        guard let error = error as? URLError, retries < 3 else { return nil }
+        switch error.code {
+        case .networkConnectionLost, .timedOut, .notConnectedToInternet,
+             .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+            let delay = max(pollingInterval, 5 * pow(2, Double(retries)))
+            retries += 1
+            return delay
+        default:
+            return nil
+        }
+    }
+
+    static func status(_ failure: String) -> String {
+        "Retrying authorization: " + failure
+    }
+}
+
 struct SitxGroup: Codable, Identifiable, Equatable {
     let flowTag: String
     let name: String

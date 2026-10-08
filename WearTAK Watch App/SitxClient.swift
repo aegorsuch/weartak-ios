@@ -722,6 +722,8 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     private func pollForAuthorization(host: String) async {
+        var retry = SitxAuthorizationRetry()
+        var retryDelay: TimeInterval?
         while !Task.isCancelled, let deviceCode, let expiresAt {
             guard Date() < expiresAt else {
                 status = State.expired
@@ -729,7 +731,11 @@ final class SitxClient: ObservableObject, TAKTransport {
                 return
             }
             do {
-                try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+                let delay = min(retryDelay ?? pollInterval, max(0, expiresAt.timeIntervalSinceNow))
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                try Task.checkCancellation()
+                guard Date() < expiresAt else { continue }
+                retryDelay = nil
                 let response = try await postForm(
                     host: host,
                     path: "/api/v1/device/authorization/token",
@@ -759,14 +765,22 @@ final class SitxClient: ObservableObject, TAKTransport {
             } catch is CancellationError {
                 return
             } catch let error as SitxError where error == .authorizationPending {
+                status = State.awaitingAuthorization
                 continue
             } catch let error as SitxError where error == .slowDown {
                 pollInterval += 5
+                status = State.awaitingAuthorization
             } catch let error as SitxError where error == .authorizationExpired {
                 status = State.expired
                 self.deviceCode = nil
                 return
             } catch {
+                guard !Task.isCancelled else { return }
+                if let delay = retry.delay(for: error, pollingInterval: pollInterval) {
+                    retryDelay = delay
+                    status = SitxAuthorizationRetry.status(Self.errorSummary(error, context: "Sit(x) token exchange"))
+                    continue
+                }
                 status = Self.errorSummary(error, context: "Sit(x) token exchange")
                 return
             }

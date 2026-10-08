@@ -931,6 +931,13 @@ Changing the address also invalidates the previous organization's credentials.
 - Poll POST `/api/v1/device/authorization/token` with the device-code grant.
   Respect the server's polling interval, `authorization_pending`, `slow_down`,
   and expiration responses.
+  On iPhone and watch, transient connection loss, timeout, connectivity, or DNS
+  failures allow up to three additional polls per authorization attempt, with
+  5/10/20-second backoff (never shorter than the server's polling interval).
+  The state shows "Retrying authorization" with the network error while waiting.
+  Polling stops on cancellation, code expiry, definitive rejection, or exhausted
+  retries. This recovery applies only to device-code polling, not requests that
+  rotate refresh tokens, and does not bypass WiFi/VPN restrictions.
 - Store tokens securely. POST `/api/v1/refresh/token` authenticates with
   `Authorization: Bearer <refresh_token>` and rotates the saved refresh token.
 - GET `/api/v1/tak_servers`, also using the refresh-token Bearer header, returns
@@ -1096,6 +1103,15 @@ swiftc -parse-as-library Shared\OfflineOutbox.swift Tests\OfflineOutboxChecks.sw
 if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-offline-checks.exe" }
 ```
 
+The shared device-authorization retry checks also run on Windows. They cover
+the exact backoff, retry budget, server polling minimum, error classification,
+and visible retry status:
+
+```powershell
+swiftc -parse-as-library Shared\SitxShared.swift Tests\SitxAuthorizationRetryChecks.swift -o "$env:TEMP\weartak-sitx-retry-checks.exe"
+if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-sitx-retry-checks.exe" }
+```
+
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/AppSettings.swift' \
@@ -1110,6 +1126,10 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/PhoneLocationReporting.swift Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
 ```
+
+The Sit(x) protocol checks include mocked connection loss during device
+authorization, successful group discovery after retry, visible retry status,
+and expiry/cancellation while waiting to retry.
 
 Remote alert parser checks cover active/cancelled emergencies, self exclusion,
 stale-time handling and backwards-compatible relay decoding. The simulator
