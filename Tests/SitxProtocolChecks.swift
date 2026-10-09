@@ -470,19 +470,24 @@ struct SitxProtocolChecks {
         let userAccess = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "ops@example.com", "callsign": "ODIN", "access_type": "user"]))
         precondition(userAccess?.label == "ops@example.com" && userAccess?.isNonPersonEntity == false)
         let npe = SitxLinkedAccount(jwt: fixtureJWT(["callsign": "SENSOR-1", "access_type": "npe"]))
-        precondition(npe?.label == "NPE · SENSOR-1" && npe?.isNonPersonEntity == true)
+        precondition(npe?.label == "SENSOR-1" && npe?.isNonPersonEntity == true)
         let refreshOnly = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "ops@example.com", "callsign": "ODIN"]))
         precondition(refreshOnly?.accessType == nil && userAccess?.updated(with: refreshOnly)?.accessType == "user")
         let otherAccount = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "other@example.com"]))
         precondition(npe?.updated(with: otherAccount) == otherAccount)
         precondition(SitxLinkedAccount(jwt: "not-a-jwt") == nil && SitxLinkedAccount(jwt: nil) == nil)
-        precondition(SitxLinkedAccount.displayLabel(nil) == "NPE")
-        precondition(SitxLinkedAccount.displayLabel(SitxLinkedAccount(jwt: "not-a-jwt")) == "NPE")
-        precondition(SitxLinkedAccount.displayLabel(userAccess) == "ops@example.com")
+        precondition(SitxLinkedAccount(jwt: fixtureJWT(["access_type": "npe"]))?.label == "NPE")
+        // Observed Sit(x) NPE token: access_type is still "user" and user_email carries the NPE name.
+        let observedNPE = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "odin-weartak-iosimulator", "access_type": "user"]))
+        precondition(observedNPE?.isNonPersonEntity == true && observedNPE?.label == "odin-weartak-iosimulator")
+        precondition(SitxLinkedAccount(jwt: fixtureJWT(["user_email": "odin-weartak-iosimulator"]))?.isNonPersonEntity == true)
+        precondition(SitxLinkedAccount(jwt: fixtureJWT(["access_type": "user"])) == nil)
         precondition(SitxLinkedAccount(jwt: fixtureJWT(["device": "WearTAK-iPhone"])) == nil)
         let legacySnapshot = try JSONDecoder().decode(SitxSettingsSnapshot.self,
             from: Data(#"{"enabled":true,"host":"https://fixture.sitx.io","status":"Connected"}"#.utf8))
-        precondition(legacySnapshot.account == nil)
+        precondition(legacySnapshot.account == nil && legacySnapshot.accountIsNonPerson == nil)
+        precondition(SitxAPI.isReauthPIN("112358") && !SitxAPI.isReauthPIN("11235") && !SitxAPI.isReauthPIN("1123589")
+                     && !SitxAPI.isReauthPIN("11235a") && !SitxAPI.isReauthPIN("１１２３５８"))
         let storedNow = ISO8601DateFormatter().date(from: "2026-10-05T12:00:00Z")!
         let stored = Data("""
         [{"resource_uid":"b-2","tak_group_tag":"grp","issued_at":"2026-10-05T11:59:00.000-05:00","stale_at":null,"ack_at":null,

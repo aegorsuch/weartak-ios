@@ -713,6 +713,42 @@ private struct CompanionSitxView: View {
     @State private var showAuthorization = false
     @State private var confirmRemoval = false
     @State private var removing = false
+    @State private var showReauthPIN = false
+    @State private var showGroupPicker = false
+    @State private var reauthPIN = ""
+    @State private var renewing = false
+    @State private var reauthMessage: String?
+
+    private func groupList(onSelect: @escaping () -> Void) -> some View {
+        List(sitx.groups) { group in
+            Button {
+                guard !bridge.adminLockEnabled else { return }
+                sitx.selectGroup(group)
+                onSelect()
+            } label: {
+                HStack {
+                    Text(group.name).foregroundStyle(.primary)
+                    Spacer()
+                    if sitx.selectedFlowTag == group.id { Image(systemName: "checkmark") }
+                }
+            }
+        }
+        .navigationTitle(String(localized: "Group", table: "CompanionApp"))
+        .refreshable { sitx.refreshGroups() }
+    }
+
+    /// After authorization, asks for a TAK group the same way the code sheet asks for authorization.
+    /// A single permitted group is selected automatically, so the picker only appears for a real choice.
+    private func promptForGroupIfNeeded() {
+        guard sitx.enabled, sitx.hasAuthorization, sitx.authorizationCode.isEmpty, sitx.selectedFlowTag.isEmpty,
+              sitx.groups.count > 1, !bridge.adminLockEnabled, !showGroupPicker else { return }
+        Task {
+            // Let the authorization sheet finish dismissing before presenting another sheet.
+            try? await Task.sleep(for: .milliseconds(600))
+            guard sitx.hasAuthorization, sitx.selectedFlowTag.isEmpty, !showAuthorization else { return }
+            showGroupPicker = true
+        }
+    }
 
     var body: some View {
         List {
@@ -728,20 +764,7 @@ private struct CompanionSitxView: View {
             }
             .disabled(bridge.adminLockEnabled)
             NavigationLink {
-                List(sitx.groups) { group in
-                    Button {
-                        guard !bridge.adminLockEnabled else { return }
-                        sitx.selectGroup(group)
-                    } label: {
-                        HStack {
-                            Text(group.name).foregroundStyle(.primary)
-                            Spacer()
-                            if sitx.selectedFlowTag == group.id { Image(systemName: "checkmark") }
-                        }
-                    }
-                }
-                .navigationTitle(String(localized: "Group", table: "CompanionApp"))
-                .refreshable { sitx.refreshGroups() }
+                groupList(onSelect: {})
             } label: {
                 LabeledContent(String(localized: "Group", table: "CompanionApp"), value: sitx.selectedGroupName ?? String(localized: "Not selected", table: "CompanionApp"))
             }
@@ -750,12 +773,17 @@ private struct CompanionSitxView: View {
                 Text(sitx.state.detail).multilineTextAlignment(.trailing)
             }
             if !sitx.host.isEmpty {
-                LabeledContent(String(localized: "Linked Account", table: "CompanionApp")) {
-                    Text(SitxLinkedAccount.displayLabel(sitx.hasAuthorization ? sitx.linkedAccount : nil))
-                        .multilineTextAlignment(.trailing).textSelection(.enabled)
+                LabeledContent(sitx.hasAuthorization && sitx.linkedAccount?.isNonPersonEntity == true
+                               ? String(localized: "NPE Name", table: "CompanionApp")
+                               : String(localized: "Linked Account", table: "CompanionApp")) {
+                    if sitx.hasAuthorization, let account = sitx.linkedAccount {
+                        Text(account.label).multilineTextAlignment(.trailing).textSelection(.enabled)
+                    } else if !sitx.hasAuthorization {
+                        Text("Not authorized", tableName: "CompanionApp")
+                    }
                 }
             }
-            let reauthDisabled = bridge.adminLockEnabled || !sitx.enabled || sitx.host.isEmpty || (sitx.hasAuthorization && sitx.state.connected)
+            let reauthDisabled = bridge.adminLockEnabled || !sitx.enabled || sitx.host.isEmpty || sitx.hasAuthorization
             Button {
                 guard !reauthDisabled else { return }
                 sitx.reauthorize()
@@ -764,6 +792,21 @@ private struct CompanionSitxView: View {
                     .foregroundStyle(reauthDisabled ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
             }
             .disabled(reauthDisabled)
+            if sitx.hasAuthorization, sitx.linkedAccount?.isNonPersonEntity == true {
+                Button {
+                    reauthPIN = ""
+                    showReauthPIN = true
+                } label: {
+                    Label(String(localized: "Renew with Reauth PIN", table: "CompanionApp"), systemImage: "key")
+                }
+                .disabled(renewing || bridge.adminLockEnabled)
+                if let reauthMessage {
+                    Text(reauthMessage).font(.caption).foregroundStyle(.secondary)
+                } else if let until = sitx.reauthRenewedUntil {
+                    Text(String(localized: "Renewed until \(until.formatted(date: .abbreviated, time: .omitted))", table: "CompanionApp"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Button(String(localized: "Remove Sit(x) connection", table: "CompanionApp"), role: .destructive) { confirmRemoval = true }
                 .disabled(removing || bridge.adminLockEnabled)
         }
@@ -779,11 +822,49 @@ private struct CompanionSitxView: View {
             }
         }
         .disabled(removing)
+        .alert(String(localized: "Renew with Reauth PIN", table: "CompanionApp"), isPresented: $showReauthPIN) {
+            SecureField(String(localized: "6-digit PIN", table: "CompanionApp"), text: $reauthPIN)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+            Button(String(localized: "Renew", table: "CompanionApp")) {
+                let pin = reauthPIN
+                reauthPIN = ""
+                guard !bridge.adminLockEnabled else { return }
+                renewing = true
+                reauthMessage = nil
+                Task {
+                    do { try await sitx.renewWithReauthPIN(pin) }
+                    catch { reauthMessage = error.localizedDescription }
+                    renewing = false
+                }
+            }
+            .disabled(!SitxAPI.isReauthPIN(reauthPIN))
+            Button(String(localized: "Cancel", table: "CompanionApp"), role: .cancel) { reauthPIN = "" }
+        } message: {
+            Text("Enter the Reauth PIN set when this device was linked as a non-person entity in Sit(x).", tableName: "CompanionApp")
+        }
         .onAppear {
             showAuthorization = !sitx.authorizationCode.isEmpty
+            promptForGroupIfNeeded()
             if sitx.enabled, sitx.hasAuthorization, sitx.groups.count <= 1 { sitx.refreshGroups() }
         }
-        .onChange(of: sitx.authorizationCode) { _, code in showAuthorization = !code.isEmpty }
+        .onChange(of: sitx.authorizationCode) { _, code in
+            showAuthorization = !code.isEmpty
+            promptForGroupIfNeeded()
+        }
+        .onChange(of: sitx.groups) { _, _ in promptForGroupIfNeeded() }
+        .onChange(of: sitx.hasAuthorization) { _, _ in promptForGroupIfNeeded() }
+        .sheet(isPresented: $showGroupPicker) {
+            NavigationStack {
+                groupList(onSelect: { showGroupPicker = false })
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(String(localized: "Cancel", table: "CompanionApp")) { showGroupPicker = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $showAuthorization) {
             NavigationStack {
                 List {

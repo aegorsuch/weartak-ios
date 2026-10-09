@@ -183,7 +183,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `17`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `18`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -220,7 +220,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `17`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `18`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -1009,8 +1009,15 @@ authorization link opens directly in Safari and the code can be copied.
 5. Wait for Sit(x) State to show Connected. This means the authenticated TAK
    WebSocket has responded, not just that authorization succeeded. Linked
    Account below it shows the Sit(x) account email (or callsign) from the
-   device token, prefixed `NPE ·` for non-person-entity access, or `NPE`
-   when the device is not linked to a person account.
+   device token, or Not authorized before authorization. When the device is
+   authorized as a non-person entity the row is titled NPE Name and shows the
+   NPE name set on the Sit(x) authorize page. Companion then also offers
+   Renew with Reauth PIN: entering the 6-digit PIN chosen on that page renews
+   the device's authorization (`POST /api/v1/reauth/token` with the refresh
+   token) without a new device code. The PIN is never stored, and a rejected
+   PIN leaves the current authorization in place. Sit(x) NPE tokens still report
+   `access_type=user`; the app recognises them because `user_email` holds the
+   NPE name (no `@`) instead of an email address.
 
 The menu order is Sit(x) TAK toggle, Address, Group, Sit(x) State, Linked
 Account, Re-auth, Back
@@ -1019,8 +1026,10 @@ to refresh).
 The Network Preferences entry shows Sit(x) TAK with the current state below it.
 Off stops Sit(x) delivery while preserving credentials and the selected group.
 Re-auth discards the old credentials and starts a new device authorization.
-It is greyed out while Sit(x) State is Connected; use Remove Sit(x) connection
-to switch accounts.
+It is greyed out once the device is authorized (even before a group is
+selected); use Remove Sit(x) connection to switch accounts. After
+authorization, if more than one TAK group is permitted, the Group picker opens
+automatically, just as the code sheet opens for authorization.
 Changing the address also invalidates the previous organization's credentials.
 
 ### Connection protocol

@@ -42,6 +42,8 @@ final class CompanionSitxSession: ObservableObject {
     @Published private(set) var authorizationCode = ""
     @Published private(set) var verificationURL = ""
     @Published private(set) var hasAuthorization = false
+    /// Expiry reported by the last Reauth PIN renewal.
+    @Published private(set) var reauthRenewedUntil: Date?
     @Published private(set) var linkedAccount: SitxLinkedAccount?
     private var groupName: String?
     private var active = true
@@ -76,7 +78,8 @@ final class CompanionSitxSession: ObservableObject {
 
     var settingsSnapshot: SitxSettingsSnapshot {
         SitxSettingsSnapshot(enabled: enabled, host: host, groupName: selectedGroupName, status: state.detail,
-                             account: hasAuthorization ? linkedAccount?.label : nil)
+                             account: hasAuthorization ? linkedAccount?.label : nil,
+                             accountIsNonPerson: hasAuthorization ? linkedAccount?.isNonPersonEntity : nil)
     }
 
     init(defaults: UserDefaults = .standard, session: URLSession = .shared) {
@@ -145,6 +148,36 @@ final class CompanionSitxSession: ObservableObject {
             self?.publish()
         }
         publish()
+    }
+
+    /// Renews a non-person entity's authorization with the 6-digit Reauth PIN set when it was linked in Sit(x).
+    /// A rejected PIN leaves the current authorization in place.
+    func renewWithReauthPIN(_ pin: String) async throws {
+        guard SitxAPI.isReauthPIN(pin) else { throw CompanionFailure.message("Enter the 6-digit Reauth PIN.") }
+        guard hasAuthorization, !host.isEmpty, let url = URL(string: host + "/api/v1/reauth/token") else {
+            throw CompanionFailure.message("Sit(x) is not authorized.")
+        }
+        let expires = try await withToken { [session] refresh -> String? in
+            var request = URLRequest(url: url, timeoutInterval: 15)
+            request.httpMethod = "POST"
+            request.setValue("Bearer " + refresh, forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["pin": pin])
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, http.statusCode == 401 || http.statusCode == 403 {
+                throw CompanionFailure.message("Sit(x) rejected the Reauth PIN.")
+            }
+            try Self.check(response, data: data)
+            let body = (try JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            guard let rotated = body["refresh_token"] as? String, !rotated.isEmpty else { throw SitxHTTPError.invalidResponse }
+            try Self.saveToken(rotated)
+            return body["refresh_token_expires_at"] as? String
+        }
+        releasedToken = nil
+        logger.notice("Sit(x) authorization renewed with Reauth PIN; expires \(expires ?? "unknown", privacy: .public)")
+        reauthRenewedUntil = expires.flatMap { ISO8601DateFormatter().date(from: $0) }
+        if let account = SitxLinkedAccount(jwt: Self.readToken()) { linkedAccount = linkedAccount?.updated(with: account) ?? account }
     }
 
     /// Reloads the permitted groups, e.g. after the watch handed over its authorization.
@@ -280,6 +313,7 @@ final class CompanionSitxSession: ObservableObject {
         releasedToken = nil
         hasAuthorization = false
         linkedAccount = nil
+        reauthRenewedUntil = nil
         groups = []
         defaults.removeObject(forKey: Self.groupsKey)
         selectedFlowTag = ""

@@ -30,6 +30,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     private var accessToken: String?
     /// The watch's own Sit(x) account; phone-managed setups report theirs via `phoneSettings`.
     var isConnected: Bool { status == State.connected }
+    var isAuthorized: Bool { refreshToken != nil || isConnected }
 
     var linkedAccount: SitxLinkedAccount? {
         guard let refresh = SitxLinkedAccount(jwt: refreshToken) else { return nil }

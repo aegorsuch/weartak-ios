@@ -149,6 +149,8 @@ struct SitxSettingsSnapshot: Codable, Equatable {
     var status: String
     /// Linked Sit(x) account label; absent from older Companion versions.
     var account: String?
+    /// True when `account` names a non-person entity; absent from older Companion versions.
+    var accountIsNonPerson: Bool?
 
     var isPresent: Bool { !host.isEmpty }
 }

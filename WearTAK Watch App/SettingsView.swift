@@ -752,6 +752,7 @@ private struct SitxDeviceAPIView: View {
     @ObservedObject var client: SitxClient
     @Environment(\.dismiss) private var dismiss
     @State private var showAuthorization = false
+    @State private var showGroupPicker = false
     @State private var confirmRemoval = false
     @State private var removing = false
     @State private var removalError: String?
@@ -765,8 +766,10 @@ private struct SitxDeviceAPIView: View {
                 LabeledContent(String(localized: "Group", table: "WatchSettings"), value: phone.groupName ?? String(localized: "Not selected", table: "WatchSettings"))
                 LabeledContent(String(localized: "Sit(x) State", table: "WatchSettings"), value: client.canReachPhone ? WatchSettingsStatusText.sitx(phone.status) : String(localized: "Needs iPhone", table: "WatchSettings"))
                 if !phone.host.isEmpty {
-                    LabeledContent(String(localized: "Linked Account", table: "WatchSettings"),
-                                   value: phone.account.flatMap { $0.isEmpty ? nil : $0 } ?? SitxLinkedAccount.unlinkedLabel)
+                    LabeledContent(phone.accountIsNonPerson == true
+                                   ? String(localized: "NPE Name", table: "WatchSettings")
+                                   : String(localized: "Linked Account", table: "WatchSettings"),
+                                   value: phone.account.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Not authorized", table: "WatchSettings"))
                 }
                 Text(String(localized: "Managed in Companion", table: "WatchSettings"))
                     .font(.caption2)
@@ -800,20 +803,7 @@ private struct SitxDeviceAPIView: View {
                 }
             }
             NavigationLink {
-                List(client.groups) { group in
-                    Button {
-                        client.selectGroup(group)
-                    } label: {
-                        HStack {
-                            Text(group.name)
-                            Spacer()
-                            if client.selectedGroupID == group.id {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-                .navigationTitle(String(localized: "Group", table: "WatchSettings"))
+                groupList(onSelect: {})
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "Group", table: "WatchSettings"))
@@ -825,10 +815,12 @@ private struct SitxDeviceAPIView: View {
             .disabled(client.groups.isEmpty || !settings.sitxEnabled)
             LabeledContent(String(localized: "Sit(x) State", table: "WatchSettings"), value: WatchSettingsStatusText.sitx(client.status))
             if !settings.sitxApiHost.isEmpty {
-                LabeledContent(String(localized: "Linked Account", table: "WatchSettings"),
-                               value: SitxLinkedAccount.displayLabel(client.linkedAccount))
+                LabeledContent(client.linkedAccount?.isNonPersonEntity == true
+                               ? String(localized: "NPE Name", table: "WatchSettings")
+                               : String(localized: "Linked Account", table: "WatchSettings"),
+                               value: client.linkedAccount?.label ?? String(localized: "Not authorized", table: "WatchSettings"))
             }
-            let reauthDisabled = !settings.sitxEnabled || settings.sitxApiHost.isEmpty || client.isConnected
+            let reauthDisabled = !settings.sitxEnabled || settings.sitxApiHost.isEmpty || client.isAuthorized
             Button {
                 guard !reauthDisabled else { return }
                 client.refreshAuthorizationCode()
@@ -837,6 +829,36 @@ private struct SitxDeviceAPIView: View {
                     .foregroundStyle(reauthDisabled ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
             }
             .disabled(reauthDisabled)
+        }
+    }
+
+    private func groupList(onSelect: @escaping () -> Void) -> some View {
+        List(client.groups) { group in
+            Button {
+                client.selectGroup(group)
+                onSelect()
+            } label: {
+                HStack {
+                    Text(group.name)
+                    Spacer()
+                    if client.selectedGroupID == group.id {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle(String(localized: "Group", table: "WatchSettings"))
+    }
+
+    /// After authorization, asks for a TAK group the same way the code sheet asks for authorization.
+    private func promptForGroupIfNeeded() {
+        guard client.phoneManagedSettings == nil, settings.sitxEnabled, client.isAuthorized,
+              client.authorizationCode.isEmpty, client.selectedGroupID.isEmpty, client.groups.count > 1,
+              !showGroupPicker else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard client.selectedGroupID.isEmpty, !showAuthorization else { return }
+            showGroupPicker = true
         }
     }
 
@@ -860,9 +882,17 @@ private struct SitxDeviceAPIView: View {
             Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) { removalError = nil }
         } message: { Text(removalError ?? "") }
         .navigationBarBackButtonHidden(true)
-        .onAppear { showAuthorization = !client.authorizationCode.isEmpty }
+        .onAppear {
+            showAuthorization = !client.authorizationCode.isEmpty
+            promptForGroupIfNeeded()
+        }
         .onChange(of: client.authorizationCode) { _, code in
             showAuthorization = !code.isEmpty
+            promptForGroupIfNeeded()
+        }
+        .onChange(of: client.groups) { _, _ in promptForGroupIfNeeded() }
+        .sheet(isPresented: $showGroupPicker) {
+            NavigationStack { groupList(onSelect: { showGroupPicker = false }) }
         }
         .sheet(isPresented: $showAuthorization) {
             NavigationStack {

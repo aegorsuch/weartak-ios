@@ -26,7 +26,7 @@ struct SitxAuthorizationRetry {
 struct SitxLinkedAccount: Equatable {
     var email: String?
     var callsign: String?
-    /// Only access tokens carry this; Sit(x) reports `user` for person accounts.
+    /// Only access tokens carry this.
     var accessType: String?
 
     init?(jwt: String?) {
@@ -42,7 +42,8 @@ struct SitxLinkedAccount: Equatable {
         email = text("user_email")
         callsign = text("callsign")
         accessType = text("access_type")
-        guard email != nil || callsign != nil else { return nil }
+        let nonPerson = accessType.map { $0.lowercased() != "user" } ?? false
+        guard email != nil || callsign != nil || nonPerson else { return nil }
     }
 
     /// Keeps a known access type when a newer refresh token (which omits it) names the same account.
@@ -52,20 +53,14 @@ struct SitxLinkedAccount: Equatable {
         return newer
     }
 
-    var isNonPersonEntity: Bool { accessType.map { $0.lowercased() != "user" } ?? false }
-
-    var label: String {
-        let name = email ?? callsign ?? ""
-        return isNonPersonEntity ? "NPE · " + name : name
+    /// Sit(x) NPE tokens still say `access_type=user`; their `user_email` holds the NPE name, which has no "@".
+    var isNonPersonEntity: Bool {
+        if let accessType, accessType.lowercased() != "user" { return true }
+        return email.map { !$0.contains("@") } ?? false
     }
 
-    /// Shown when the device is not linked to a person account.
-    static let unlinkedLabel = "NPE"
-
-    static func displayLabel(_ account: SitxLinkedAccount?) -> String {
-        guard let label = account?.label, !label.isEmpty else { return unlinkedLabel }
-        return label
-    }
+    /// The account email/callsign, or the NPE name for non-person entities.
+    var label: String { email ?? callsign ?? (isNonPersonEntity ? "NPE" : "") }
 }
 
 private extension String {
@@ -85,6 +80,11 @@ struct SitxGroup: Codable, Identifiable, Equatable {
 
 /// Sit(x) Device API details shared by the watch client and the Companion setup flow.
 enum SitxAPI {
+    /// Sit(x) Reauth PINs are exactly six ASCII digits.
+    static func isReauthPIN(_ pin: String) -> Bool {
+        pin.count == 6 && pin.allSatisfy { $0.isASCII && $0.isNumber }
+    }
+
     static let clientID = "D4RTE81TJjccxlc8LPD7QQ"
 
     /// Shows 8-character device codes as `XXXX-XXXX`, matching the Sit(x) pairing page.
