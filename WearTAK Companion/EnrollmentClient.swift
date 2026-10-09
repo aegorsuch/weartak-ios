@@ -1,8 +1,11 @@
 import Foundation
+import os
 import Security
 import SwiftASN1
 
 enum EnrollmentClient {
+    private static let logger = Logger(subsystem: "com.aegorsuch.weartak", category: "Enrollment")
+
     private struct Result: Decodable {
         private struct Key: CodingKey {
             let stringValue: String
@@ -65,7 +68,8 @@ enum EnrollmentClient {
         let authorization = "Basic " + Data("\(username):\(password)".utf8).base64EncodedString()
         var request = URLRequest(url: configURL)
         request.setValue(authorization, forHTTPHeaderField: "Authorization")
-        let (config, response) = try await session.data(for: request)
+        logger.notice("Enrollment configuration request to \(host, privacy: .public):\(port)")
+        let (config, response) = try await load(request, session: session, trust: trustDelegate, stage: "configuration")
         try validate(response, data: config, endpoint: configURL)
         let subject = EnrollmentSubject()
         let parser = XMLParser(data: config)
@@ -88,11 +92,27 @@ enum EnrollmentClient {
         request.setValue(authorization, forHTTPHeaderField: "Authorization")
         request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(csr.base64EncodedString().utf8)
-        let (data, signingResponse) = try await session.data(for: request)
+        let (data, signingResponse) = try await load(request, session: session, trust: trustDelegate, stage: "certificate signing")
         try validate(signingResponse, data: data, endpoint: signURL)
         try Task.checkCancellation()
         let chain = try signingChain(from: data)
         return try CertificateStore.enrolled(key: key, chain: chain)
+    }
+
+    /// A rejected server certificate otherwise surfaces only as URLError.cancelled ("cancelled").
+    private static func load(_ request: URLRequest, session: URLSession, trust: EnrollmentTrustDelegate,
+                             stage: String) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: request)
+        } catch {
+            if let rejection = trust.rejection {
+                logger.error("Enrollment \(stage, privacy: .public) TLS rejected: \(rejection.localizedDescription, privacy: .public)")
+                throw CompanionFailure.message("Enrollment \(stage) failed: the server certificate was rejected (\(rejection.localizedDescription)). Check the enrollment port and server CA.")
+            }
+            if Task.isCancelled { logger.notice("Enrollment \(stage, privacy: .public) cancelled by Companion") }
+            else { logger.error("Enrollment \(stage, privacy: .public) failed: \(error.localizedDescription, privacy: .public)") }
+            throw error
+        }
     }
 
     nonisolated static func createRequest(username: String, fields: [(String, String)]) throws -> (SecKey, Data) {
@@ -176,6 +196,9 @@ private final class EnrollmentSubject: NSObject, XMLParserDelegate {
 private final class EnrollmentTrustDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
     let host: String
     let ca: Data?
+    private let lock = NSLock()
+    private var _rejection: Error?
+    var rejection: Error? { lock.withLock { _rejection } }
     init(host: String, ca: Data?) { self.host = host; self.ca = ca }
 
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
@@ -189,6 +212,7 @@ private final class EnrollmentTrustDelegate: NSObject, URLSessionDelegate, URLSe
             try CertificateStore.evaluateServerTrust(trust, host: host, certificates: [], trustedCA: ca)
             completionHandler(.useCredential, URLCredential(trust: trust))
         } catch {
+            lock.withLock { _rejection = error }
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }

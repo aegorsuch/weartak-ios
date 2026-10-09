@@ -1002,13 +1002,17 @@ authorization link opens directly in Safari and the code can be copied.
 2. Set Address to the organization name. For example, `team` becomes
    `https://team.sitx.io`. An existing `.sitx.io` suffix is not duplicated.
 3. Turn on Sit(x) TAK and approve the device using the code and authorization
-   link in the authorization sheet.
+   link in the authorization sheet. Eight-character codes are shown as
+   `XXXX-XXXX`.
 4. Select Group. A single permitted group is selected automatically; the
    selection is remembered across launches.
 5. Wait for Sit(x) State to show Connected. This means the authenticated TAK
-   WebSocket has responded, not just that authorization succeeded.
+   WebSocket has responded, not just that authorization succeeded. Linked
+   Account below it shows the Sit(x) account email (or callsign) from the
+   device token, prefixed `NPE ·` for non-person-entity access.
 
-The menu order is Sit(x) TAK toggle, Address, Group, Sit(x) State, Re-auth, Back
+The menu order is Sit(x) TAK toggle, Address, Group, Sit(x) State, Linked
+Account, Re-auth, Back
 (Companion uses the standard iOS back button, and the Group list can be pulled
 to refresh).
 The Network Preferences entry shows Sit(x) TAK with the current state below it.
@@ -1218,7 +1222,7 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/SitxCoT.swift' \
   'WearTAK Watch App/MulticastTAKTransport.swift' \
   'WearTAK Watch App/SitxClient.swift' \
-  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift Shared/TAKMulticast.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Shared/SitxShared.swift \
   Shared/PhoneLocationReporting.swift Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks

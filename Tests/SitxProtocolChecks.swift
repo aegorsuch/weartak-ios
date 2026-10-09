@@ -458,6 +458,28 @@ struct SitxProtocolChecks {
         precondition(SitxAPI.sequesteredReason("admin_approval_required_sequestered")?.contains("administrator approval") == true)
         precondition(SitxAPI.sequesteredReason("over_plan_user_devices_sequestered")?.contains("device limit") == true)
         precondition(SitxAPI.sequesteredReason("new_reason")?.contains("new_reason") == true)
+        precondition(SitxAPI.displayUserCode("ABCD1234") == "ABCD-1234")
+        precondition(SitxAPI.displayUserCode("abcd-1234") == "ABCD-1234")
+        precondition(SitxAPI.displayUserCode("FIXTURE") == "FIXTURE")
+        func fixtureJWT(_ claims: [String: Any]) -> String {
+            let payload = try! JSONSerialization.data(withJSONObject: claims).base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+            return "eyJhbGciOiJIUzI1NiJ9.\(payload).signature"
+        }
+        let userAccess = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "ops@example.com", "callsign": "ODIN", "access_type": "user"]))
+        precondition(userAccess?.label == "ops@example.com" && userAccess?.isNonPersonEntity == false)
+        let npe = SitxLinkedAccount(jwt: fixtureJWT(["callsign": "SENSOR-1", "access_type": "npe"]))
+        precondition(npe?.label == "NPE · SENSOR-1" && npe?.isNonPersonEntity == true)
+        let refreshOnly = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "ops@example.com", "callsign": "ODIN"]))
+        precondition(refreshOnly?.accessType == nil && userAccess?.updated(with: refreshOnly)?.accessType == "user")
+        let otherAccount = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "other@example.com"]))
+        precondition(npe?.updated(with: otherAccount) == otherAccount)
+        precondition(SitxLinkedAccount(jwt: "not-a-jwt") == nil && SitxLinkedAccount(jwt: nil) == nil)
+        precondition(SitxLinkedAccount(jwt: fixtureJWT(["device": "WearTAK-iPhone"])) == nil)
+        let legacySnapshot = try JSONDecoder().decode(SitxSettingsSnapshot.self,
+            from: Data(#"{"enabled":true,"host":"https://fixture.sitx.io","status":"Connected"}"#.utf8))
+        precondition(legacySnapshot.account == nil)
         let storedNow = ISO8601DateFormatter().date(from: "2026-10-05T12:00:00Z")!
         let stored = Data("""
         [{"resource_uid":"b-2","tak_group_tag":"grp","issued_at":"2026-10-05T11:59:00.000-05:00","stale_at":null,"ack_at":null,

@@ -22,6 +22,48 @@ struct SitxAuthorizationRetry {
     }
 }
 
+/// Display-only account details from Sit(x) token claims; never used for authorization decisions.
+struct SitxLinkedAccount: Equatable {
+    var email: String?
+    var callsign: String?
+    /// Only access tokens carry this; Sit(x) reports `user` for person accounts.
+    var accessType: String?
+
+    init?(jwt: String?) {
+        let parts = jwt?.split(separator: ".", omittingEmptySubsequences: false) ?? []
+        guard parts.count == 3 else { return nil }
+        var payload = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let data = Data(base64Encoded: payload),
+              let claims = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        func text(_ key: String) -> String? {
+            (claims[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        }
+        email = text("user_email")
+        callsign = text("callsign")
+        accessType = text("access_type")
+        guard email != nil || callsign != nil else { return nil }
+    }
+
+    /// Keeps a known access type when a newer refresh token (which omits it) names the same account.
+    func updated(with newer: SitxLinkedAccount?) -> SitxLinkedAccount? {
+        guard var newer else { return self }
+        if newer.accessType == nil, newer.email == email, newer.callsign == callsign { newer.accessType = accessType }
+        return newer
+    }
+
+    var isNonPersonEntity: Bool { accessType.map { $0.lowercased() != "user" } ?? false }
+
+    var label: String {
+        let name = email ?? callsign ?? ""
+        return isNonPersonEntity ? "NPE · " + name : name
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
 struct SitxGroup: Codable, Identifiable, Equatable {
     let flowTag: String
     let name: String
@@ -36,6 +78,13 @@ struct SitxGroup: Codable, Identifiable, Equatable {
 /// Sit(x) Device API details shared by the watch client and the Companion setup flow.
 enum SitxAPI {
     static let clientID = "D4RTE81TJjccxlc8LPD7QQ"
+
+    /// Shows 8-character device codes as `XXXX-XXXX`, matching the Sit(x) pairing page.
+    static func displayUserCode(_ code: String) -> String {
+        let characters = code.filter { $0.isLetter || $0.isNumber }.uppercased()
+        guard characters.count == 8 else { return code }
+        return "\(characters.prefix(4))-\(characters.suffix(4))"
+    }
 
     /// Turns an organization name or URL into `https://<org>.sitx.io`, rejecting anything else.
     static func normalizedHost(_ value: String) -> String? {

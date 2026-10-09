@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -384,6 +385,8 @@ private struct ServerEditorRoute: Identifiable {
     let server: CompanionServer?
 }
 
+private let enrollmentLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "Enrollment")
+
 private struct CompanionServerEditor: View {
     @ObservedObject var bridge: PhoneBridgeModel
     @Environment(\.dismiss) private var dismiss
@@ -565,6 +568,7 @@ private struct CompanionServerEditor: View {
             .onChange(of: port) { _, _ in resetChangedDraft(); refreshCertificate() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background {
+                    if busy { enrollmentLogger.notice("Enrollment cancelled: Companion moved to background") }
                     enrollmentTask?.cancel()
                     password = ""
                     p12Password = ""
@@ -573,6 +577,7 @@ private struct CompanionServerEditor: View {
                 }
             }
             .onDisappear {
+                if busy { enrollmentLogger.notice("Enrollment cancelled: server editor closed") }
                 enrollmentTask?.cancel()
                 password = ""
                 p12Password = ""
@@ -743,6 +748,11 @@ private struct CompanionSitxView: View {
             .disabled(bridge.adminLockEnabled || sitx.groups.isEmpty || !sitx.enabled)
             LabeledContent(String(localized: "Sit(x) State", table: "CompanionApp")) {
                 Text(sitx.state.detail).multilineTextAlignment(.trailing)
+            }
+            if sitx.hasAuthorization, let account = sitx.linkedAccount {
+                LabeledContent(String(localized: "Linked Account", table: "CompanionApp")) {
+                    Text(account.label).multilineTextAlignment(.trailing).textSelection(.enabled)
+                }
             }
             Button {
                 guard !bridge.adminLockEnabled else { return }

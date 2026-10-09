@@ -764,6 +764,9 @@ private struct SitxDeviceAPIView: View {
                 LabeledContent(String(localized: "Address", table: "WatchSettings"), value: phone.host.replacingOccurrences(of: "https://", with: ""))
                 LabeledContent(String(localized: "Group", table: "WatchSettings"), value: phone.groupName ?? String(localized: "Not selected", table: "WatchSettings"))
                 LabeledContent(String(localized: "Sit(x) State", table: "WatchSettings"), value: client.canReachPhone ? WatchSettingsStatusText.sitx(phone.status) : String(localized: "Needs iPhone", table: "WatchSettings"))
+                if let account = phone.account, !account.isEmpty {
+                    LabeledContent(String(localized: "Linked Account", table: "WatchSettings"), value: account)
+                }
                 Text(String(localized: "Managed in Companion", table: "WatchSettings"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -820,6 +823,9 @@ private struct SitxDeviceAPIView: View {
             }
             .disabled(client.groups.isEmpty || !settings.sitxEnabled)
             LabeledContent(String(localized: "Sit(x) State", table: "WatchSettings"), value: WatchSettingsStatusText.sitx(client.status))
+            if let account = client.linkedAccount {
+                LabeledContent(String(localized: "Linked Account", table: "WatchSettings"), value: account.label)
+            }
             Button {
                 client.refreshAuthorizationCode()
             } label: {

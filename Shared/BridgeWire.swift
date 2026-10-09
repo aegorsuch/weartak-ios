@@ -147,6 +147,8 @@ struct SitxSettingsSnapshot: Codable, Equatable {
     var host: String
     var groupName: String?
     var status: String
+    /// Linked Sit(x) account label; absent from older Companion versions.
+    var account: String?
 
     var isPresent: Bool { !host.isEmpty }
 }

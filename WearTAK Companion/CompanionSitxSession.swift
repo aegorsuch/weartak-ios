@@ -42,6 +42,7 @@ final class CompanionSitxSession: ObservableObject {
     @Published private(set) var authorizationCode = ""
     @Published private(set) var verificationURL = ""
     @Published private(set) var hasAuthorization = false
+    @Published private(set) var linkedAccount: SitxLinkedAccount?
     private var groupName: String?
     private var active = true
     private let session: URLSession
@@ -74,7 +75,8 @@ final class CompanionSitxSession: ObservableObject {
     var selectedGroupName: String? { groups.first { $0.id == selectedFlowTag }?.name ?? groupName }
 
     var settingsSnapshot: SitxSettingsSnapshot {
-        SitxSettingsSnapshot(enabled: enabled, host: host, groupName: selectedGroupName, status: state.detail)
+        SitxSettingsSnapshot(enabled: enabled, host: host, groupName: selectedGroupName, status: state.detail,
+                             account: linkedAccount?.label)
     }
 
     init(defaults: UserDefaults = .standard, session: URLSession = .shared) {
@@ -86,7 +88,9 @@ final class CompanionSitxSession: ObservableObject {
         groupName = stored?.groupName
         enabled = stored?.enabled ?? (stored?.flowTag != nil)
         groups = defaults.data(forKey: Self.groupsKey).flatMap { try? JSONDecoder().decode([SitxGroup].self, from: $0) } ?? []
-        hasAuthorization = Self.readToken() != nil
+        let token = Self.readToken()
+        hasAuthorization = token != nil
+        linkedAccount = SitxLinkedAccount(jwt: token)
         state.detail = !enabled ? (stored == nil ? Status.unconfigured : Status.off)
             : !hasAuthorization ? Status.unconfigured
             : selectedFlowTag.isEmpty ? Status.selectGroup : "Waiting to connect"
@@ -164,7 +168,7 @@ final class CompanionSitxSession: ObservableObject {
             guard let deviceCode = code["device_code"] as? String, let userCode = code["user_code"] as? String else {
                 throw SitxHTTPError.invalidResponse
             }
-            authorizationCode = userCode
+            authorizationCode = SitxAPI.displayUserCode(userCode)
             verificationURL = code["verification_uri"] as? String ?? code["verification_url"] as? String ?? ""
             var interval = max(1, code["interval"] as? Double ?? 5)
             let expiresAt = Date().addingTimeInterval(code["expires_in"] as? Double ?? 600)
@@ -194,6 +198,8 @@ final class CompanionSitxSession: ObservableObject {
                     try Self.saveToken(refresh)
                     releasedToken = nil
                     hasAuthorization = true
+                    linkedAccount = SitxLinkedAccount(jwt: token["access_token"] as? String)
+                        ?? SitxLinkedAccount(jwt: refresh)
                     authorizationCode = ""
                     verificationURL = ""
                     await loadGroups(host: host)
@@ -273,6 +279,7 @@ final class CompanionSitxSession: ObservableObject {
         Self.deleteToken()
         releasedToken = nil
         hasAuthorization = false
+        linkedAccount = nil
         groups = []
         defaults.removeObject(forKey: Self.groupsKey)
         selectedFlowTag = ""
@@ -297,6 +304,7 @@ final class CompanionSitxSession: ObservableObject {
             cancelPairing()
             try Self.saveToken(token)
             hasAuthorization = true
+            linkedAccount = SitxLinkedAccount(jwt: token)
         } else {
             guard hasAuthorization, host == relay.host else {
                 throw CompanionFailure.message("Sit(x) needs Re-auth on the watch.")
@@ -386,6 +394,7 @@ final class CompanionSitxSession: ObservableObject {
                     try await Self.socketRequest(config, refresh: refresh, session: session)
                 }
                 guard generation == self.generation, active else { return }
+                if let account = SitxLinkedAccount(jwt: Self.bearerToken(request)) { linkedAccount = account }
                 let task = session.webSocketTask(with: request)
                 socket = task
                 task.resume()
@@ -496,6 +505,10 @@ final class CompanionSitxSession: ObservableObject {
         }
         tokenChain = Task { _ = try? await task.value }
         return try await task.value
+    }
+
+    private static func bearerToken(_ request: URLRequest) -> String? {
+        request.value(forHTTPHeaderField: "Authorization")?.split(separator: " ").last.map(String.init)
     }
 
     private static func socketRequest(_ config: Config, refresh: String, session: URLSession) async throws -> URLRequest {

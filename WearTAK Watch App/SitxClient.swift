@@ -28,6 +28,11 @@ final class SitxClient: ObservableObject, TAKTransport {
     private let defaults: UserDefaults
     private var hostSubscription: AnyCancellable?
     private var accessToken: String?
+    /// The watch's own Sit(x) account; phone-managed setups report theirs via `phoneSettings`.
+    var linkedAccount: SitxLinkedAccount? {
+        guard let refresh = SitxLinkedAccount(jwt: refreshToken) else { return nil }
+        return SitxLinkedAccount(jwt: accessToken)?.updated(with: refresh) ?? refresh
+    }
     private var refreshToken: String?
     private var deviceCode: String?
     private var expiresAt: Date?
@@ -706,7 +711,7 @@ final class SitxClient: ObservableObject, TAKTransport {
                 throw SitxError.invalidResponse
             }
             deviceCode = code
-            authorizationCode = userCode
+            authorizationCode = SitxAPI.displayUserCode(userCode)
             verificationURL = response["verification_uri"] as? String
                 ?? response["verification_url"] as? String
                 ?? ""
