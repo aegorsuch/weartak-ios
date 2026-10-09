@@ -85,7 +85,7 @@ enum EnrollmentClient {
         try Task.checkCancellation()
         url.path = "/Marti/api/tls/signClient/v2"
         url.queryItems = [URLQueryItem(name: "clientUid", value: deviceID),
-                          URLQueryItem(name: "version", value: "WearTAK-Companion-5.8.0")]
+                          URLQueryItem(name: "version", value: "WearTAK-Companion-\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown")")]
         guard let signURL = url.url else { throw CompanionFailure.message("Invalid signing URL.") }
         request = URLRequest(url: signURL)
         request.httpMethod = "POST"
