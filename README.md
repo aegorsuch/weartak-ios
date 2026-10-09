@@ -1009,7 +1009,8 @@ authorization link opens directly in Safari and the code can be copied.
 5. Wait for Sit(x) State to show Connected. This means the authenticated TAK
    WebSocket has responded, not just that authorization succeeded. Linked
    Account below it shows the Sit(x) account email (or callsign) from the
-   device token, prefixed `NPE ·` for non-person-entity access.
+   device token, prefixed `NPE ·` for non-person-entity access, or `NPE`
+   when the device is not linked to a person account.
 
 The menu order is Sit(x) TAK toggle, Address, Group, Sit(x) State, Linked
 Account, Re-auth, Back

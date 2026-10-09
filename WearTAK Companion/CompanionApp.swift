@@ -749,9 +749,10 @@ private struct CompanionSitxView: View {
             LabeledContent(String(localized: "Sit(x) State", table: "CompanionApp")) {
                 Text(sitx.state.detail).multilineTextAlignment(.trailing)
             }
-            if sitx.hasAuthorization, let account = sitx.linkedAccount {
+            if !sitx.host.isEmpty {
                 LabeledContent(String(localized: "Linked Account", table: "CompanionApp")) {
-                    Text(account.label).multilineTextAlignment(.trailing).textSelection(.enabled)
+                    Text(SitxLinkedAccount.displayLabel(sitx.hasAuthorization ? sitx.linkedAccount : nil))
+                        .multilineTextAlignment(.trailing).textSelection(.enabled)
                 }
             }
             let reauthDisabled = bridge.adminLockEnabled || !sitx.enabled || sitx.host.isEmpty || (sitx.hasAuthorization && sitx.state.connected)

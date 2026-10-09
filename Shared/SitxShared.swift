@@ -58,6 +58,14 @@ struct SitxLinkedAccount: Equatable {
         let name = email ?? callsign ?? ""
         return isNonPersonEntity ? "NPE · " + name : name
     }
+
+    /// Shown when the device is not linked to a person account.
+    static let unlinkedLabel = "NPE"
+
+    static func displayLabel(_ account: SitxLinkedAccount?) -> String {
+        guard let label = account?.label, !label.isEmpty else { return unlinkedLabel }
+        return label
+    }
 }
 
 private extension String {

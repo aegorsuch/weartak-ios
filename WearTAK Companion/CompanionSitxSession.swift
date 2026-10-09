@@ -76,7 +76,7 @@ final class CompanionSitxSession: ObservableObject {
 
     var settingsSnapshot: SitxSettingsSnapshot {
         SitxSettingsSnapshot(enabled: enabled, host: host, groupName: selectedGroupName, status: state.detail,
-                             account: linkedAccount?.label)
+                             account: hasAuthorization ? linkedAccount?.label : nil)
     }
 
     init(defaults: UserDefaults = .standard, session: URLSession = .shared) {

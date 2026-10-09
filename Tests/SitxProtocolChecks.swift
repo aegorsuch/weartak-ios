@@ -476,6 +476,9 @@ struct SitxProtocolChecks {
         let otherAccount = SitxLinkedAccount(jwt: fixtureJWT(["user_email": "other@example.com"]))
         precondition(npe?.updated(with: otherAccount) == otherAccount)
         precondition(SitxLinkedAccount(jwt: "not-a-jwt") == nil && SitxLinkedAccount(jwt: nil) == nil)
+        precondition(SitxLinkedAccount.displayLabel(nil) == "NPE")
+        precondition(SitxLinkedAccount.displayLabel(SitxLinkedAccount(jwt: "not-a-jwt")) == "NPE")
+        precondition(SitxLinkedAccount.displayLabel(userAccess) == "ops@example.com")
         precondition(SitxLinkedAccount(jwt: fixtureJWT(["device": "WearTAK-iPhone"])) == nil)
         let legacySnapshot = try JSONDecoder().decode(SitxSettingsSnapshot.self,
             from: Data(#"{"enabled":true,"host":"https://fixture.sitx.io","status":"Connected"}"#.utf8))
