@@ -471,6 +471,8 @@ identities and import passwords are stored in endpoint-scoped Keychain entries.
 Enrollment passwords are not persisted; renew by enrolling again. The UI
 identifies whether an HTTP enrollment failure came from configuration or
 certificate signing and shows the endpoint without query parameters or credentials.
+Signing responses accept the required `signedCert` and optional `ca` or numbered
+`caN` certificates, with the unnumbered CA first in the stored chain.
 HTTP 401 means the endpoint rejected enrollment authorization; it is separate
 from CoT stream TLS identity validation.
 The UI reports certificate expiration and a renewal warning within three days.

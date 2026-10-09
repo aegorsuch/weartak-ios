@@ -60,6 +60,7 @@ struct CompanionSecurityChecks {
             fatalError("Wrong .p12 password accepted")
         } catch CompanionFailure.message {}
         try checkServerTrust(in: directory, client: leaf)
+        try checkEnrollmentCAResponses(in: directory)
         try await checkCertificateInspection(in: directory)
         let diagnostics = TLSConnectionDiagnostics()
         diagnostics.record(CompanionFailure.message("Hostname mismatch"))
@@ -85,6 +86,35 @@ struct CompanionSecurityChecks {
         diagnostics.record(NSError(domain: NSOSStatusErrorDomain, code: -67843))
         precondition(!diagnostics.hasHostnameMismatch)
         print("PASS: CSR, identity, expiry, server trust, hostname rejection, explicit CA and TLS diagnostics checks")
+    }
+
+    static func checkEnrollmentCAResponses(in directory: URL) throws {
+        let leaf = try String(contentsOf: directory.appendingPathComponent("client.pem"), encoding: .utf8)
+        let ca = try String(contentsOf: directory.appendingPathComponent("ca.pem"), encoding: .utf8)
+        let otherCA = try String(contentsOf: directory.appendingPathComponent("other-ca.pem"), encoding: .utf8)
+        func chain(_ fields: [String: String]) throws -> [Data] {
+            try EnrollmentClient.signingChain(from: JSONSerialization.data(withJSONObject: fields))
+        }
+        let leafData = try CertificateStore.decodeCertificate(leaf)
+        let caData = try CertificateStore.decodeCertificate(ca)
+        let otherCAData = try CertificateStore.decodeCertificate(otherCA)
+
+        let openTAKChain = try chain(["signedCert": leaf, "ca": ca])
+        precondition(openTAKChain == [leafData, caData])
+        let numberedChain = try chain(["signedCert": leaf, "ca0": ca, "ca1": otherCA])
+        precondition(numberedChain == [leafData, caData, otherCAData])
+        let orderedChain = try chain(["signedCert": leaf, "ca10": otherCA, "ca2": ca, "ca": otherCA])
+        precondition(orderedChain == [leafData, otherCAData, caData, otherCAData])
+        let leafOnlyChain = try chain(["signedCert": leaf])
+        precondition(leafOnlyChain == [leafData])
+        do {
+            _ = try chain(["signedCert": leaf, "ca": "invalid certificate"])
+            fatalError("Malformed OpenTAKServer CA accepted")
+        } catch {}
+        do {
+            _ = try EnrollmentClient.signingChain(from: Data(#"{"signedCert":"invalid","ca":42}"#.utf8))
+            fatalError("Non-string enrollment CA accepted")
+        } catch {}
     }
 
     static func checkServerTrust(in directory: URL, client: SecCertificate) throws {
