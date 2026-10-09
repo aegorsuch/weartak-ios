@@ -1018,6 +1018,8 @@ to refresh).
 The Network Preferences entry shows Sit(x) TAK with the current state below it.
 Off stops Sit(x) delivery while preserving credentials and the selected group.
 Re-auth discards the old credentials and starts a new device authorization.
+It is greyed out while Sit(x) State is Connected; use Remove Sit(x) connection
+to switch accounts.
 Changing the address also invalidates the previous organization's credentials.
 
 ### Connection protocol

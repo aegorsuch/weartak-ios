@@ -754,13 +754,15 @@ private struct CompanionSitxView: View {
                     Text(account.label).multilineTextAlignment(.trailing).textSelection(.enabled)
                 }
             }
+            let reauthDisabled = bridge.adminLockEnabled || !sitx.enabled || sitx.host.isEmpty || (sitx.hasAuthorization && sitx.state.connected)
             Button {
-                guard !bridge.adminLockEnabled else { return }
+                guard !reauthDisabled else { return }
                 sitx.reauthorize()
             } label: {
                 Label(String(localized: "Re-auth", table: "CompanionApp"), systemImage: "arrow.clockwise")
+                    .foregroundStyle(reauthDisabled ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
             }
-            .disabled(bridge.adminLockEnabled || !sitx.enabled || sitx.host.isEmpty)
+            .disabled(reauthDisabled)
             Button(String(localized: "Remove Sit(x) connection", table: "CompanionApp"), role: .destructive) { confirmRemoval = true }
                 .disabled(removing || bridge.adminLockEnabled)
         }

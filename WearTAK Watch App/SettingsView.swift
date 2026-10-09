@@ -826,12 +826,15 @@ private struct SitxDeviceAPIView: View {
             if let account = client.linkedAccount {
                 LabeledContent(String(localized: "Linked Account", table: "WatchSettings"), value: account.label)
             }
+            let reauthDisabled = !settings.sitxEnabled || settings.sitxApiHost.isEmpty || client.isConnected
             Button {
+                guard !reauthDisabled else { return }
                 client.refreshAuthorizationCode()
             } label: {
                 Label(String(localized: "Re-auth", table: "WatchSettings"), systemImage: "arrow.clockwise")
+                    .foregroundStyle(reauthDisabled ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
             }
-            .disabled(!settings.sitxEnabled || settings.sitxApiHost.isEmpty)
+            .disabled(reauthDisabled)
         }
     }
 
