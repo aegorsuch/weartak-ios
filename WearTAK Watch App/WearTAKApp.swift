@@ -10,13 +10,21 @@ struct WearTAKApp: App {
     init() {
         let settings: AppSettings
         #if DEBUG && targetEnvironment(simulator)
-        if ProcessInfo.processInfo.arguments.contains("--simulator-load-test") {
+        if ProcessInfo.processInfo.arguments.contains("--simulator-load-test") ||
+            ProcessInfo.processInfo.arguments.contains("--preview-crowded-map") {
             let defaults = UserDefaults(suiteName: "WearTAK.simulatorLoadTest")!
             defaults.removePersistentDomain(forName: "WearTAK.simulatorLoadTest")
             settings = AppSettings(defaults: defaults)
             settings.multicastEnabled = false
             settings.sitxEnabled = false
             settings.relayProvider = .notSet
+            if ProcessInfo.processInfo.arguments.contains("--preview-crowded-map") {
+                settings.physiologicalAlertsEnabled = false
+                settings.physiologicalMonitoringEnabled = false
+                settings.lowPressureAlertsEnabled = false
+                settings.highPressureAlertsEnabled = false
+                settings.immersionAlertsEnabled = false
+            }
         } else {
             settings = AppSettings()
         }

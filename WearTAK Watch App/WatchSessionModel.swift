@@ -1396,6 +1396,29 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     #if DEBUG && targetEnvironment(simulator)
+    func prepareCrowdedMapPreview() {
+        let now = Date()
+        let latitude = 27.9517
+        let longitude = -82.5182
+        lastLocation = CLLocation(latitude: latitude, longitude: longitude)
+        incomingEntities = (0..<13).map { index in
+            let isolated = index == 12
+            let isUser = index < 10
+            return IncomingMapEntity(
+                id: "crowded-map-preview-\(index)",
+                latitude: latitude + (isolated ? 0.004 : Double(index % 3) * 0.00005),
+                longitude: longitude + (isolated ? 0.003 : Double(index / 3) * 0.00005),
+                type: isUser ? "a-f-G-U-C" : "a-n-G",
+                lastSeen: now,
+                callSign: isolated ? "ISOLATED POINT" : isUser ? "TEST CONTACT \(index + 1)" : "TEST POINT \(index - 9)",
+                team: isUser ? "Blue" : nil,
+                role: isUser ? "Team Member" : nil,
+                senderUID: nil, sourceServerID: nil, sourceGeneration: 0,
+                expiresAt: now.addingTimeInterval(300), isUser: isUser
+            )
+        }
+    }
+
     private var loadTestCacheWrites = 0
     private struct LoadStage: Codable {
         let name: String

@@ -68,6 +68,10 @@ struct ContentView: View {
                 showMapPreview = true
             }
             #if targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--preview-crowded-map") {
+                model.prepareCrowdedMapPreview()
+                showMapPreview = true
+            }
             if ProcessInfo.processInfo.arguments.contains("--preview-remote-alert") {
                 let now = Date()
                 let coordinate = model.lastLocation?.coordinate
@@ -1295,7 +1299,13 @@ private struct TacticalMapView: View {
     }
 
     private func centerOnLocation() {
-        guard let coordinate = model.lastLocation?.coordinate else { return }
+        var coordinate = model.lastLocation?.coordinate
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--preview-crowded-map") {
+            coordinate = model.incomingEntities.first { $0.id == "crowded-map-preview-0" }?.coordinate
+        }
+        #endif
+        guard let coordinate else { return }
         let region = MKCoordinateRegion(
             center: coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)

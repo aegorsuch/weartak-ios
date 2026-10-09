@@ -183,7 +183,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.0`, Build `16`, with separate Apple-compatible
+- The project uses Version `5.8.0`, Build `17`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -220,7 +220,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.0`, Build `16`.
+The current checkout includes its app-icon image and Version `5.8.0`, Build `17`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -273,6 +273,13 @@ WearTAK is a watch-first TAK application for Apple Watch. It provides a MapKit
 map, saved tactical points, Bloodhound navigation, manual alerts, physiological
 and environmental monitoring, local TAK multicast, and direct Sit(x) connectivity.
 App code lives in `WearTAK Watch App/`.
+
+For a simulator-only crowded-map smoke test, launch the Debug watch app with
+`--preview-crowded-map`. It opens a map with ten synthetic contacts, two nearby
+points, and one isolated point. Tap the cluster to test the chooser and the
+isolated point to test direct details. Network outputs are disabled using
+temporary settings; synthetic items exist only in memory and expire after five
+minutes. Relaunch without the argument to return to normal settings.
 
 HealthKit supplies heart-rate readings; Core Motion supplies step activity,
 relative altitude, and pressure where supported. Physiological sensing and
