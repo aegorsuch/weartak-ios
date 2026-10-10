@@ -125,42 +125,44 @@ struct CompanionSetupView: View {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
                 }
-                Section("User Metrics") {
-                    ForEach(UserMetrics.Field.allCases) { field in
-                        LabeledContent(field.title, value: bridge.userMetrics.value(field) ?? "Not available")
-                    }
-                    if let source = bridge.importedMetricsSource {
-                        Text("Current source: \(source)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("Import from Apple Health") {
-                        Task {
-                            do {
-                                let preview = try await bridge.importAppleHealthMetrics()
-                                await MainActor.run {
-                                    metricsPreview = preview
-                                    selectedMetricFields = Set(UserMetrics.Field.allCases.filter { preview.value($0) != nil })
+                Section {
+                    DisclosureGroup("User Metrics") {
+                        ForEach(UserMetrics.Field.allCases) { field in
+                            LabeledContent(field.title, value: bridge.userMetrics.value(field) ?? "Not available")
+                        }
+                        if let source = bridge.importedMetricsSource {
+                            Text("Current source: \(source)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("Import from Apple Health") {
+                            Task {
+                                do {
+                                    let preview = try await bridge.importAppleHealthMetrics()
+                                    await MainActor.run {
+                                        metricsPreview = preview
+                                        selectedMetricFields = Set(UserMetrics.Field.allCases.filter { preview.value($0) != nil })
+                                    }
+                                } catch {
+                                    await MainActor.run { errorText = error.localizedDescription }
                                 }
-                            } catch {
-                                await MainActor.run { errorText = error.localizedDescription }
                             }
                         }
-                    }
-                    Button("Import from Garmin") {
-                        Task {
-                            do {
-                                let preview = try await bridge.importGarminMetrics()
-                                await MainActor.run {
-                                    metricsPreview = preview
-                                    selectedMetricFields = Set(UserMetrics.Field.allCases.filter { preview.value($0) != nil })
+                        Button("Import from Garmin") {
+                            Task {
+                                do {
+                                    let preview = try await bridge.importGarminMetrics()
+                                    await MainActor.run {
+                                        metricsPreview = preview
+                                        selectedMetricFields = Set(UserMetrics.Field.allCases.filter { preview.value($0) != nil })
+                                    }
+                                } catch {
+                                    await MainActor.run { errorText = error.localizedDescription }
                                 }
-                            } catch {
-                                await MainActor.run { errorText = error.localizedDescription }
                             }
                         }
+                        .disabled(bridge.watchRoute != .garmin || !bridge.garminReady)
                     }
-                    .disabled(bridge.watchRoute != .garmin || !bridge.garminReady)
                 }
                 Section(String(localized: "TAK Servers", table: "CompanionApp")) {
                     if bridge.adminLockEnabled {

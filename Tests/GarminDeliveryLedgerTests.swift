@@ -44,7 +44,8 @@ struct GarminDeliveryLedgerTests {
             fingerprint: fingerprint, now: now.addingTimeInterval(GarminDeliveryLedger.retention + 1)) { "<new />" }
         precondition(!expired.accepted && expired.requestID != original.requestID && restored.records.count == 1)
         do {
-            try restored.save(to: url.appendingPathComponent("missing").appendingPathComponent("ledger.json"))
+            try restored.save(to: url.deletingLastPathComponent()
+                .appendingPathComponent(UUID().uuidString).appendingPathComponent("ledger.json"))
             fatalError("Persistence errors must propagate.")
         } catch let error as CocoaError {
             precondition(error.code == .fileNoSuchFile)
