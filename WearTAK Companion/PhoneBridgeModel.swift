@@ -1,11 +1,17 @@
 import Combine
 import Foundation
+import HealthKit
 import OSLog
 import WatchConnectivity
 import UIKit
 
 @MainActor
-final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
+final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, WearTAKGarminDelegate {
+    enum WatchRoute: String, CaseIterable, Identifiable {
+        case apple, garmin
+        var id: String { rawValue }
+        var title: String { self == .apple ? "Apple Watch" : "Garmin Connect IQ" }
+    }
     private let chatLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "GeoChat")
     private let reportingLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "PhoneReporting")
     private let missionLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "DataSync")
@@ -15,10 +21,17 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var status = String(localized: "No servers configured", table: "PhoneBridgeStatus")
     @Published private(set) var isWatchPaired = false
     @Published private(set) var watchSetupError: String?
+    @Published private(set) var watchRoute: WatchRoute
     @Published private(set) var configured = false
     @Published private(set) var connected = false
     @Published private(set) var mapCacheError: String?
     @Published private(set) var tlsDiscoveryError: String?
+    @Published private(set) var garminStatus = "Choose a Garmin watch in Garmin Connect."
+    @Published private(set) var garminDevices: [[String: String]] = []
+    @Published private(set) var garminDeviceID: String?
+    @Published private(set) var garminReady = false
+    @Published private(set) var userMetrics = UserMetrics(source: "Manual entry", measuredAt: nil)
+    @Published private(set) var importedMetricsSource: String?
     private var tlsWaiters: [String: [CheckedContinuation<Void, Error>]] = [:]
     private var tlsDiscoveryTasks: [String: Task<Void, Never>] = [:]
     private var failedTLSDiscoveries = Set<String>()
@@ -91,17 +104,50 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     private var sourceGenerations: [UUID: Int] = [:]
     private let bridgeSessionID = UUID()
     private static let storageKey = "WearTAK.companion.servers"
+    private static let watchRouteKey = "WearTAK.companion.watchRoute"
+    private static let userMetricsKey = "WearTAK.companion.userMetrics"
     private let defaults: UserDefaults
+    private let healthStore = HKHealthStore()
+    private var garmin: WearTAKGarmin?
+    private var garminGeneration = UUID()
+    private var garminConnectionToken: String?
+    private var garminIdentity: WatchReportingIdentity?
+    private var garminBiometrics = WatchBiometrics(batdokCotEnabled: false)
+    private var garminChannelServers: [UUID] = []
+    private var garminQueue: [GarminEnvelope] = []
+    private var garminSending = false
+    private var garminMetricsRequestID: String?
+    private var garminMetricsPreview: UserMetrics?
+    private var garminMetricsError: String?
+    private var garminLedger = GarminDeliveryLedger()
+    private var garminLedgerError: String?
+    private var garminWrites = Set<UUID>()
+    private var garminReceivesInFlight = 0
 
     override convenience init() { self.init(defaults: .standard) }
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
+        watchRoute = WatchRoute(rawValue: defaults.string(forKey: Self.watchRouteKey) ?? "") ?? .apple
         developerMode = defaults.bool(forKey: Self.developerModeKey)
         adminLockEnabled = defaults.bool(forKey: Self.adminLockKey)
         reporter = PhoneLocationReporter(defaults: defaults)
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
+        do {
+            let url = try GarminDeliveryLedger.storageURL()
+            if FileManager.default.fileExists(atPath: url.path) {
+                garminLedger = try JSONDecoder().decode(GarminDeliveryLedger.self, from: Data(contentsOf: url))
+            }
+        } catch {
+            garminLedgerError = "Unable to load Garmin delivery records: \(error.localizedDescription)"
+            garminStatus = garminLedgerError ?? error.localizedDescription
+        }
+        if let data = defaults.data(forKey: Self.userMetricsKey),
+           let stored = try? JSONDecoder().decode(UserMetrics.self, from: data) {
+            userMetrics = stored
+            importedMetricsSource = stored.source
+        }
         if sitx.isConfigured { serverStates[SitxRelayConfig.serverID] = sitx.state }
         sitx.onState = { [weak self] state in
             guard let self else { return }
@@ -156,6 +202,100 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         if WCSession.isSupported() {
             WCSession.default.delegate = self
             WCSession.default.activate()
+        }
+        if watchRoute == .garmin { startGarmin() }
+    }
+
+    func selectWatchRoute(_ route: WatchRoute) {
+        guard route != watchRoute else { return }
+        watchRoute = route
+        defaults.set(route.rawValue, forKey: Self.watchRouteKey)
+        garmin?.stop()
+        garmin = nil
+        garminGeneration = UUID()
+        garminIdentity = nil
+        garminBiometrics = WatchBiometrics(batdokCotEnabled: false)
+        garminChannelServers = []
+        garminQueue = []
+        garminSending = false
+        garminReady = false
+        garminMetricsRequestID = nil
+        garminMetricsPreview = nil
+        garminMetricsError = nil
+        if route == .garmin {
+            setWatchIdentity(.failure(.missing))
+            startGarmin()
+        } else {
+            refreshWatchIdentity()
+        }
+        publishState()
+    }
+
+    private func startGarmin() {
+        let client = WearTAKGarmin(defaults: defaults)
+        client.delegate = self
+        garmin = client
+        garminDevices = client.devices
+        garminDeviceID = client.selectedDeviceID
+        if let selected = client.selectedDeviceID { client.selectDevice(selected) }
+    }
+
+    func chooseGarminDevices() { garmin?.chooseDevices() }
+
+    func selectGarminDevice(_ id: String) {
+        garminGeneration = UUID()
+        garminIdentity = nil
+        garminBiometrics = WatchBiometrics(batdokCotEnabled: false)
+        garminChannelServers = []
+        garminQueue = []
+        garminSending = false
+        garminMetricsRequestID = nil
+        garminMetricsPreview = nil
+        garminMetricsError = nil
+        garminDeviceID = id
+        setWatchIdentity(.failure(.missing))
+        garmin?.selectDevice(id)
+    }
+
+    func handleGarminURL(_ url: URL) {
+        guard watchRoute == .garmin, let garmin, garmin.handle(url) else { return }
+        garminDevices = garmin.devices
+        garminDeviceID = garmin.selectedDeviceID
+    }
+
+    nonisolated func garmin(_ client: WearTAKGarmin, received data: Data, token: String) {
+        Task { @MainActor [weak self] in
+            guard let self, self.garmin === client, client.connectionToken == token else { return }
+            await self.receiveGarmin(data)
+        }
+    }
+
+    nonisolated func garmin(_ client: WearTAKGarmin, status: String, ready: Bool, token: String) {
+        Task { @MainActor [weak self] in
+            guard let self, self.watchRoute == .garmin, self.garmin === client,
+                  client.connectionToken == token else { return }
+            let connectionChanged = self.garminConnectionToken != token
+            let becameReady = ready && !self.garminReady
+            if connectionChanged {
+                self.garminConnectionToken = token
+                self.garminGeneration = UUID()
+                self.garminQueue = []
+                self.garminSending = false
+            }
+            self.garminStatus = status
+            self.garminReady = ready
+            self.garminDevices = self.garmin?.devices ?? []
+            self.garminDeviceID = self.garmin?.selectedDeviceID
+            if ready && (connectionChanged || becameReady) {
+                self.enqueueGarmin(GarminEnvelope("request_settings"))
+            } else if !ready {
+                self.garminGeneration = UUID()
+                self.garminQueue = []
+                self.garminSending = false
+                self.garminIdentity = nil
+                self.setWatchIdentity(.failure(.watchUnavailable))
+            }
+            self.publishState()
         }
     }
 
@@ -318,6 +458,138 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     private func persist(_ servers: [CompanionServer]) throws {
         defaults.set(try JSONEncoder().encode(servers), forKey: Self.storageKey)
+    }
+
+    private func persistUserMetrics() {
+        do {
+            defaults.set(try JSONEncoder().encode(userMetrics), forKey: Self.userMetricsKey)
+            importedMetricsSource = userMetrics.source
+        } catch {
+            watchSetupError = "Unable to save imported user metrics: \(error.localizedDescription)"
+        }
+    }
+
+    func applyImportedMetrics(_ preview: UserMetrics, fields: Set<UserMetrics.Field>) throws {
+        var updated = userMetrics
+        updated.importFields(fields, from: try preview.validated())
+        userMetrics = try updated.validated()
+        persistUserMetrics()
+    }
+
+    func importAppleHealthMetrics() async throws -> UserMetrics {
+        guard HKHealthStore.isHealthDataAvailable() else { throw UserMetrics.Failure.unavailable }
+        let heightType = HKQuantityType.quantityType(forIdentifier: .height)!
+        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+        let bloodType = HKObjectType.characteristicType(forIdentifier: .bloodType)!
+        let sexType = HKObjectType.characteristicType(forIdentifier: .biologicalSex)!
+        try await healthStore.requestAuthorization(toShare: [], read: [heightType, weightType, bloodType, sexType])
+        var result = UserMetrics(source: "Apple Health", measuredAt: Date())
+        if let birth = try? healthStore.dateOfBirthComponents().year { result.birthYear = birth }
+        if let sex = try? healthStore.biologicalSex().biologicalSex {
+            switch sex {
+            case .female: result.sex = "Female"
+            case .male: result.sex = "Male"
+            default: break
+            }
+        }
+        if let blood = try? healthStore.bloodType().bloodType {
+            switch blood {
+            case .aPositive: result.bloodType = "A+"
+            case .aNegative: result.bloodType = "A-"
+            case .bPositive: result.bloodType = "B+"
+            case .bNegative: result.bloodType = "B-"
+            case .abPositive: result.bloodType = "AB+"
+            case .abNegative: result.bloodType = "AB-"
+            case .oPositive: result.bloodType = "O+"
+            case .oNegative: result.bloodType = "O-"
+            default: break
+            }
+        }
+        result.heightCM = try await latestQuantity(heightType, unit: .meterUnit(with: .centi))
+        result.weightKG = try await latestQuantity(weightType, unit: .gramUnit(with: .kilo))
+        if result.birthYear == nil, result.heightCM == nil, result.weightKG == nil, result.sex == nil, result.bloodType == nil {
+            throw UserMetrics.Failure.unavailable
+        }
+        return try result.validated()
+    }
+
+    private func latestQuantity(_ type: HKQuantityType, unit: HKUnit) async throws -> Double? {
+        try await withCheckedThrowingContinuation { continuation in
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { _, samples, error in
+                if let error { continuation.resume(throwing: error); return }
+                let sample = samples?.first as? HKQuantitySample
+                continuation.resume(returning: sample?.quantity.doubleValue(for: unit))
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    func importGarminMetrics() async throws -> UserMetrics {
+        guard watchRoute == .garmin, garminReady else {
+            throw CompanionFailure.message("Select and connect a Garmin watch first.")
+        }
+        let requestID = UUID().uuidString
+        garminMetricsRequestID = requestID
+        garminMetricsPreview = nil
+        garminMetricsError = nil
+        enqueueGarmin(GarminEnvelope("request_user_profile", ["requestId": requestID]))
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            if let garminMetricsPreview {
+                garminMetricsRequestID = nil
+                return garminMetricsPreview
+            }
+            if let garminMetricsError {
+                garminMetricsRequestID = nil
+                throw CompanionFailure.message(garminMetricsError)
+            }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        garminMetricsRequestID = nil
+        throw CompanionFailure.message("Timed out waiting for Garmin user metrics.")
+    }
+
+    private func enqueueGarmin(_ message: GarminEnvelope) {
+        guard watchRoute == .garmin, garminReady else {
+            garminStatus = "Garmin reply deferred: watch is unavailable. Queued events will retry."
+            return
+        }
+        guard garminQueue.count < 64 else {
+            garminStatus = "Garmin reply queue is full. Queued events will retry."
+            return
+        }
+        garminQueue.append(message)
+        flushGarmin()
+    }
+
+    private func flushGarmin() {
+        guard watchRoute == .garmin, garminReady, !garminSending, let garmin, !garminQueue.isEmpty else { return }
+        do {
+            let data = try JSONSerialization.data(withJSONObject: garminQueue[0].object)
+            guard data.count <= GarminEnvelope.maximumBytes else {
+                throw GarminRelayProtocol.Failure.invalid("outgoing message size")
+            }
+            let generation = garminGeneration
+            let connectionToken = garmin.connectionToken
+            garminSending = true
+            garmin.send(data) { [weak self] error in
+                Task { @MainActor in
+                    guard let self, self.garminGeneration == generation, self.watchRoute == .garmin,
+                          self.garmin?.connectionToken == connectionToken else { return }
+                    self.garminSending = false
+                    if !self.garminQueue.isEmpty { self.garminQueue.removeFirst() }
+                    if let error {
+                        self.garminStatus = "Garmin send failed: \(error.localizedDescription)"
+                    }
+                    self.flushGarmin()
+                }
+            }
+        } catch {
+            garminQueue.removeFirst()
+            garminStatus = "Garmin send failed: \(error.localizedDescription)"
+            flushGarmin()
+        }
     }
 
     private func synchronize() {
@@ -529,7 +801,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             return
         }
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let biometrics = WatchBiometrics.decode(contextValue: WCSession.default.receivedApplicationContext[WatchBiometrics.contextKey])
+        let biometrics = watchRoute == .garmin ? garminBiometrics :
+            WatchBiometrics.decode(contextValue: WCSession.default.receivedApplicationContext[WatchBiometrics.contextKey])
         let xml = PhonePLI.event(identity: identity, fix: fix, interval: interval, appVersion: version,
                                  osVersion: "iOS \(UIDevice.current.systemVersion)",
                                  biometrics: biometrics ?? WatchBiometrics())
@@ -564,6 +837,277 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
+    private func receiveGarmin(_ data: Data) async {
+        guard watchRoute == .garmin, garminReady else { return }
+        let generation = garminGeneration
+        let connectionToken = garmin?.connectionToken
+        var received: GarminEnvelope?
+        do {
+            let object = try JSONSerialization.jsonObject(with: data)
+            let envelope = try GarminEnvelope(object: object)
+            received = envelope
+            guard garminReceivesInFlight < 16 else {
+                throw CompanionFailure.message("Garmin relay is busy. Retry later.")
+            }
+            garminReceivesInFlight += 1
+            defer { garminReceivesInFlight -= 1 }
+            try beginBackgroundRefresh()
+            if envelope.type == "watch_settings" {
+                guard let id = garminDeviceID.flatMap(UUID.init(uuidString:)) else {
+                    throw GarminRelayProtocol.Failure.noIdentity
+                }
+                let identity = try GarminRelayProtocol.identity(envelope, uid: id)
+                garminIdentity = identity
+                setWatchIdentity(.success(identity))
+                return
+            }
+            if envelope.type == "user_profile" {
+                guard try envelope.string("requestId", maximum: 128) == garminMetricsRequestID else { return }
+                if let error = envelope.payload["error"] as? String {
+                    garminMetricsError = error
+                } else {
+                    garminMetricsPreview = try GarminRelayProtocol.metrics(envelope)
+                }
+                return
+            }
+            if envelope.type == "pli" {
+                guard var identity = garminIdentity else { throw GarminRelayProtocol.Failure.noIdentity }
+                if let callsign = envelope.payload["callsign"] as? String { identity.callSign = callsign }
+                if let team = envelope.payload["team"] as? String { identity.team = team }
+                if let role = envelope.payload["role"] as? String { identity.role = role }
+                identity.issuedAt = Date()
+                identity = try identity.validated()
+                garminIdentity = identity
+                let heartRate = envelope.payload["hr"] == nil ? nil : try envelope.integer("hr", range: 1...300)
+                garminBiometrics = WatchBiometrics(
+                    heartRate: heartRate, measuredAt: Date(),
+                    batdokCotEnabled: envelope.payload["includeBatdok"] as? Bool ?? false)
+                setWatchIdentity(.success(identity))
+                if let fix = latestPhoneFix { reportPhoneFix(fix) }
+                return
+            }
+            let request: BridgeWire.Message
+            let isEvent = ["marker", "marker_delete", "emergency", "chat"].contains(envelope.type)
+            if isEvent {
+                if let garminLedgerError { throw CompanionFailure.message(garminLedgerError) }
+                guard let deviceID = garminDeviceID.flatMap(UUID.init(uuidString:)),
+                    garminWrites.count < 16
+                else {
+                    throw CompanionFailure.message("Garmin relay is busy or the watch is unavailable. Retry later.")
+                }
+                var payload = envelope.payload
+                payload.removeValue(forKey: "relaySession")
+                let fingerprint = try JSONSerialization.data(
+                    withJSONObject: GarminEnvelope(envelope.type, payload).object, options: [.sortedKeys])
+                var updated = garminLedger
+                let record = try updated.reserve(
+                    deviceID: deviceID,
+                    messageID: envelope.string("messageId", maximum: 128), fingerprint: fingerprint
+                ) {
+                    guard let identity = garminIdentity else { throw GarminRelayProtocol.Failure.noIdentity }
+                    return try GarminRelayProtocol.outgoingCoT(
+                        envelope, identity: identity,
+                        fix: latestPhoneFix, now: Date())
+                }
+                try updated.save(to: GarminDeliveryLedger.storageURL())
+                garminLedger = updated
+                if record.accepted {
+                    try sendGarminReply(
+                        BridgeWire.Message(
+                            kind: .acknowledgement, id: record.requestID,
+                            ready: true), request: envelope)
+                    return
+                }
+                guard garminWrites.insert(record.requestID).inserted else {
+                    throw CompanionFailure.message("This Garmin event is already being relayed. Retry later.")
+                }
+                request = BridgeWire.Message(kind: .cot, id: record.requestID, xml: record.xml)
+            } else {
+                request = try GarminRelayProtocol.request(
+                    envelope, identity: garminIdentity,
+                    fix: latestPhoneFix, channelServers: garminChannelServers)
+            }
+            defer { if isEvent { garminWrites.remove(request.id) } }
+            let reply = try await processWatchMessage(request)
+            if isEvent {
+                guard reply.kind == .acknowledgement, reply.ready == true else {
+                    throw CompanionFailure.message("No connected server accepted this Garmin event. Retry later.")
+                }
+                var updated = garminLedger
+                try updated.accept(request.id)
+                try updated.save(to: GarminDeliveryLedger.storageURL())
+                garminLedger = updated
+            }
+            guard generation == garminGeneration, watchRoute == .garmin,
+                garmin?.connectionToken == connectionToken
+            else { return }
+            try sendGarminReply(reply, request: envelope)
+        } catch {
+            guard generation == garminGeneration, watchRoute == .garmin,
+                garmin?.connectionToken == connectionToken
+            else { return }
+            garminStatus = error.localizedDescription
+            if let received, ["marker", "marker_delete", "emergency", "chat"].contains(received.type),
+                let messageID = received.payload["messageId"] as? String, messageID.count <= 128
+            {
+                var payload: [String: Any] = [
+                    "ok": false, "messageId": messageID,
+                    "error": String(error.localizedDescription.prefix(256)),
+                ]
+                if let session = received.payload["relaySession"] as? String { payload["relaySession"] = session }
+                enqueueGarmin(GarminEnvelope("relay_result", payload))
+            }
+        }
+    }
+
+    private func sendGarminReply(_ reply: BridgeWire.Message, request: GarminEnvelope) throws {
+        if request.type == "relay_hello" {
+            var payload: [String: Any] = [
+                "ready": reply.ready == true, "detail": reply.detail ?? "",
+                "reliableDelivery": true,
+            ]
+            if let session = request.payload["relaySession"] as? String { payload["relaySession"] = session }
+            enqueueGarmin(GarminEnvelope("relay_status", payload))
+            return
+        }
+        switch reply.kind {
+        case .hello:
+            break
+        case .acknowledgement:
+            if let messageID = request.payload["messageId"] {
+                var payload: [String: Any] = ["ok": true, "messageId": messageID]
+                if let session = request.payload["relaySession"] as? String { payload["relaySession"] = session }
+                enqueueGarmin(GarminEnvelope("relay_result", payload))
+            }
+        case .mapSnapshot:
+            for event in (reply.mapEvents ?? []).prefix(GarminRelayProtocol.maximumEntities) {
+                if let envelope = try GarminRelayProtocol.incoming(event.xml, ownUID: garminIdentity?.uid ?? "") {
+                    enqueueGarmin(envelope)
+                }
+            }
+        case .channels:
+            let servers = reply.channelServers ?? []
+            if request.type == "channels_servers_request" {
+                garminChannelServers = Array(servers.prefix(4).map(\.id))
+                let payload = [
+                    "servers": servers.prefix(4).enumerated().map {
+                        ["serverIndex": $0.offset, "name": $0.element.name]
+                    }
+                ]
+                enqueueGarmin(GarminEnvelope("channels_servers_response", payload))
+            } else if let index = request.payload["serverIndex"] as? Int,
+                garminChannelServers.indices.contains(index),
+                let server = servers.first(where: { $0.id == garminChannelServers[index] })
+            {
+                enqueueGarmin(
+                    GarminEnvelope(
+                        "channels_response",
+                        [
+                            "serverName": server.name,
+                            "channels": server.channels.map {
+                                [
+                                    "bitpos": $0.bitPosition, "name": $0.name, "direction": $0.direction,
+                                    "active": $0.active,
+                                ]
+                            },
+                        ]))
+            }
+        case .missions:
+            let requestID = try request.string("requestId", maximum: 128)
+            let payloadServers = (reply.missionServers ?? []).map { server -> [String: Any] in
+                [
+                    "id": server.id.uuidString, "name": server.name, "state": server.state,
+                    "missions": server.missions.map { mission -> [String: Any] in
+                        var row: [String: Any] = [
+                            "name": mission.name, "subscribed": mission.subscribed,
+                            "passwordProtected": mission.passwordProtected,
+                        ]
+                        if let count = mission.itemCount { row["itemCount"] = count }
+                        if let error = mission.error { row["error"] = error }
+                        return row
+                    },
+                ]
+            }
+            if request.type == "missions_servers_request" {
+                enqueueGarmin(
+                    GarminEnvelope(
+                        "missions_servers_response",
+                        ["requestId": requestID, "dataSyncVersion": 1, "servers": payloadServers]))
+            } else {
+                let serverID = try request.string("serverID", maximum: 128)
+                let missions =
+                    payloadServers.first(where: { ($0["id"] as? String) == serverID })?["missions"] as? [[String: Any]]
+                    ?? []
+                enqueueGarmin(
+                    GarminEnvelope(
+                        "missions_response",
+                        ["requestId": requestID, "dataSyncVersion": 1, "serverID": serverID, "missions": missions]))
+            }
+        default:
+            break
+        }
+    }
+
+    private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
+        if message.kind == .hello {
+            chatBuffer.prune(enabledServerIDs: enabledSourceIDs)
+            return try chatBuffer.filling(snapshot(id: message.id))
+        }
+        if message.kind == .sitxConfig, let config = message.sitxConfig {
+            var released: SitxRelayConfig?
+            if config.removeConnection == true {
+                await sitx.removeConnection()
+                released = SitxRelayConfig(enabled: false, host: "", flowTag: "", removeConnection: true)
+            } else if config.enabled {
+                try applySitx(config)
+            } else {
+                let token = await sitx.release()
+                released = SitxRelayConfig(enabled: false, host: config.host, flowTag: config.flowTag, refreshToken: token)
+            }
+            return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true,
+                sitxConfig: released, sitxStatus: sitxStatusSummary ?? "", sitxSettings: sitx.settingsSnapshot)
+        }
+        if message.kind == .mapSnapshot { return try await mapReply(to: message) }
+        if message.kind == .channels || message.kind == .channelUpdate { return await channelReply(to: message) }
+        if message.kind == .missions, message.missionItemOffset != nil { return missionItemPageReply(to: message) }
+        if message.kind == .missions || message.kind == .missionUpdate { return await missionReply(to: message) }
+        guard message.kind == .cot, let xml = message.xml, canRelay, connected, watchWritesInFlight < 16 else {
+            return snapshot(id: message.id)
+        }
+        watchWritesInFlight += 1
+        defer { watchWritesInFlight -= 1 }
+        let isGarmin = garminWrites.contains(message.id)
+        let generation = garminGeneration
+        let connectionToken = garmin?.connectionToken
+        var successful = completedMessages[message.id] ?? []
+        var ready = readyOutputs()
+        if let target = message.serverID {
+            guard enabledSourceIDs.contains(target), let send = ready[target] else {
+                throw CompanionFailure.message("The contact's TAK server is not connected. Message not sent.")
+            }
+            ready = [target: send]
+        }
+        for (id, send) in ready where !successful.contains(id) {
+            if isGarmin && (watchRoute != .garmin || generation != garminGeneration ||
+                            garmin?.connectionToken != connectionToken) { break }
+            if shouldSuppressWatchPLI(xml, serverID: id) {
+                successful.insert(id)
+                continue
+            }
+            do {
+                try await send(xml)
+                successful.insert(id)
+            } catch {
+                reportingLogger.error("Watch relay write failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        guard !successful.isEmpty else { throw CompanionFailure.message("No server accepted the relay write.") }
+        if completedMessages[message.id] == nil { completedOrder.append(message.id) }
+        completedMessages[message.id] = successful
+        if completedOrder.count > 128 { completedMessages.removeValue(forKey: completedOrder.removeFirst()) }
+        return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true)
+    }
+
     private func updatePhoneReportingState(_ state: String, detail: String?) {
         phoneReporting.detail = detail
         guard phoneReporting.state != state else { return }
@@ -593,6 +1137,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     /// Accepts identity only from the activated session of a paired watch with WearTAK installed. WatchConnectivity
     /// persists that context per paired watch, so Companion keeps no separate copy that could outlive a watch switch.
     private func refreshWatchIdentity(contextValue: Data? = nil) {
+        guard watchRoute == .apple else { return }
         let session = WCSession.default
         guard WCSession.isSupported(), session.activationState == .activated, session.isPaired,
               session.isWatchAppInstalled else {
@@ -651,6 +1196,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
             : connected ? String(localized: "Connected", table: "PhoneBridgeStatus")
             : configured ? String(localized: "No connected servers", table: "PhoneBridgeStatus")
             : String(localized: "Configure on phone", table: "PhoneBridgeStatus")
+        if watchRoute == .garmin {
+            isWatchPaired = garminDeviceID != nil
+            return
+        }
         let session = WCSession.default
         isWatchPaired = WCSession.isSupported() && session.isPaired
         guard session.activationState == .activated else { return }
@@ -687,6 +1236,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
         if event.isValid { lastMapEventReceivedAt = event.receivedAt }
         mapCache.receive(event)
         mapCacheWrites.schedule()
+        if watchRoute == .garmin {
+            guard canRelay, connected, garminReady, let envelope = try? GarminRelayProtocol.incoming(xml, ownUID: garminIdentity?.uid ?? "") else {
+                return
+            }
+            enqueueGarmin(envelope)
+            return
+        }
         guard canRelay, connected, WCSession.default.isReachable, incomingInFlight < 16,
               let data = try? BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: sourceID,
                   sourceGeneration: sourceGenerations[sourceID, default: 0], sessionID: bridgeSessionID).encoded() else {
@@ -708,17 +1264,26 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        Task { @MainActor [weak self] in self?.refreshWatchIdentity() }
+        Task { @MainActor [weak self] in
+            guard self?.watchRoute == .apple else { return }
+            self?.refreshWatchIdentity()
+        }
     }
 
     nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
-        Task { @MainActor [weak self] in self?.refreshWatchIdentity() }
+        Task { @MainActor [weak self] in
+            guard self?.watchRoute == .apple else { return }
+            self?.refreshWatchIdentity()
+        }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         guard let value = applicationContext[WatchReportingIdentity.contextKey] else { return }
         let data = value as? Data ?? Data()
-        Task { @MainActor [weak self] in self?.refreshWatchIdentity(contextValue: data) }
+        Task { @MainActor [weak self] in
+            guard self?.watchRoute == .apple else { return }
+            self?.refreshWatchIdentity(contextValue: data)
+        }
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
@@ -727,6 +1292,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         Task { @MainActor [weak self] in
+            guard self?.watchRoute == .apple else { return }
             self?.setWatchIdentity(.failure(.watchUnavailable))
         }
     }
@@ -742,74 +1308,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate {
                 let message = try BridgeWire.Message.decode(messageData)
                 replyID = message.id
                 try self.beginBackgroundRefresh()
-                if message.kind == .hello {
-                    self.chatBuffer.prune(enabledServerIDs: self.enabledSourceIDs)
-                    replyHandler(try self.chatBuffer.filling(self.snapshot(id: message.id)).encoded())
-                    return
-                }
-                if message.kind == .sitxConfig, let config = message.sitxConfig {
-                    var released: SitxRelayConfig?
-                    if config.removeConnection == true {
-                        await self.sitx.removeConnection()
-                        released = SitxRelayConfig(enabled: false, host: "", flowTag: "", removeConnection: true)
-                    } else if config.enabled {
-                        try self.applySitx(config)
-                    } else {
-                        let token = await self.sitx.release()
-                        released = SitxRelayConfig(enabled: false, host: config.host, flowTag: config.flowTag,
-                                                   refreshToken: token)
-                    }
-                    replyHandler(try BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true,
-                        sitxConfig: released, sitxStatus: self.sitxStatusSummary ?? "",
-                        sitxSettings: self.sitx.settingsSnapshot).encoded())
-                    return
-                }
-                if message.kind == .mapSnapshot {
-                    replyHandler(try await self.mapReply(to: message).encoded())
-                    return
-                }
-                if message.kind == .channels || message.kind == .channelUpdate {
-                    let reply = await self.channelReply(to: message)
-                    replyHandler((try? reply.encoded()) ?? Data())
-                    return
-                }
-                if message.kind == .missions, message.missionItemOffset != nil {
-                    replyHandler(try self.missionItemPageReply(to: message).encoded())
-                    return
-                }
-                if message.kind == .missions || message.kind == .missionUpdate {
-                    replyHandler(try await self.missionReply(to: message).encoded())
-                    return
-                }
-                    guard message.kind == .cot, let xml = message.xml, self.canRelay, self.connected,
-                        self.watchWritesInFlight < 16 else {
-                    replyHandler(try self.snapshot(id: message.id).encoded())
-                    return
-                }
-                self.watchWritesInFlight += 1
-                defer { self.watchWritesInFlight -= 1 }
-                var successful = self.completedMessages[message.id] ?? []
-                var ready = self.readyOutputs()
-                if let target = message.serverID {
-                    // Directed CoT (for example GeoChat) goes only to its source server and is never broadcast.
-                    guard self.enabledSourceIDs.contains(target), let send = ready[target] else {
-                        throw CompanionFailure.message("The contact's TAK server is not connected. Message not sent.")
-                    }
-                    ready = [target: send]
-                }
-                for (id, send) in ready where !successful.contains(id) {
-                    if self.shouldSuppressWatchPLI(xml, serverID: id) {
-                        successful.insert(id)
-                        continue
-                    }
-                    do { try await send(xml); successful.insert(id) }
-                    catch { continue }
-                }
-                guard !successful.isEmpty else { throw CompanionFailure.message("No server accepted the relay write.") }
-                if self.completedMessages[message.id] == nil { self.completedOrder.append(message.id) }
-                self.completedMessages[message.id] = successful
-                if self.completedOrder.count > 128 { self.completedMessages.removeValue(forKey: self.completedOrder.removeFirst()) }
-                replyHandler(try BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true).encoded())
+                replyHandler(try await self.processWatchMessage(message).encoded())
             } catch {
                 replyHandler((try? BridgeWire.Message(kind: .status, id: replyID, ready: false,
                     detail: error.localizedDescription).encoded()) ?? Data())

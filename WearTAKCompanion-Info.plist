@@ -2,6 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array><string>weartak-garmin</string></array>
+			<key>CFBundleURLName</key>
+			<string>com.aegorsuch.weartak.garmin</string>
+		</dict>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array><string>gcm-ciq</string></array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>WearTAK Companion communicates with the Garmin watch you authorize to relay TAK messages.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>WearTAK Companion communicates with your authorized Garmin watch.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Import the birth year, height, weight, sex and blood type you choose from Apple Health into your local WearTAK profile.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>WearTAK does not save or modify your Apple Health data.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
@@ -12,6 +31,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>bluetooth-central</string>
 	</array>
 </dict>
 </plist>

@@ -17,6 +17,8 @@ struct CompanionSetupView: View {
     @State private var confirmRemove = false
     @State private var errorText: String?
     @State private var showDeveloperModeEnabled = false
+    @State private var metricsPreview: UserMetrics?
+    @State private var selectedMetricFields = Set(UserMetrics.Field.allCases)
 
     init() {
         #if DEBUG
@@ -90,13 +92,75 @@ struct CompanionSetupView: View {
                     }
                 }
                 Section {
-                    LabeledContent(String(localized: "Watch status", table: "CompanionApp"), value: bridge.isWatchPaired ? String(localized: "Paired", table: "CompanionApp") : String(localized: "Not paired", table: "CompanionApp"))
+                    Picker("Watch Route", selection: Binding(
+                        get: { bridge.watchRoute },
+                        set: { bridge.selectWatchRoute($0) }
+                    )) {
+                        ForEach(PhoneBridgeModel.WatchRoute.allCases) { route in
+                            Text(route.title).tag(route)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    if bridge.watchRoute == .garmin {
+                        LabeledContent("Garmin status", value: bridge.garminStatus)
+                        Button("Choose Garmin Watches") { bridge.chooseGarminDevices() }
+                        if !bridge.garminDevices.isEmpty {
+                            Picker("Authorized Garmin", selection: Binding(
+                                get: { bridge.garminDeviceID ?? "" },
+                                set: { if !$0.isEmpty { bridge.selectGarminDevice($0) } }
+                            )) {
+                                ForEach(bridge.garminDevices, id: \.self) { device in
+                                    Text(device["name"] ?? "Garmin").tag(device["id"] ?? "")
+                                }
+                            }
+                        }
+                    } else {
+                        LabeledContent(String(localized: "Watch status", table: "CompanionApp"),
+                                       value: bridge.isWatchPaired ? String(localized: "Paired", table: "CompanionApp") : String(localized: "Not paired", table: "CompanionApp"))
+                    }
                     if let error = bridge.watchSetupError {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
                     if let error = bridge.mapCacheError {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
+                }
+                Section("User Metrics") {
+                    ForEach(UserMetrics.Field.allCases) { field in
+                        LabeledContent(field.title, value: bridge.userMetrics.value(field) ?? "Not available")
+                    }
+                    if let source = bridge.importedMetricsSource {
+                        Text("Current source: \(source)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("Import from Apple Health") {
+                        Task {
+                            do {
+                                let preview = try await bridge.importAppleHealthMetrics()
+                                await MainActor.run {
+                                    metricsPreview = preview
+                                    selectedMetricFields = Set(UserMetrics.Field.allCases.filter { preview.value($0) != nil })
+                                }
+                            } catch {
+                                await MainActor.run { errorText = error.localizedDescription }
+                            }
+                        }
+                    }
+                    Button("Import from Garmin") {
+                        Task {
+                            do {
+                                let preview = try await bridge.importGarminMetrics()
+                                await MainActor.run {
+                                    metricsPreview = preview
+                                    selectedMetricFields = Set(UserMetrics.Field.allCases.filter { preview.value($0) != nil })
+                                }
+                            } catch {
+                                await MainActor.run { errorText = error.localizedDescription }
+                            }
+                        }
+                    }
+                    .disabled(bridge.watchRoute != .garmin || !bridge.garminReady)
                 }
                 Section(String(localized: "TAK Servers", table: "CompanionApp")) {
                     if bridge.adminLockEnabled {
@@ -191,6 +255,16 @@ struct CompanionSetupView: View {
             .sheet(item: $editor) { route in
                 CompanionServerEditor(bridge: bridge, server: route.server)
             }
+            .sheet(item: $metricsPreview) { preview in
+                MetricsImportSheet(preview: preview, selectedFields: $selectedMetricFields) {
+                    do {
+                        try bridge.applyImportedMetrics(preview, fields: selectedMetricFields)
+                        metricsPreview = nil
+                    } catch {
+                        errorText = error.localizedDescription
+                    }
+                }
+            }
             .confirmationDialog(String(localized: "Remove server and its certificate?", table: "CompanionApp"), isPresented: $confirmRemove) {
                 Button(String(localized: "Remove Server", table: "CompanionApp"), role: .destructive) {
                     guard !bridge.adminLockEnabled else { return }
@@ -208,6 +282,9 @@ struct CompanionSetupView: View {
                 if phase == .background { bridge.setActive(false) }
                 else if phase == .active { bridge.setActive(true) }
             }
+            .onOpenURL { url in
+                bridge.handleGarminURL(url)
+            }
         }
     }
 
@@ -215,6 +292,53 @@ struct CompanionSetupView: View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
         return "\(version) (\(build))"
+    }
+
+    private struct MetricsImportSheet: View {
+        let preview: UserMetrics
+        @Binding var selectedFields: Set<UserMetrics.Field>
+        let apply: () -> Void
+        @Environment(\.dismiss) private var dismiss
+
+        var body: some View {
+            NavigationStack {
+                List {
+                    Section("Source") {
+                        Text(preview.source)
+                        if let measuredAt = preview.measuredAt {
+                            Text(measuredAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Section("Import Fields") {
+                        ForEach(UserMetrics.Field.allCases) { field in
+                            if let value = preview.value(field) {
+                                Toggle(isOn: Binding(
+                                    get: { selectedFields.contains(field) },
+                                    set: { if $0 { selectedFields.insert(field) } else { selectedFields.remove(field) } }
+                                )) {
+                                    LabeledContent(field.title, value: value)
+                                }
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Import User Metrics")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Import") {
+                            apply()
+                            dismiss()
+                        }
+                        .disabled(selectedFields.isEmpty)
+                    }
+                }
+            }
+        }
     }
 }
 

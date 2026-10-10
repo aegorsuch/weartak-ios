@@ -472,6 +472,50 @@ and local multicast without Companion.
   Connected requires a successful mutual-TLS server connection, not just a
   saved certificate or Bluetooth pairing.
 
+WearTAK Companion now supports two watch routes:
+
+- **Apple Watch** uses the existing WatchConnectivity relay and pairing state.
+- **Garmin Connect IQ** uses Garmin's iOS Connect IQ Mobile SDK. Pair the
+  Garmin watch in Garmin Connect Mobile, install WearTAK-Garmin on the watch,
+  open **WearTAK Companion** on the phone, select **Garmin Connect IQ** in the
+  Watch Route control, then use **Choose Garmin Watches** to authorize the
+  watch through Garmin Connect Mobile. After returning to Companion, select the
+  authorized watch if more than one is listed. Garmin relay traffic does not
+  require an Apple Watch.
+
+### Garmin relay acknowledgements
+
+Companion advertises `reliableDelivery` in a session-correlated `relay_status`
+response to `relay_hello`. Queued marker, marker-delete, emergency, and chat
+events are acknowledged with `relay_result` only after at least one eligible
+TAK server socket accepts the write. This is **not** remote-recipient delivery
+confirmation or a guarantee that every configured server received it.
+
+The watch waits up to 30 seconds for an acknowledgement, retains failed events,
+and retries with delays from 5 to 60 seconds. A lost phone-to-watch reply is
+recovered by watch replay. Companion keeps an atomic on-disk delivery ledger
+scoped by authorized watch UUID and event ID, including the original CoT and a
+stable request UUID. Accepted retries are acknowledged without another server
+write, including after a normal app restart; changed payloads under an existing
+ID are rejected. The ledger retains up to 256 records for 24 hours plus five
+minutes and refuses new records rather than evicting live ones. The reply queue
+is bounded to 64 messages; unavailable, failed, or overflowing replies are
+reported in Garmin status and queued watch events recover by replay.
+
+There remains an unavoidable crash window between the server socket accepting
+a write and Companion persisting that acceptance. A replay after a crash in
+that window can duplicate the write; this is not an exactly-once protocol.
+For older phone companions, a watch that has not negotiated reliable delivery
+in its current app lifetime falls back to SDK-handoff-only acknowledgement after
+a 15-second capability wait. Once negotiated, a missing hello response does
+not downgrade that watch process to handoff-only mode. Bloodhound coordination
+is not implemented by the iPhone route.
+
+Portable delivery-ledger checks can be run with Swift:
+`swiftc Shared/GarminDeliveryLedger.swift Tests/GarminDeliveryLedgerTests.swift -o garmin-ledger-tests`,
+then execute `garmin-ledger-tests`. The full Companion/ConnectIQ SDK build still
+requires Xcode on macOS.
+
 Enrollment uses HTTPS `8446` by default; an explicit HTTPS URL port overrides
 that enrollment port, not the separately entered CoT stream port. Client
 identities and import passwords are stored in endpoint-scoped Keychain entries.
@@ -529,6 +573,22 @@ pauses only while Companion is actually ready; multicast remains independent.
 The Companion's Watch status row shows "Paired" or "Not paired" using the phone's
 watch pairing state, independently of whether the watch app is foregrounded.
 Pairing status is not TAK server health or live-message availability.
+
+### User metrics import
+
+Companion can import local profile values for **Birth year, Height, Weight,
+Sex, and Blood Type** without editing them by hand:
+
+- **Import from Apple Health** reads whichever of those fields the user already
+  granted to HealthKit on the iPhone.
+- **Import from Garmin** requests the current Garmin WearTAK watch profile
+  values from the paired Garmin watch over Connect IQ.
+
+Imports are previewed first. Each available field has its own toggle so the
+user can replace only selected values while leaving the rest untouched. Missing
+fields remain editable or importable later. Importing these metrics updates
+Companion's local stored profile only; it does not automatically transmit them
+to TAK servers.
 
 ### Phone GPS location reporting
 

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		99C100000000000000000003 /* ConnectIQ in Companion Frameworks */ = {isa = PBXBuildFile; productRef = 99C100000000000000000002 /* ConnectIQ */; };
 		99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */ = {isa = PBXBuildFile; productRef = 99B100000000000000000006 /* SwiftASN1 */; };
 		99A20000000000000000000A /* WearTAK Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 12858C89306DD75A002BB8CC /* WearTAK Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -62,7 +63,7 @@
 		99B100000000000000000004 /* Companion Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */, );
+			files = (99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */, 99C100000000000000000003 /* ConnectIQ in Companion Frameworks */, );
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		12858C86306DD75A002BB8CC /* Frameworks */ = {
@@ -141,6 +142,7 @@
 			);
 			packageProductDependencies = (
 				99B100000000000000000006 /* SwiftASN1 */,
+				99C100000000000000000002 /* ConnectIQ */,
 			);
 			productName = WearTAK;
 			productReference = 99A200000000000000000001 /* WearTAK.app */;
@@ -211,6 +213,7 @@
 			projectRoot = "";
 			packageReferences = (
 				99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */,
+				99C100000000000000000001 /* XCRemoteSwiftPackageReference ConnectIQ */,
 			);
 			targets = (
 				12858C88306DD75A002BB8CC /* WearTAK Watch App */,
@@ -283,6 +286,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		99C100000000000000000001 /* XCRemoteSwiftPackageReference ConnectIQ */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/garmin/connectiq-companion-app-sdk-ios.git";
+			requirement = {kind = revision; revision = f0d29ff691d700a132d86205ed9bb091e336c2f7; };
+		};
 		99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-asn1.git";
@@ -291,6 +299,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		99C100000000000000000002 /* ConnectIQ */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 99C100000000000000000001 /* XCRemoteSwiftPackageReference ConnectIQ */;
+			productName = ConnectIQ;
+		};
 		99B100000000000000000006 /* SwiftASN1 */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */;
@@ -524,6 +537,9 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
 				SWIFT_VERSION = 5.0;
+				CODE_SIGN_ENTITLEMENTS = WearTAK.entitlements;
+				SWIFT_OBJC_BRIDGING_HEADER = "WearTAKCompanion-Bridging-Header.h";
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK Companion connects to your TAK server and relays your watch's positions, alerts, and points.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -551,6 +567,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";
 				SWIFT_VERSION = 5.0;
+				CODE_SIGN_ENTITLEMENTS = WearTAK.entitlements;
+				SWIFT_OBJC_BRIDGING_HEADER = "WearTAKCompanion-Bridging-Header.h";
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WearTAK Companion connects to your TAK server and relays your watch's positions, alerts, and points.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
