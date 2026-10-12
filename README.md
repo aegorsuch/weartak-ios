@@ -871,6 +871,16 @@ and legacy `recipientUid`/`replyTo` direct messages remain supported; canonical
 fields take precedence and invalid explicit fields cannot fall back to broadcast.
 The bridge does not emit the incompatible `title` chat alias. Cross-platform
 Android/Garmin integration still requires device/relay validation.
+The sender adapter also provides `senderUid`, `senderCallsign`, `msg` and local
+`receivedAt` milliseconds. Legacy `uid` retains its sender-UID meaning for older
+Garmin clients; `messageId` and `eventUid` identify the message/event instead.
+Garmin picker interoperability depends on
+[aegorsuch/weartak-garmin#4](https://github.com/aegorsuch/weartak-garmin/pull/4).
+Companion explicitly reports `chatGroups: false` alongside `reliableDelivery`
+and the echoed `relaySession`: non-All group sending from Garmin remains gated
+until safe group destination routing is verified. The presence of group receive
+metadata alone does not advertise safe outbound group routing. All Chat Rooms
+and direct chat do not require the custom-group capability.
 
 Conversations are in-memory and bounded to 50 rooms with 50 messages each.
 New picker labels currently have English catalog entries with the standard

@@ -965,6 +965,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             var payload: [String: Any] = [
                 "ready": reply.ready == true, "detail": reply.detail ?? "",
                 "reliableDelivery": true,
+                "chatGroups": false,
             ]
             if let session = request.payload["relaySession"] as? String { payload["relaySession"] = session }
             enqueueGarmin(GarminEnvelope("relay_status", payload))
@@ -1237,7 +1238,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         mapCache.receive(event)
         mapCacheWrites.schedule()
         if watchRoute == .garmin {
-            guard canRelay, connected, garminReady, let envelope = try? GarminRelayProtocol.incoming(xml, ownUID: garminIdentity?.uid ?? "") else {
+            guard canRelay, connected, garminReady, let envelope = try? GarminRelayProtocol.incoming(xml,
+                ownUID: garminIdentity?.uid ?? "", receivedAt: event.receivedAt) else {
                 return
             }
             enqueueGarmin(envelope)

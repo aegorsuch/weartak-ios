@@ -219,7 +219,7 @@ enum GarminRelayProtocol {
         return "<event version=\"2.0\" uid=\"\(escape(scopedUID))\" type=\"\(type)\" time=\"\(time)\" start=\"\(time)\" stale=\"\(stale)\" how=\"h-g-i-g-o\"><point lat=\"\(latitude)\" lon=\"\(longitude)\" hae=\"9999999\" ce=\"9999999\" le=\"9999999\"/><detail>\(detail)</detail></event>"
     }
 
-    static func incoming(_ xml: String, ownUID: String) throws -> GarminEnvelope? {
+    static func incoming(_ xml: String, ownUID: String, receivedAt: Date = Date()) throws -> GarminEnvelope? {
         guard CoTStreamFramer.isEvent(Data(xml.utf8)) else { throw Failure.invalid("CoT") }
         let delegate = GarminCoTParser()
         let parser = XMLParser(data: Data(xml.utf8))
@@ -233,6 +233,9 @@ enum GarminRelayProtocol {
             guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else { return nil }
             return GarminEnvelope("chat", ["uid": message.senderUID, "sender": message.senderCallSign,
                 "text": String(message.text.prefix(512)), "messageId": message.id,
+                "senderUid": message.senderUID, "senderCallsign": message.senderCallSign,
+                "msg": String(message.text.prefix(512)), "eventUid": uid,
+                "receivedAt": Int64(receivedAt.timeIntervalSince1970 * 1_000),
                 "conversationUid": message.conversationUID(ownUID: ownUID),
                 "conversationTitle": message.title ?? message.senderCallSign, "isGroup": message.isGroup])
         }

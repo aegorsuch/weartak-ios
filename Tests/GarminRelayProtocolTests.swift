@@ -60,11 +60,17 @@ struct GarminRelayProtocolTests {
             "roomTitle": "Team & Friends", "isGroup": true, "text": "Group reply",
             "conversationUid": "ignored-alias", "title": "Ignored alias"])
         let groupXML = try GarminRelayProtocol.outgoingCoT(groupEnvelope, identity: identity, fix: nil, now: now)
-        let receivedGroup = try GarminRelayProtocol.incoming(groupXML, ownUID: "other")!
+        let receivedGroup = try GarminRelayProtocol.incoming(groupXML, ownUID: "other", receivedAt: now)!
         precondition(receivedGroup.payload["uid"] as? String == identity.uid)
         precondition(receivedGroup.payload["conversationUid"] as? String == "team-room")
         precondition(receivedGroup.payload["conversationTitle"] as? String == "Team & Friends")
         precondition(receivedGroup.payload["title"] == nil)
+        precondition(receivedGroup.payload["senderUid"] as? String == identity.uid)
+        precondition(receivedGroup.payload["senderCallsign"] as? String == identity.resolvedCallSign)
+        precondition(receivedGroup.payload["msg"] as? String == "Group reply")
+        precondition(receivedGroup.payload["receivedAt"] as? Int64 == Int64(now.timeIntervalSince1970 * 1_000))
+        precondition(receivedGroup.payload["messageId"] as? String == "group-1")
+        precondition(receivedGroup.payload["eventUid"] as? String == "GeoChat.\(identity.uid).team-room.group-1")
         precondition(receivedGroup.payload["isGroup"] as? Bool == true)
         let directXML = try TAKChatMessage.outgoing(senderUID: "other", senderCallSign: "Other",
             recipientUID: identity.uid, recipientCallSign: "Garmin", text: "Private", now: now)
