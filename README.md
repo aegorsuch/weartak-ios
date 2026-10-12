@@ -845,8 +845,37 @@ shared local network with the recipient UID in the message; it is not private
 point-to-point transport. A successful send means the transport accepted the
 message, not confirmed recipient delivery.
 Replies addressed to the watch UID appear in the matching source/contact
-conversation. Conversations are in-memory and bounded to 50 contacts with 50
-messages each. The dashboard Chat button shows the total unread count; the inbox
+conversation. WEARTAK-118 also groups GeoChat room messages by room UID and source,
+not by sender; each message still displays its own sender. Room titles update
+from the latest received metadata. Legacy direct messages for unrelated UIDs
+remain excluded.
+
+The chat picker pins **All Chat Rooms** first and **Select User for Chat** second.
+The selector opens the existing watch map; tapping a user opens a direct chat and
+adds it to the normal conversation list even before sending. Other conversations
+sort by newest locally received message, descending. Sending, replaying a duplicate
+or opening a conversation does not promote it over newer received conversations.
+The All Chat Rooms action lets you choose the source transport/server explicitly;
+it uses ATAK's `All Chat Rooms` GeoChat room identity, not a direct-user fallback.
+Private replies retain their recipient UID and directed server destination.
+Group replies retain their original room identity and source. This supports
+received group conversations, not group creation or membership management.
+
+Apple Watch Companion delivery already relays raw GeoChat XML unchanged (including
+`__chat` room ID/title and `chatgrp` members), rather than an ATAK JSON chat envelope.
+The Garmin Companion bridge emits canonical `conversationUid`, `conversationTitle`
+and `isGroup` in its existing phone-to-watch `chat` payload; `uid`/`sender` remain
+the message sender. Watch-to-phone replies consume canonical `roomUid`, `roomTitle`
+and `isGroup`. Earlier `conversationUid`/`conversationTitle`/`title` input aliases
+and legacy `recipientUid`/`replyTo` direct messages remain supported; canonical
+fields take precedence and invalid explicit fields cannot fall back to broadcast.
+The bridge does not emit the incompatible `title` chat alias. Cross-platform
+Android/Garmin integration still requires device/relay validation.
+
+Conversations are in-memory and bounded to 50 rooms with 50 messages each.
+New picker labels currently have English catalog entries with the standard
+English fallback in other app languages; existing translations are unchanged.
+The dashboard Chat button shows the total unread count; the inbox
 lists conversations with per-conversation counts. Opening an active conversation
 marks it read. New unread incoming messages trigger a haptic when Chat is enabled.
 These are in-app notifications while the watch app receives messages, not system
@@ -1434,7 +1463,9 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 /tmp/weartak-status-checks
 ```
 
-Directed GeoChat checks cover recipient addressing, XML escaping, message
+GeoChat checks cover direct privacy, group merge and sender identity, dynamic room
+titles, ATAK All Chat Rooms addressing, pinned picker actions, received-message
+recency independent of sent timestamps/outgoing messages, XML escaping, message
 bounds, incoming reply parsing, chat exclusion from map snapshots, unread/read
 state, duplicate suppression, source isolation, quick messages and inbox eviction:
 

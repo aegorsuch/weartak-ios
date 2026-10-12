@@ -136,6 +136,7 @@ struct BloodhoundDestination {
 struct ContactConversation: Hashable, Identifiable {
     let uid: String
     let route: ContactChatRoute
+    var isGroup: Bool = false
     var id: Self { self }
 }
 
@@ -258,6 +259,28 @@ final class WatchSessionModel: NSObject, ObservableObject {
     var unreadChatCount: Int { chatInbox.unreadCount }
 
     var chatConversations: [ContactConversation] { chatInbox.conversations }
+    var chatPickerEntries: [TAKChatPickerEntry<ContactConversation>] {
+        chatInbox.pickerEntries(excluding: Set(chatConversations.filter { $0.uid == TAKChatMessage.allChatRoomsUID }))
+    }
+
+    var allChatRoutes: [ContactChatRoute] {
+        var routes = Set(incomingEntities.compactMap(\.chatRoute) + chatConversations.map(\.route))
+        for id in connectedRemoteAlertServers ?? [] { routes.insert(.companion(id)) }
+        for server in companionClient.channelServers { routes.insert(.companion(server.id)) }
+        if multicastClient.isReady { routes.insert(.multicast) }
+        if sitxClient.isSitxConnected { routes.insert(.sitx) }
+        return routes.sorted { chatRouteTitle($0) < chatRouteTitle($1) }
+    }
+
+    func chatRouteTitle(_ route: ContactChatRoute) -> String {
+        switch route {
+        case .companion(let id):
+            return companionClient.channelServers.first { $0.id == id }?.name ??
+                companionClient.missionServers.first { $0.id == id }?.name ?? id.uuidString
+        case .multicast: return "TAK SA Multicast"
+        case .sitx: return "Sit(x)"
+        }
+    }
     var incomingMapPoints: [IncomingMapEntity] { remoteAlertEntities + incomingEntities.filter { !$0.isUser } }
     /// Points offered in the Bloodhound order list; Data Sync items stay on the map only.
     var bloodhoundOrderPoints: [IncomingMapEntity] {
@@ -266,6 +289,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func chatTitle(for conversation: ContactConversation) -> String {
+        if conversation.uid == TAKChatMessage.allChatRoomsUID {
+            return String(localized: "All Chat Rooms", table: "WatchMain")
+        }
+        if conversation.isGroup { return chatInbox.latestMetadata[conversation]?.title ?? conversation.uid }
+        if let sender = chatInbox.latestMetadata[conversation], sender.senderUID == conversation.uid {
+            return sender.senderCallSign
+        }
         if let sender = contactMessages[conversation]?.last(where: { $0.senderUID == conversation.uid }) {
             return sender.senderCallSign
         }
@@ -274,6 +304,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func setConversationVisible(_ conversation: ContactConversation, visible: Bool) {
+        if visible { chatInbox.open(conversation) }
         chatInbox.setVisible(conversation, visible: visible)
     }
     @Published private(set) var headingDegrees: Double?
@@ -909,17 +940,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
         return nil
     }
 
-    func sendContactChat(uid: String, route: ContactChatRoute, text: String) async throws {
-        let conversation = ContactConversation(uid: uid, route: route)
+    func sendContactChat(uid: String, route: ContactChatRoute, text: String, isGroup: Bool = false) async throws {
+        let conversation = ContactConversation(uid: uid, route: route, isGroup: isGroup)
         let contact = incomingEntities.first(where: { $0.id == uid && $0.chatRoute == route })
-        guard contact != nil || contactMessages[conversation] != nil else {
+        guard contact != nil || contactMessages[conversation] != nil || uid == TAKChatMessage.allChatRoomsUID else {
             throw ContactChatFailure.message("This contact is no longer available on that transport.")
         }
-        if let contact, let reason = chatUnavailableReason(for: contact) { throw ContactChatFailure.message(reason) }
+        if !isGroup, let contact, let reason = chatUnavailableReason(for: contact) { throw ContactChatFailure.message(reason) }
         let ownUID = SitxClient.deviceID()
         let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
             senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
-            recipientUID: uid, recipientCallSign: contact?.callSign ?? chatTitle(for: conversation), text: text)
+            recipientUID: uid, recipientCallSign: isGroup ? chatTitle(for: conversation) :
+                (contact?.callSign ?? chatTitle(for: conversation)), text: text, isGroup: isGroup)
         guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
             throw ContactChatFailure.message("Unable to record the outgoing chat message.")
         }
@@ -933,8 +965,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     private func recordChat(_ message: TAKChatMessage, route: ContactChatRoute) {
         let ownUID = SitxClient.deviceID()
-        let other = message.senderUID == ownUID ? message.recipientUID : message.senderUID
-        let key = ContactConversation(uid: other, route: route)
+        let key = ContactConversation(uid: message.conversationUID(ownUID: ownUID), route: route, isGroup: message.isGroup)
         if chatInbox.record(message, conversation: key, ownUID: ownUID) {
             WKInterfaceDevice.current().play(.notification)
             chatLogger.notice("New unread GeoChat recorded; notification haptic requested")

@@ -43,13 +43,78 @@ struct TAKChatChecks {
             } catch TAKChatMessage.ChatError.invalidMessage {}
         }
         checkInbox(now: now)
+        try checkGroupsAndOrdering(now: now)
         let atak = """
         <event version="2.0" uid="GeoChat.atak.watch.message-1" type="b-t-f" time="2027-01-15T08:00:00.123Z" start="2027-01-15T08:00:00Z" stale="2027-01-15T08:05:00Z" how="h-g-i-g-o"><point lat="0" lon="0" hae="9999999" ce="9999999" le="9999999"/><detail><__chat parent="RootContactGroup" groupOwner="false" messageId="message-1" chatroom="Watch" id="watch" senderCallsign="ATAK"><chatgrp uid0="atak" uid1="watch" id="watch"/></__chat><link uid="atak" type="a-f-G-U-C" relation="p-p"/><remarks source="BAO.F.ATAK.atak" to="watch" time="2027-01-15T08:00:00.123Z">Roger</remarks></detail></event>
         """
         precondition(TAKChatMessage.parse(atak, ownUID: "watch")?.text == "Roger")
         precondition(TAKChatMessage.parse(atak, ownUID: "watch")?.senderCallSign == "ATAK")
         try checkRelayBuffer(xml: atak, now: now)
-        print("PASS: GeoChat routing, quick messages, ATAK-shaped XML, inbox unread/read, deduplication, source isolation, buffered handshake delivery and eviction checks")
+        print("PASS: GeoChat direct privacy, groups, All Chat Rooms, picker order, receive recency, quick messages, inbox bounds and buffered delivery")
+    }
+
+    static func checkGroupsAndOrdering(now: Date) throws {
+        func group(_ sender: String, title: String, id: String, sentAt: Date) throws -> TAKChatMessage {
+            let xml = try TAKChatMessage.outgoing(senderUID: sender, senderCallSign: sender.uppercased(),
+                recipientUID: "team-room", recipientCallSign: title, text: id, now: sentAt,
+                messageID: id, isGroup: true)
+            guard let message = TAKChatMessage.parse(xml, ownUID: "watch") else {
+                fatalError("Group message not parsed")
+            }
+            precondition(message.senderUID == sender && message.title == title && message.isGroup)
+            return message
+        }
+        var inbox = TAKChatInbox<String>()
+        let first = try group("alpha", title: "Team One", id: "g1", sentAt: now)
+        let second = try group("bravo", title: "Renamed Team", id: "g2", sentAt: now.addingTimeInterval(-600))
+        precondition(inbox.record(first, conversation: first.conversationUID(ownUID: "watch"),
+                                  ownUID: "watch", receivedAt: now))
+        precondition(inbox.record(second, conversation: second.conversationUID(ownUID: "watch"),
+                                  ownUID: "watch", receivedAt: now.addingTimeInterval(10)))
+        precondition(inbox.messages.count == 1 && inbox.messages["team-room"]?.count == 2)
+        precondition(inbox.latestMetadata["team-room"]?.title == "Renamed Team")
+        precondition(Set(inbox.messages["team-room"]!.map(\.senderUID)) == ["alpha", "bravo"])
+        let direct = TAKChatMessage(id: "d1", senderUID: "direct", recipientUID: "watch",
+            senderCallSign: "Direct", text: "Private", sentAt: now.addingTimeInterval(10_000))
+        _ = inbox.record(direct, conversation: "direct", ownUID: "watch", receivedAt: now.addingTimeInterval(5))
+        precondition(inbox.conversations == ["team-room", "direct"])
+        let outgoing = TAKChatMessage(id: "d2", senderUID: "watch", recipientUID: "direct",
+            senderCallSign: "Watch", text: "Reply", sentAt: now.addingTimeInterval(20_000))
+        _ = inbox.record(outgoing, conversation: "direct", ownUID: "watch", receivedAt: now.addingTimeInterval(100))
+        precondition(inbox.conversations == ["team-room", "direct"])
+        precondition(!inbox.record(first, conversation: "team-room", ownUID: "watch",
+                                  receivedAt: now.addingTimeInterval(200)))
+        precondition(inbox.lastReceived["team-room"] == now.addingTimeInterval(10))
+        inbox.open("selected-user")
+        precondition(inbox.messages["selected-user"] == [])
+        precondition(inbox.pickerEntries() == [.allChatRooms, .selectUser,
+            .conversation("team-room"), .conversation("direct"), .conversation("selected-user")])
+        let allXML = try TAKChatMessage.outgoing(senderUID: "alpha", senderCallSign: "Alpha",
+            recipientUID: TAKChatMessage.allChatRoomsUID, recipientCallSign: TAKChatMessage.allChatRoomsUID,
+            text: "All", now: now)
+        precondition(!allXML.contains("__serverdestination"))
+        let all = TAKChatMessage.parse(allXML, ownUID: "watch")!
+        precondition(all.isGroup && all.conversationUID(ownUID: "watch") == TAKChatMessage.allChatRoomsUID)
+        _ = inbox.record(all, conversation: TAKChatMessage.allChatRoomsUID, ownUID: "watch")
+        precondition(inbox.pickerEntries(excluding: [TAKChatMessage.allChatRoomsUID]).prefix(2) ==
+                     [.allChatRooms, .selectUser])
+        precondition(!inbox.pickerEntries(excluding: [TAKChatMessage.allChatRoomsUID])
+            .contains(.conversation(TAKChatMessage.allChatRoomsUID)))
+        let legacyXML = try TAKChatMessage.outgoing(senderUID: "alpha", senderCallSign: "Alpha",
+            recipientUID: "private-other", recipientCallSign: "A title is not a group", text: "Private", now: now)
+        precondition(TAKChatMessage.parse(legacyXML, ownUID: "watch") == nil)
+        precondition(TAKChatMessage.parse(legacyXML, ownUID: "private-other")?.isGroup == false)
+        let memberXML = allXML.replacingOccurrences(of: "All Chat Rooms", with: "members-room")
+            .replacingOccurrences(of: " isGroup=\"true\"", with: "")
+            .replacingOccurrences(of: "uid1=\"members-room\"", with: "uid1=\"bravo\" uid2=\"watch\"")
+        precondition(TAKChatMessage.parse(memberXML, ownUID: "watch")?.conversationUid == "members-room")
+        precondition(TAKChatMessage.parse(memberXML, ownUID: "outsider") == nil)
+        let ownGroupReply = try group("watch", title: "Old Title", id: "reply", sentAt: now)
+        _ = inbox.record(ownGroupReply, conversation: "team-room", ownUID: "watch")
+        precondition(inbox.latestMetadata["team-room"]?.title == "Renamed Team")
+        let otherSenderSameID = try group("charlie", title: "Renamed Again", id: "g1", sentAt: now)
+        precondition(inbox.record(otherSenderSameID, conversation: "team-room", ownUID: "watch"))
+        precondition(inbox.messages["team-room"]?.count == 4)
     }
 
     static func checkRelayBuffer(xml: String, now: Date) throws {

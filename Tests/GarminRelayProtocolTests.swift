@@ -56,6 +56,54 @@ struct GarminRelayProtocolTests {
         let metrics = UserMetrics(birthYear: 1990, source: "Test", measuredAt: now)
         let restoredMetrics = try JSONDecoder().decode(UserMetrics.self, from: JSONEncoder().encode(metrics))
         precondition(restoredMetrics == metrics)
-        print("PASS: JSON types, hello, four queued event types, stable CoT retries, coordinate validation, metrics roundtrip")
+        let groupEnvelope = try envelope("chat", ["messageId": "group-1", "roomUid": "team-room",
+            "roomTitle": "Team & Friends", "isGroup": true, "text": "Group reply",
+            "conversationUid": "ignored-alias", "title": "Ignored alias"])
+        let groupXML = try GarminRelayProtocol.outgoingCoT(groupEnvelope, identity: identity, fix: nil, now: now)
+        let receivedGroup = try GarminRelayProtocol.incoming(groupXML, ownUID: "other")!
+        precondition(receivedGroup.payload["uid"] as? String == identity.uid)
+        precondition(receivedGroup.payload["conversationUid"] as? String == "team-room")
+        precondition(receivedGroup.payload["conversationTitle"] as? String == "Team & Friends")
+        precondition(receivedGroup.payload["title"] == nil)
+        precondition(receivedGroup.payload["isGroup"] as? Bool == true)
+        let directXML = try TAKChatMessage.outgoing(senderUID: "other", senderCallSign: "Other",
+            recipientUID: identity.uid, recipientCallSign: "Garmin", text: "Private", now: now)
+        let receivedDirect = try GarminRelayProtocol.incoming(directXML, ownUID: identity.uid)!
+        precondition(receivedDirect.payload["conversationUid"] as? String == "other")
+        precondition(receivedDirect.payload["isGroup"] as? Bool == false)
+        precondition(receivedDirect.payload["conversationTitle"] as? String == "Other")
+        precondition(receivedDirect.payload["title"] == nil)
+        let directReply = try GarminRelayProtocol.outgoingCoT(envelope("chat", ["messageId": "direct-reply",
+            "roomUid": "other", "roomTitle": "Other", "isGroup": false, "text": "Private reply"]),
+            identity: identity, fix: nil, now: now)
+        precondition(directReply.contains("destinations=\"other\""))
+        precondition(TAKChatMessage.parse(directReply, ownUID: "other")?.isGroup == false)
+        for titleKey in ["title", "conversationTitle"] {
+            let aliasXML = try GarminRelayProtocol.outgoingCoT(envelope("chat", ["messageId": "alias-\(titleKey)",
+                "conversationUid": "alias-room", titleKey: "Alias Room", "isGroup": true, "text": "Compatibility"]),
+                identity: identity, fix: nil, now: now)
+            precondition(TAKChatMessage.parse(aliasXML, ownUID: "other")?.title == "Alias Room")
+        }
+        let unrelated = try GarminRelayProtocol.incoming(directXML, ownUID: "unrelated")
+        precondition(unrelated == nil)
+        let broadcast = try GarminRelayProtocol.outgoingCoT(envelope("chat", ["messageId": "all-1",
+            "roomUid": TAKChatMessage.allChatRoomsUID, "roomTitle": TAKChatMessage.allChatRoomsUID,
+            "isGroup": true, "text": "All"]), identity: identity, fix: nil, now: now)
+        precondition(!broadcast.contains("__serverdestination"))
+        for invalid in [
+            ["messageId": "bad-1", "conversationUid": "room", "text": "Missing group flag"],
+            ["messageId": "bad-2", "conversationUid": "", "isGroup": false, "text": "No generic fallback"],
+            ["messageId": "bad-3", "conversationUid": TAKChatMessage.allChatRoomsUID, "isGroup": false, "text": "Not direct"],
+            ["messageId": "bad-4", "recipientUid": 123, "text": "Invalid legacy direct UID"],
+            ["messageId": "bad-5", "roomUid": "", "conversationUid": "ignored", "isGroup": false, "text": "Invalid canonical UID"],
+            ["messageId": "bad-6", "roomUid": "room", "roomTitle": "", "title": "ignored", "isGroup": true, "text": "Invalid canonical title"],
+            ["messageId": "bad-7", "roomUid": "room", "text": "Missing canonical group flag"]
+        ] as [[String: Any]] {
+            do {
+                _ = try GarminRelayProtocol.outgoingCoT(envelope("chat", invalid), identity: identity, fix: nil, now: now)
+                fatalError("Invalid conversation must not become a broadcast")
+            } catch GarminRelayProtocol.Failure.invalid {}
+        }
+        print("PASS: JSON types, relay retries, coordinates, metrics, canonical conversationTitle/roomUid/roomTitle, aliases, direct privacy and All Chat Rooms")
     }
 }

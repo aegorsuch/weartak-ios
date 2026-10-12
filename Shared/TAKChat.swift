@@ -10,13 +10,36 @@ struct TAKChatMessage: Identifiable, Equatable {
     let senderCallSign: String
     let text: String
     let sentAt: Date
+    let conversationUid: String?
+    let title: String?
+    let isGroup: Bool
+    var deduplicationID: String { "\(senderUID).\(id)" }
 
+    init(id: String, senderUID: String, recipientUID: String, senderCallSign: String,
+         text: String, sentAt: Date, conversationUid: String? = nil, title: String? = nil,
+         isGroup: Bool = false) {
+        self.id = id
+        self.senderUID = senderUID
+        self.recipientUID = recipientUID
+        self.senderCallSign = senderCallSign
+        self.text = text
+        self.sentAt = sentAt
+        self.conversationUid = conversationUid
+        self.title = title
+        self.isGroup = isGroup
+    }
+
+    func conversationUID(ownUID: String) -> String {
+        isGroup ? (conversationUid ?? recipientUID) : (senderUID == ownUID ? recipientUID : senderUID)
+    }
+
+    static let allChatRoomsUID = "All Chat Rooms"
     static let maximumTextBytes = 2_000
     static let quickMessages = ["Roger", "Negative", "Objective Sighted", "In Position"]
 
     static func outgoing(senderUID: String, senderCallSign: String, recipientUID: String,
                          recipientCallSign: String, text: String, now: Date = Date(),
-                         messageID: String = UUID().uuidString) throws -> String {
+                         messageID: String = UUID().uuidString, isGroup: Bool = false) throws -> String {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !senderUID.isEmpty, !recipientUID.isEmpty, senderUID != recipientUID,
               !body.isEmpty, body.utf8.count <= maximumTextBytes, !messageID.isEmpty,
@@ -34,8 +57,11 @@ struct TAKChatMessage: Identifiable, Equatable {
         let stale = formatter.string(from: now.addingTimeInterval(300))
         let sender = escape(senderUID)
         let recipient = escape(recipientUID)
+        let group = isGroup || recipientUID == allChatRoomsUID
+        let groupAttribute = group ? " isGroup=\"true\"" : ""
+        let destination = group ? "" : "<__serverdestination destinations=\"\(recipient)\"/>"
         return """
-        <event version="2.0" uid="GeoChat.\(sender).\(recipient).\(id)" type="b-t-f" time="\(timestamp)" start="\(timestamp)" stale="\(stale)" how="h-g-i-g-o"><point lat="0" lon="0" hae="9999999" ce="9999999" le="9999999"/><detail><__chat id="\(recipient)" chatroom="\(escape(recipientCallSign))" senderCallsign="\(escape(senderCallSign))" messageId="\(id)" groupOwner="false"><chatgrp uid0="\(sender)" uid1="\(recipient)" id="\(recipient)"/></__chat><link uid="\(sender)" type="a-f-G-U-C" relation="p-p"/><remarks source="BAO.F.ATAK.\(sender)" to="\(recipient)" time="\(timestamp)">\(escape(body))</remarks><__serverdestination destinations="\(recipient)"/></detail></event>
+        <event version="2.0" uid="GeoChat.\(sender).\(recipient).\(id)" type="b-t-f" time="\(timestamp)" start="\(timestamp)" stale="\(stale)" how="h-g-i-g-o"><point lat="0" lon="0" hae="9999999" ce="9999999" le="9999999"/><detail><__chat id="\(recipient)" chatroom="\(escape(recipientCallSign))" senderCallsign="\(escape(senderCallSign))" messageId="\(id)" groupOwner="false"\(groupAttribute)><chatgrp uid0="\(sender)" uid1="\(recipient)" id="\(recipient)"/></__chat><link uid="\(sender)" type="a-f-G-U-C" relation="p-p"/><remarks source="BAO.F.ATAK.\(sender)" to="\(recipient)" time="\(timestamp)">\(escape(body))</remarks>\(destination)</detail></event>
         """
     }
 
@@ -47,18 +73,29 @@ struct TAKChatMessage: Identifiable, Equatable {
         parser.delegate = delegate
         guard parser.parse(), delegate.type == "b-t-f", let chat = delegate.chat,
               let group = delegate.group, let sender = group["uid0"], let recipient = group["uid1"],
-              sender != recipient, recipient == ownUID || sender == ownUID,
+              sender != recipient,
               let id = chat["messageId"], !id.isEmpty, !sender.isEmpty, !recipient.isEmpty,
               !delegate.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               delegate.text.utf8.count <= maximumTextBytes,
               let stamp = delegate.timestamp else { return nil }
+        let room = chat["id"] ?? group["id"] ?? recipient
+        guard !room.isEmpty else { return nil }
+        let members = group.filter { $0.key.hasPrefix("uid") && Int($0.key.dropFirst(3)) != nil }.map(\.value)
+        let isGroup = room == allChatRoomsUID || chat["isGroup"] == "true" ||
+            members.count > 2 || (room != sender && room != recipient)
+        // Legacy private traffic must never become an unrelated room merely because it has a title.
+        guard isGroup || recipient == ownUID || sender == ownUID else { return nil }
+        if isGroup, room != allChatRoomsUID, chat["isGroup"] != "true",
+           !members.contains(ownUID) { return nil }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let fractional = formatter.date(from: stamp)
         formatter.formatOptions = [.withInternetDateTime]
         guard let date = fractional ?? formatter.date(from: stamp) else { return nil }
         return Self(id: id, senderUID: sender, recipientUID: recipient,
-                    senderCallSign: chat["senderCallsign"] ?? sender, text: delegate.text, sentAt: date)
+                    senderCallSign: chat["senderCallsign"] ?? sender, text: delegate.text, sentAt: date,
+                    conversationUid: isGroup ? room : nil, title: isGroup ? (chat["chatroom"] ?? room) : nil,
+                    isGroup: isGroup)
     }
 
     enum ChatError: LocalizedError {
@@ -67,17 +104,39 @@ struct TAKChatMessage: Identifiable, Equatable {
     }
 }
 
+enum TAKChatPickerEntry<Conversation: Hashable>: Hashable {
+    case allChatRooms, selectUser, conversation(Conversation)
+}
+
 struct TAKChatInbox<Conversation: Hashable> {
     private(set) var messages: [Conversation: [TAKChatMessage]] = [:]
     private(set) var unreadCounts: [Conversation: Int] = [:]
     private var visibleConversation: Conversation?
+    private(set) var lastReceived: [Conversation: Date] = [:]
+    private(set) var latestMetadata: [Conversation: TAKChatMessage] = [:]
+    private var insertionOrder: [Conversation: Int] = [:]
+    private var nextOrder = 0
 
     var unreadCount: Int { unreadCounts.values.reduce(0, +) }
 
     var conversations: [Conversation] {
         messages.keys.sorted {
-            (messages[$0]?.last?.sentAt ?? .distantPast) > (messages[$1]?.last?.sentAt ?? .distantPast)
+            let left = lastReceived[$0] ?? .distantPast
+            let right = lastReceived[$1] ?? .distantPast
+            return left == right ? (insertionOrder[$0] ?? 0) > (insertionOrder[$1] ?? 0) : left > right
         }
+    }
+
+    func pickerEntries(excluding excluded: Set<Conversation> = []) -> [TAKChatPickerEntry<Conversation>] {
+        [.allChatRooms, .selectUser] + conversations.filter { !excluded.contains($0) }.map { .conversation($0) }
+    }
+
+    mutating func open(_ conversation: Conversation) {
+        guard messages[conversation] == nil else { return }
+        messages[conversation] = []
+        insertionOrder[conversation] = nextOrder
+        nextOrder += 1
+        evictOldestIfNeeded(excluding: conversation)
     }
 
     mutating func setVisible(_ conversation: Conversation, visible: Bool) {
@@ -90,23 +149,35 @@ struct TAKChatInbox<Conversation: Hashable> {
     }
 
     // Returns true only when a new incoming message should notify the user.
-    mutating func record(_ message: TAKChatMessage, conversation: Conversation, ownUID: String) -> Bool {
-        guard message.senderUID == ownUID || message.recipientUID == ownUID else { return false }
+    mutating func record(_ message: TAKChatMessage, conversation: Conversation, ownUID: String,
+                         receivedAt: Date = Date()) -> Bool {
+        guard message.isGroup || message.senderUID == ownUID || message.recipientUID == ownUID else { return false }
         var history = messages[conversation] ?? []
-        guard !history.contains(where: { $0.id == message.id }) else { return false }
+        guard !history.contains(where: { $0.deduplicationID == message.deduplicationID }) else { return false }
+        open(conversation)
         history.append(message)
         history.sort { $0.sentAt < $1.sentAt }
         messages[conversation] = Array(history.suffix(50))
+        if message.senderUID != ownUID || latestMetadata[conversation] == nil {
+            latestMetadata[conversation] = message
+        }
+        if message.senderUID != ownUID { lastReceived[conversation] = receivedAt }
         let notify = message.senderUID != ownUID && visibleConversation != conversation
         if notify {
             unreadCounts[conversation] = min((unreadCounts[conversation] ?? 0) + 1, 50)
         }
-        if messages.count > 50,
-           let oldest = messages.min(by: { ($0.value.last?.sentAt ?? .distantPast) < ($1.value.last?.sentAt ?? .distantPast) })?.key {
+        evictOldestIfNeeded()
+        return notify && messages[conversation] != nil
+    }
+
+    private mutating func evictOldestIfNeeded(excluding excluded: Conversation? = nil) {
+        if messages.count > 50, let oldest = conversations.last(where: { $0 != excluded }) {
             messages.removeValue(forKey: oldest)
             unreadCounts.removeValue(forKey: oldest)
+            lastReceived.removeValue(forKey: oldest)
+            latestMetadata.removeValue(forKey: oldest)
+            insertionOrder.removeValue(forKey: oldest)
         }
-        return notify && messages[conversation] != nil
     }
 }
 

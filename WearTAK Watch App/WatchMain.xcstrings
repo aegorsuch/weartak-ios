@@ -1,6 +1,21 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "All Chat Rooms" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All Chat Rooms" } }
+      }
+    },
+    "Select User for Chat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Select User for Chat" } }
+      }
+    },
+    "Connect a chat transport to send to All Chat Rooms." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect a chat transport to send to All Chat Rooms." } }
+      }
+    },
     "911 Alert" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "911 Alert" } },

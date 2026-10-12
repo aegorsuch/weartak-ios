@@ -154,10 +154,25 @@ enum GarminRelayProtocol {
         let escape = PhonePLI.escape
         let messageID = try envelope.string("messageId", maximum: 128)
         if envelope.type == "chat" {
-            let recipient = (p["recipientUid"] as? String) ?? (p["replyTo"] as? String) ?? "All Chat Rooms"
+            let hasConversation = p["roomUid"] != nil || p["conversationUid"] != nil
+            let recipient: String
+            if p["roomUid"] != nil { recipient = try envelope.string("roomUid") }
+            else if p["conversationUid"] != nil { recipient = try envelope.string("conversationUid") }
+            else if p["recipientUid"] != nil { recipient = try envelope.string("recipientUid") }
+            else if p["replyTo"] != nil { recipient = try envelope.string("replyTo") }
+            else { recipient = TAKChatMessage.allChatRoomsUID }
+            let isGroup = p["isGroup"] == nil ? recipient == TAKChatMessage.allChatRoomsUID : try envelope.boolean("isGroup")
+            guard !hasConversation || p["isGroup"] != nil else { throw Failure.invalid("isGroup") }
+            guard recipient != TAKChatMessage.allChatRoomsUID || isGroup else { throw Failure.invalid("conversationUid") }
+            let title: String
+            if p["roomTitle"] != nil { title = try envelope.string("roomTitle") }
+            else if p["conversationTitle"] != nil { title = try envelope.string("conversationTitle") }
+            else if p["title"] != nil { title = try envelope.string("title") }
+            else { title = recipient }
             let text = (p["text"] as? String) ?? (p["msg"] as? String) ?? ""
             return try TAKChatMessage.outgoing(senderUID: identity.uid, senderCallSign: identity.resolvedCallSign,
-                recipientUID: recipient, recipientCallSign: recipient, text: text, now: now, messageID: messageID)
+                recipientUID: recipient, recipientCallSign: title, text: text, now: now,
+                messageID: messageID, isGroup: isGroup)
         }
         let uid = try envelope.string("uid")
         guard uid.hasPrefix("garmin-") else { throw Failure.invalid("event UID") }
@@ -215,10 +230,11 @@ enum GarminRelayProtocol {
         }
         if uid == ownUID || delegate.senderUID == ownUID { return nil }
         if type == "b-t-f" {
-            guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) ??
-                    TAKChatMessage.parse(xml, ownUID: "All Chat Rooms") else { return nil }
+            guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else { return nil }
             return GarminEnvelope("chat", ["uid": message.senderUID, "sender": message.senderCallSign,
-                "text": String(message.text.prefix(512)), "messageId": message.id])
+                "text": String(message.text.prefix(512)), "messageId": message.id,
+                "conversationUid": message.conversationUID(ownUID: ownUID),
+                "conversationTitle": message.title ?? message.senderCallSign, "isGroup": message.isGroup])
         }
         guard type.hasPrefix("a-") || type.hasPrefix("b-a-o") || type == "b-a-g" || delegate.emergency != nil else { return nil }
         var payload: [String: Any] = ["uid": uid, "type": type]

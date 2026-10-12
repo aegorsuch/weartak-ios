@@ -734,35 +734,80 @@ private struct ChatView: View {
 
     var body: some View {
         List {
-            ForEach(model.chatConversations) { conversation in
-                NavigationLink {
-                    ContactChatView(model: model, uid: conversation.uid, route: conversation.route,
-                                    title: model.chatTitle(for: conversation))
-                } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text(model.chatTitle(for: conversation))
-                            if let unread = model.unreadChatCounts[conversation], unread > 0 {
-                                Text("\(unread)")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(.white)
-                                    .padding(3)
-                                    .background(.red, in: Capsule())
+            ForEach(model.chatPickerEntries, id: \.self) { entry in
+                switch entry {
+                case .allChatRooms:
+                    NavigationLink {
+                        AllChatRoomsView(model: model, companion: model.companionClient)
+                    } label: {
+                        Label(String(localized: "All Chat Rooms", table: "WatchMain"), systemImage: "person.3")
+                    }
+                case .selectUser:
+                    NavigationLink {
+                        TacticalMapView(model: model, settings: settings, selectingChatUser: true)
+                    } label: {
+                        Label(String(localized: "Select User for Chat", table: "WatchMain"), systemImage: "map")
+                    }
+                case .conversation(let conversation):
+                    NavigationLink {
+                        ContactChatView(model: model, uid: conversation.uid, route: conversation.route,
+                                        title: model.chatTitle(for: conversation), isGroup: conversation.isGroup)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(model.chatTitle(for: conversation))
+                                if let unread = model.unreadChatCounts[conversation], unread > 0 {
+                                    Text("\(unread)")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
+                                        .padding(3)
+                                        .background(.red, in: Capsule())
+                                }
                             }
-                        }
-                        if let message = model.contactMessages[conversation]?.last {
-                            Text(message.text).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                            if let message = model.contactMessages[conversation]?.last {
+                                Text(message.text).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                            }
                         }
                     }
                 }
             }
-            NavigationLink {
-                TacticalMapView(model: model, settings: settings)
-            } label: {
-                Label(String(localized: "Select a map user", table: "WatchMain"), systemImage: "map")
-            }
         }
         .navigationTitle(String(localized: "Chat", table: "WatchMain"))
+    }
+}
+
+private struct AllChatRoomsView: View {
+    @ObservedObject var model: WatchSessionModel
+    @ObservedObject var companion: WatchCompanionOutput
+
+    var body: some View {
+        List {
+            ForEach(model.allChatRoutes, id: \.self) { route in
+                NavigationLink {
+                    ContactChatView(model: model, uid: TAKChatMessage.allChatRoomsUID, route: route,
+                                    title: String(localized: "All Chat Rooms", table: "WatchMain"), isGroup: true)
+                } label: {
+                    VStack(alignment: .leading) {
+                        Text(model.chatRouteTitle(route))
+                        let conversation = ContactConversation(uid: TAKChatMessage.allChatRoomsUID, route: route, isGroup: true)
+                        if let unread = model.unreadChatCounts[conversation], unread > 0 {
+                            Text("\(unread)").font(.caption2).foregroundStyle(.red)
+                        }
+                    }
+                }
+            }
+            if model.allChatRoutes.isEmpty {
+                Text("Connect a chat transport to send to All Chat Rooms.", tableName: "WatchMain")
+                    .foregroundStyle(.secondary)
+            }
+            if let error = companion.channelError {
+                Text(error).font(.caption).foregroundStyle(.orange)
+            }
+        }
+        .navigationTitle(String(localized: "All Chat Rooms", table: "WatchMain"))
+        .task {
+            if companion.isReady { await companion.refreshChannels() }
+        }
     }
 }
 
@@ -851,6 +896,7 @@ private struct EnvironmentView: View {
 private struct TacticalMapView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
+    var selectingChatUser = false
     @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var cameraHeading: Double = 0
@@ -1032,7 +1078,13 @@ private struct TacticalMapView: View {
         }
         .sheet(item: $contactSelection) { selection in
             NavigationStack {
-                MapContactDetailView(model: model, uid: selection.id)
+                if selectingChatUser,
+                   let contact = model.incomingEntities.first(where: { $0.id == selection.id && $0.isUser }),
+                   let route = contact.chatRoute {
+                    ContactChatView(model: model, uid: contact.id, route: route, title: contact.callSign ?? contact.id)
+                } else {
+                    MapContactDetailView(model: model, uid: selection.id)
+                }
             }
         }
         .sheet(item: $incomingSelection) { selection in
@@ -1670,16 +1722,17 @@ private struct ContactChatView: View {
     let uid: String
     let route: ContactChatRoute
     let title: String
+    var isGroup = false
     @State private var text = ""
     @State private var sending = false
     @State private var error: String?
     @State private var sent = false
     @Environment(\.scenePhase) private var scenePhase
-    private var conversation: ContactConversation { ContactConversation(uid: uid, route: route) }
+    private var conversation: ContactConversation { ContactConversation(uid: uid, route: route, isGroup: isGroup) }
 
     var body: some View {
         List {
-            ForEach(model.contactMessages[ContactConversation(uid: uid, route: route)] ?? []) { message in
+            ForEach(model.contactMessages[conversation] ?? [], id: \.deduplicationID) { message in
                 VStack(alignment: .leading, spacing: 3) {
                     Text(message.senderUID == SitxClient.deviceID() ? String(localized: "You", table: "WatchMain") : message.senderCallSign)
                         .font(.caption2).foregroundStyle(.secondary)
@@ -1705,7 +1758,7 @@ private struct ContactChatView: View {
                 }
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(model.contactMessages[conversation] == nil ? title : model.chatTitle(for: conversation))
         .onAppear { model.setConversationVisible(conversation, visible: scenePhase == .active) }
         .onDisappear { model.setConversationVisible(conversation, visible: false) }
         .onChange(of: scenePhase) { _, phase in
@@ -1721,7 +1774,7 @@ private struct ContactChatView: View {
         Task {
             defer { sending = false }
             do {
-                try await model.sendContactChat(uid: uid, route: route, text: text)
+                try await model.sendContactChat(uid: uid, route: route, text: text, isGroup: isGroup)
                 text = ""
                 sent = true
             } catch { self.error = error.localizedDescription }
