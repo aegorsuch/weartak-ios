@@ -234,13 +234,15 @@ enum GarminRelayProtocol {
         if uid == ownUID || delegate.senderUID == ownUID { return nil }
         if type == "b-t-f" {
             guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else { return nil }
-            return GarminEnvelope("chat_received", ["uid": message.id, "sender": message.senderCallSign,
+            var payload: [String: Any] = ["uid": message.id, "sender": message.senderCallSign,
                 "text": String(message.text.prefix(512)), "messageId": message.id,
                 "senderUid": message.senderUID, "senderCallsign": message.senderCallSign,
                 "msg": String(message.text.prefix(512)), "eventUid": uid,
                 "receivedAt": Int64(receivedAt.timeIntervalSince1970 * 1_000),
                 "conversationUid": message.conversationUID(ownUID: ownUID),
-                "conversationTitle": message.title ?? message.senderCallSign, "isGroup": message.isGroup])
+                "conversationTitle": message.title ?? message.senderCallSign, "isGroup": message.isGroup]
+            if message.isGroup { payload["participantUids"] = message.participantUids }
+            return GarminEnvelope("chat_received", payload)
         }
         guard type.hasPrefix("a-") || type.hasPrefix("b-a-o") || type == "b-a-g" || delegate.emergency != nil else { return nil }
         var payload: [String: Any] = ["uid": uid, "type": type]

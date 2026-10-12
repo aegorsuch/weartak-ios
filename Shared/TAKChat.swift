@@ -13,11 +13,12 @@ struct TAKChatMessage: Identifiable, Equatable {
     let conversationUid: String?
     let title: String?
     let isGroup: Bool
+    let participantUids: [String]
     var deduplicationID: String { "\(senderUID).\(id)" }
 
     init(id: String, senderUID: String, recipientUID: String, senderCallSign: String,
          text: String, sentAt: Date, conversationUid: String? = nil, title: String? = nil,
-         isGroup: Bool = false) {
+         isGroup: Bool = false, participantUids: [String] = []) {
         self.id = id
         self.senderUID = senderUID
         self.recipientUID = recipientUID
@@ -27,6 +28,7 @@ struct TAKChatMessage: Identifiable, Equatable {
         self.conversationUid = conversationUid
         self.title = title
         self.isGroup = isGroup
+        self.participantUids = participantUids
     }
 
     func conversationUID(ownUID: String) -> String {
@@ -80,13 +82,19 @@ struct TAKChatMessage: Identifiable, Equatable {
               let stamp = delegate.timestamp else { return nil }
         let room = chat["id"] ?? group["id"] ?? recipient
         guard !room.isEmpty else { return nil }
-        let members = group.filter { $0.key.hasPrefix("uid") && Int($0.key.dropFirst(3)) != nil }.map(\.value)
-        let isGroup = room == allChatRoomsUID || chat["isGroup"] == "true" ||
-            members.count > 2 || (room != sender && room != recipient)
-        // Legacy private traffic must never become an unrelated room merely because it has a title.
-        guard isGroup || recipient == ownUID || sender == ownUID else { return nil }
-        if isGroup, room != allChatRoomsUID, chat["isGroup"] != "true",
-           !members.contains(ownUID) { return nil }
+        if let chatID = chat["id"], let groupID = group["id"], chatID != groupID { return nil }
+        let recipients = group.filter {
+            $0.key.hasPrefix("uid") && (Int($0.key.dropFirst(3)) ?? 0) > 0
+        }.map(\.value)
+        let isBroadcast = room == allChatRoomsUID
+        let isDirect = room == ownUID || room == sender || delegate.remarksTo == ownUID
+        let isGroup = isBroadcast || !isDirect && room != recipient
+        if isGroup, !isBroadcast {
+            guard let title = chat["chatroom"], !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  recipients.contains(ownUID) || sender == ownUID else { return nil }
+        } else if !isBroadcast {
+            guard recipient == ownUID || sender == ownUID else { return nil }
+        }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let fractional = formatter.date(from: stamp)
@@ -95,7 +103,7 @@ struct TAKChatMessage: Identifiable, Equatable {
         return Self(id: id, senderUID: sender, recipientUID: recipient,
                     senderCallSign: chat["senderCallsign"] ?? sender, text: delegate.text, sentAt: date,
                     conversationUid: isGroup ? room : nil, title: isGroup ? (chat["chatroom"] ?? room) : nil,
-                    isGroup: isGroup)
+                    isGroup: isGroup, participantUids: isGroup ? Array(Set([sender] + recipients)).sorted() : [])
     }
 
     enum ChatError: LocalizedError {
@@ -186,6 +194,7 @@ private final class TAKChatParser: NSObject, XMLParserDelegate {
     var chat: [String: String]?
     var group: [String: String]?
     var timestamp: String?
+    var remarksTo: String?
     var text = ""
     private var elements: [String] = []
 
@@ -198,7 +207,9 @@ private final class TAKChatParser: NSObject, XMLParserDelegate {
             timestamp = attributes["time"]
         case "event/detail/__chat": chat = attributes
         case "event/detail/__chat/chatgrp": group = attributes
-        case "event/detail/remarks": text = ""
+        case "event/detail/remarks":
+            text = ""
+            remarksTo = attributes["to"]
         default: break
         }
     }

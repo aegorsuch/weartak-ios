@@ -58,6 +58,8 @@ struct TAKChatChecks {
             let xml = try TAKChatMessage.outgoing(senderUID: sender, senderCallSign: sender.uppercased(),
                 recipientUID: "team-room", recipientCallSign: title, text: id, now: sentAt,
                 messageID: id, isGroup: true)
+                .replacingOccurrences(of: "uid1=\"team-room\"", with: "uid1=\"member\" uid2=\"watch\"")
+                .replacingOccurrences(of: " isGroup=\"true\"", with: "")
             guard let message = TAKChatMessage.parse(xml, ownUID: "watch") else {
                 fatalError("Group message not parsed")
             }
@@ -109,6 +111,20 @@ struct TAKChatChecks {
             .replacingOccurrences(of: "uid1=\"members-room\"", with: "uid1=\"bravo\" uid2=\"watch\"")
         precondition(TAKChatMessage.parse(memberXML, ownUID: "watch")?.conversationUid == "members-room")
         precondition(TAKChatMessage.parse(memberXML, ownUID: "outsider") == nil)
+        let noTo = memberXML.replacingOccurrences(of: " to=\"members-room\"", with: "")
+        precondition(TAKChatMessage.parse(noTo, ownUID: "watch")?.isGroup == true)
+        precondition(TAKChatMessage.parse(noTo, ownUID: "watch")?.participantUids == ["alpha", "bravo", "watch"])
+        let localFirst = noTo.replacingOccurrences(of: "uid1=\"bravo\" uid2=\"watch\"",
+                                                   with: "uid1=\"watch\" uid2=\"bravo\"")
+        precondition(TAKChatMessage.parse(localFirst, ownUID: "watch")?.conversationUid == "members-room")
+        let mismatched = noTo.replacingOccurrences(of: "uid2=\"watch\" id=\"members-room\"",
+                                                   with: "uid2=\"watch\" id=\"different-room\"")
+        precondition(TAKChatMessage.parse(mismatched, ownUID: "watch") == nil)
+        precondition(TAKChatMessage.parse(noTo.replacingOccurrences(of: "chatroom=\"members-room\"",
+                                                                   with: "chatroom=\"\""), ownUID: "watch") == nil)
+        let foreignExplicit = legacyXML.replacingOccurrences(of: "groupOwner=\"false\"",
+                                                             with: "groupOwner=\"false\" isGroup=\"true\"")
+        precondition(TAKChatMessage.parse(foreignExplicit, ownUID: "watch") == nil)
         let ownGroupReply = try group("watch", title: "Old Title", id: "reply", sentAt: now)
         _ = inbox.record(ownGroupReply, conversation: "team-room", ownUID: "watch")
         precondition(inbox.latestMetadata["team-room"]?.title == "Renamed Team")

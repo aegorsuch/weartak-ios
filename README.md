@@ -849,6 +849,11 @@ conversation. WEARTAK-118 also groups GeoChat room messages by room UID and sour
 not by sender; each message still displays its own sender. Room titles update
 from the latest received metadata. Legacy direct messages for unrelated UIDs
 remain excluded.
+Native ATAK XML reception derives room identity from matching `__chat.id` and
+`chatgrp.id` (with the latter as fallback), title and recipient `uidN` metadata;
+it does not require a nonstandard XML `isGroup` attribute. The local recipient
+may appear at any recipient index. Missing group `remarks.to` is supported;
+foreign recipients, empty group titles and mismatched room IDs are rejected.
 
 The chat picker pins **All Chat Rooms** first and **Select User for Chat** second.
 The selector opens the existing watch map; tapping a user opens a direct chat and
