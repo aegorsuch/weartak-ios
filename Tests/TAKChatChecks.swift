@@ -57,9 +57,7 @@ struct TAKChatChecks {
         func group(_ sender: String, title: String, id: String, sentAt: Date) throws -> TAKChatMessage {
             let xml = try TAKChatMessage.outgoing(senderUID: sender, senderCallSign: sender.uppercased(),
                 recipientUID: "team-room", recipientCallSign: title, text: id, now: sentAt,
-                messageID: id, isGroup: true)
-                .replacingOccurrences(of: "uid1=\"team-room\"", with: "uid1=\"member\" uid2=\"watch\"")
-                .replacingOccurrences(of: " isGroup=\"true\"", with: "")
+                messageID: id, isGroup: true, participantUids: ["member", "watch"])
             guard let message = TAKChatMessage.parse(xml, ownUID: "watch") else {
                 fatalError("Group message not parsed")
             }
@@ -131,6 +129,18 @@ struct TAKChatChecks {
         let otherSenderSameID = try group("charlie", title: "Renamed Again", id: "g1", sentAt: now)
         precondition(inbox.record(otherSenderSameID, conversation: "team-room", ownUID: "watch"))
         precondition(inbox.messages["team-room"]?.count == 4)
+        let routed = try TAKChatMessage.outgoing(senderUID: "watch", senderCallSign: "Watch",
+            recipientUID: "named", recipientCallSign: "Named Room", text: "Reply", now: now,
+            isGroup: true, participantUids: ["watch", "named", "alice", "bob", "alice"])
+        precondition(routed.contains("<marti><dest uid=\"alice\"/><dest uid=\"bob\"/></marti>"))
+        precondition(routed.contains("uid1=\"alice\" uid2=\"bob\""))
+        precondition(!routed.contains("__serverdestination") && !routed.contains("isGroup="))
+        do {
+            _ = try TAKChatMessage.outgoing(senderUID: "watch", senderCallSign: "Watch",
+                recipientUID: "named", recipientCallSign: "Named", text: "Unsafe",
+                isGroup: true, participantUids: ["watch", "named"])
+            fatalError("Named room without recipients must never become broadcast")
+        } catch TAKChatMessage.ChatError.invalidMessage {}
     }
 
     static func checkRelayBuffer(xml: String, now: Date) throws {

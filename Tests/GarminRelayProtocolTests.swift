@@ -65,9 +65,7 @@ struct GarminRelayProtocolTests {
         } catch GarminRelayProtocol.Failure.unsupported {}
         let groupXML = try TAKChatMessage.outgoing(senderUID: identity.uid, senderCallSign: identity.resolvedCallSign,
             recipientUID: "team-room", recipientCallSign: "Team & Friends", text: "Group reply",
-            now: now, messageID: "group-1", isGroup: true)
-            .replacingOccurrences(of: "uid1=\"team-room\"", with: "uid1=\"other\"")
-            .replacingOccurrences(of: " isGroup=\"true\"", with: "")
+            now: now, messageID: "group-1", isGroup: true, participantUids: ["other"])
         let receivedGroup = try GarminRelayProtocol.incoming(groupXML, ownUID: "other", receivedAt: now)!
         precondition(receivedGroup.type == "chat_received")
         precondition(receivedGroup.payload["uid"] as? String == "group-1")

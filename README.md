@@ -867,6 +867,12 @@ Received groups retain their original room identity and source. Non-All group
 replies currently return an explicit unsupported-routing error on both Apple
 Watch and Garmin instead of generating a potential server-wide broadcast.
 Verified group-member routing is still required before enabling those replies.
+The shared XML builder now requires explicit nonempty recipient UIDs for a named
+room, removes sender/room UID entries, and emits member `chatgrp.uidN` entries
+plus `marti/dest` UID destinations. It cannot generate an undirected named-room
+message. The watch/phone adapters still need trusted source-scoped membership
+resolution before their send gates can be lifted; builder fixtures are not a
+live-device interoperability result.
 This supports received group conversations, not group creation or membership
 management.
 

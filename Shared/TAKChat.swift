@@ -41,7 +41,8 @@ struct TAKChatMessage: Identifiable, Equatable {
 
     static func outgoing(senderUID: String, senderCallSign: String, recipientUID: String,
                          recipientCallSign: String, text: String, now: Date = Date(),
-                         messageID: String = UUID().uuidString, isGroup: Bool = false) throws -> String {
+                         messageID: String = UUID().uuidString, isGroup: Bool = false,
+                         participantUids: [String] = []) throws -> String {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !senderUID.isEmpty, !recipientUID.isEmpty, senderUID != recipientUID,
               !body.isEmpty, body.utf8.count <= maximumTextBytes, !messageID.isEmpty,
@@ -60,10 +61,25 @@ struct TAKChatMessage: Identifiable, Equatable {
         let sender = escape(senderUID)
         let recipient = escape(recipientUID)
         let group = isGroup || recipientUID == allChatRoomsUID
-        let groupAttribute = group ? " isGroup=\"true\"" : ""
-        let destination = group ? "" : "<__serverdestination destinations=\"\(recipient)\"/>"
+        let members = Array(Set(participantUids.filter { $0 != senderUID && $0 != recipientUID })).sorted()
+        let namedGroup = group && recipientUID != allChatRoomsUID
+        if namedGroup {
+            guard !members.isEmpty, members.allSatisfy({
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                !$0.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+            }) else { throw ChatError.invalidMessage }
+        }
+        let recipientAttributes = namedGroup
+            ? members.enumerated().map { "uid\($0.offset + 1)=\"\(escape($0.element))\"" }.joined(separator: " ")
+            : "uid1=\"\(recipient)\""
+        let destination: String
+        if namedGroup {
+            destination = "<marti>" + members.map { "<dest uid=\"\(escape($0))\"/>" }.joined() + "</marti>"
+        } else {
+            destination = group ? "" : "<__serverdestination destinations=\"\(recipient)\"/>"
+        }
         return """
-        <event version="2.0" uid="GeoChat.\(sender).\(recipient).\(id)" type="b-t-f" time="\(timestamp)" start="\(timestamp)" stale="\(stale)" how="h-g-i-g-o"><point lat="0" lon="0" hae="9999999" ce="9999999" le="9999999"/><detail><__chat id="\(recipient)" chatroom="\(escape(recipientCallSign))" senderCallsign="\(escape(senderCallSign))" messageId="\(id)" groupOwner="false"\(groupAttribute)><chatgrp uid0="\(sender)" uid1="\(recipient)" id="\(recipient)"/></__chat><link uid="\(sender)" type="a-f-G-U-C" relation="p-p"/><remarks source="BAO.F.ATAK.\(sender)" to="\(recipient)" time="\(timestamp)">\(escape(body))</remarks>\(destination)</detail></event>
+        <event version="2.0" uid="GeoChat.\(sender).\(recipient).\(id)" type="b-t-f" time="\(timestamp)" start="\(timestamp)" stale="\(stale)" how="h-g-i-g-o"><point lat="0" lon="0" hae="9999999" ce="9999999" le="9999999"/><detail><__chat id="\(recipient)" chatroom="\(escape(recipientCallSign))" senderCallsign="\(escape(senderCallSign))" messageId="\(id)" groupOwner="false"><chatgrp uid0="\(sender)" \(recipientAttributes) id="\(recipient)"/></__chat><link uid="\(sender)" type="a-f-G-U-C" relation="p-p"/><remarks source="BAO.F.ATAK.\(sender)" to="\(recipient)" time="\(timestamp)">\(escape(body))</remarks>\(destination)</detail></event>
         """
     }
 
