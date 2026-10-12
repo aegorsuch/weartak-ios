@@ -868,16 +868,19 @@ management.
 Apple Watch Companion delivery already relays raw GeoChat XML unchanged (including
 `__chat` room ID/title and `chatgrp` members), rather than an ATAK JSON chat envelope.
 The Garmin Companion bridge emits canonical `conversationUid`, `conversationTitle`
-and `isGroup` in its existing phone-to-watch `chat` payload; `uid`/`sender` remain
-the message sender. Watch-to-phone replies consume canonical `roomUid`, `roomTitle`
+and `isGroup` in its canonical phone-to-watch `chat_received` payload; `uid` is
+the message ID and `senderUid`/`senderCallsign` identify the individual sender.
+Watch-to-phone replies consume canonical `roomUid`, `roomTitle`
 and `isGroup`. Earlier `conversationUid`/`conversationTitle`/`title` input aliases
 and legacy `recipientUid`/`replyTo` direct messages remain supported; canonical
 fields take precedence and invalid explicit fields cannot fall back to broadcast.
 The bridge does not emit the incompatible `title` chat alias. Cross-platform
 Android/Garmin integration still requires device/relay validation.
-The sender adapter also provides `senderUid`, `senderCallsign`, `msg` and local
-`receivedAt` milliseconds. Legacy `uid` retains its sender-UID meaning for older
-Garmin clients; `messageId` and `eventUid` identify the message/event instead.
+The sender adapter also provides canonical `msg` and local `receivedAt`
+milliseconds, with `sender`/`text` and `messageId` aliases retained for compatible
+clients. `eventUid` identifies the original CoT event. Older Garmin clients that
+require `chat` with a sender-valued `uid` need the updated Garmin adapter; sending
+duplicate legacy/canonical notifications is deliberately avoided.
 Garmin picker interoperability depends on
 [aegorsuch/weartak-garmin#4](https://github.com/aegorsuch/weartak-garmin/pull/4).
 Companion explicitly reports `chatGroups: false` alongside `reliableDelivery`

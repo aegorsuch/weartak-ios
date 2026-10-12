@@ -67,7 +67,8 @@ struct GarminRelayProtocolTests {
             recipientUID: "team-room", recipientCallSign: "Team & Friends", text: "Group reply",
             now: now, messageID: "group-1", isGroup: true)
         let receivedGroup = try GarminRelayProtocol.incoming(groupXML, ownUID: "other", receivedAt: now)!
-        precondition(receivedGroup.payload["uid"] as? String == identity.uid)
+        precondition(receivedGroup.type == "chat_received")
+        precondition(receivedGroup.payload["uid"] as? String == "group-1")
         precondition(receivedGroup.payload["conversationUid"] as? String == "team-room")
         precondition(receivedGroup.payload["conversationTitle"] as? String == "Team & Friends")
         precondition(receivedGroup.payload["title"] == nil)
@@ -96,6 +97,9 @@ struct GarminRelayProtocolTests {
             recipientUID: identity.uid, recipientCallSign: "Garmin", text: "Private", now: now)
         let receivedDirect = try GarminRelayProtocol.incoming(directXML, ownUID: identity.uid)!
         precondition(receivedDirect.payload["conversationUid"] as? String == "other")
+        precondition(receivedDirect.type == "chat_received")
+        precondition(receivedDirect.payload["uid"] as? String ==
+                     TAKChatMessage.parse(directXML, ownUID: identity.uid)?.id)
         precondition(receivedDirect.payload["isGroup"] as? Bool == false)
         precondition(receivedDirect.payload["conversationTitle"] as? String == "Other")
         precondition(receivedDirect.payload["title"] == nil)

@@ -234,7 +234,7 @@ enum GarminRelayProtocol {
         if uid == ownUID || delegate.senderUID == ownUID { return nil }
         if type == "b-t-f" {
             guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else { return nil }
-            return GarminEnvelope("chat", ["uid": message.senderUID, "sender": message.senderCallSign,
+            return GarminEnvelope("chat_received", ["uid": message.id, "sender": message.senderCallSign,
                 "text": String(message.text.prefix(512)), "messageId": message.id,
                 "senderUid": message.senderUID, "senderCallsign": message.senderCallSign,
                 "msg": String(message.text.prefix(512)), "eventUid": uid,
