@@ -72,6 +72,19 @@ struct GarminRelayProtocolTests {
         precondition(receivedGroup.payload["messageId"] as? String == "group-1")
         precondition(receivedGroup.payload["eventUid"] as? String == "GeoChat.\(identity.uid).team-room.group-1")
         precondition(receivedGroup.payload["isGroup"] as? Bool == true)
+        let publishedReply = try GarminRelayProtocol.outgoingCoT(envelope("chat", [
+            "messageId": "published-reply", "roomUid": "team-room", "roomTitle": "Team & Friends",
+            "isGroup": true, "msg": "Published reply", "text": "Published reply", "cs": "WATCH"
+        ]), identity: identity, fix: nil, now: now)
+        precondition(TAKChatMessage.parse(publishedReply, ownUID: "other")?.text == "Published reply")
+        precondition(TAKChatMessage.parse(publishedReply, ownUID: "other")?.conversationUid == "team-room")
+        let msgOnlyReply = try GarminRelayProtocol.outgoingCoT(envelope("chat", [
+            "messageId": "msg-only", "roomUid": "other", "roomTitle": "Other",
+            "isGroup": false, "msg": "Private msg", "cs": "WATCH",
+            "recipientUid": "other", "replyTo": "other"
+        ]), identity: identity, fix: nil, now: now)
+        precondition(TAKChatMessage.parse(msgOnlyReply, ownUID: "other")?.text == "Private msg")
+        precondition(msgOnlyReply.contains("destinations=\"other\""))
         let directXML = try TAKChatMessage.outgoing(senderUID: "other", senderCallSign: "Other",
             recipientUID: identity.uid, recipientCallSign: "Garmin", text: "Private", now: now)
         let receivedDirect = try GarminRelayProtocol.incoming(directXML, ownUID: identity.uid)!
