@@ -59,7 +59,13 @@ struct GarminRelayProtocolTests {
         let groupEnvelope = try envelope("chat", ["messageId": "group-1", "roomUid": "team-room",
             "roomTitle": "Team & Friends", "isGroup": true, "text": "Group reply",
             "conversationUid": "ignored-alias", "title": "Ignored alias"])
-        let groupXML = try GarminRelayProtocol.outgoingCoT(groupEnvelope, identity: identity, fix: nil, now: now)
+        do {
+            _ = try GarminRelayProtocol.outgoingCoT(groupEnvelope, identity: identity, fix: nil, now: now)
+            fatalError("Unsupported group routing must not become a server broadcast")
+        } catch GarminRelayProtocol.Failure.unsupported {}
+        let groupXML = try TAKChatMessage.outgoing(senderUID: identity.uid, senderCallSign: identity.resolvedCallSign,
+            recipientUID: "team-room", recipientCallSign: "Team & Friends", text: "Group reply",
+            now: now, messageID: "group-1", isGroup: true)
         let receivedGroup = try GarminRelayProtocol.incoming(groupXML, ownUID: "other", receivedAt: now)!
         precondition(receivedGroup.payload["uid"] as? String == identity.uid)
         precondition(receivedGroup.payload["conversationUid"] as? String == "team-room")
@@ -72,12 +78,13 @@ struct GarminRelayProtocolTests {
         precondition(receivedGroup.payload["messageId"] as? String == "group-1")
         precondition(receivedGroup.payload["eventUid"] as? String == "GeoChat.\(identity.uid).team-room.group-1")
         precondition(receivedGroup.payload["isGroup"] as? Bool == true)
-        let publishedReply = try GarminRelayProtocol.outgoingCoT(envelope("chat", [
-            "messageId": "published-reply", "roomUid": "team-room", "roomTitle": "Team & Friends",
-            "isGroup": true, "msg": "Published reply", "text": "Published reply", "cs": "WATCH"
-        ]), identity: identity, fix: nil, now: now)
-        precondition(TAKChatMessage.parse(publishedReply, ownUID: "other")?.text == "Published reply")
-        precondition(TAKChatMessage.parse(publishedReply, ownUID: "other")?.conversationUid == "team-room")
+        do {
+            _ = try GarminRelayProtocol.outgoingCoT(envelope("chat", [
+                "messageId": "published-reply", "roomUid": "team-room", "roomTitle": "Team & Friends",
+                "isGroup": true, "msg": "Published reply", "text": "Published reply", "cs": "WATCH"
+            ]), identity: identity, fix: nil, now: now)
+            fatalError("Published custom-group payload must remain gated")
+        } catch GarminRelayProtocol.Failure.unsupported {}
         let msgOnlyReply = try GarminRelayProtocol.outgoingCoT(envelope("chat", [
             "messageId": "msg-only", "roomUid": "other", "roomTitle": "Other",
             "isGroup": false, "msg": "Private msg", "cs": "WATCH",
@@ -99,9 +106,9 @@ struct GarminRelayProtocolTests {
         precondition(TAKChatMessage.parse(directReply, ownUID: "other")?.isGroup == false)
         for titleKey in ["title", "conversationTitle"] {
             let aliasXML = try GarminRelayProtocol.outgoingCoT(envelope("chat", ["messageId": "alias-\(titleKey)",
-                "conversationUid": "alias-room", titleKey: "Alias Room", "isGroup": true, "text": "Compatibility"]),
+                "conversationUid": "other", titleKey: "Alias Room", "isGroup": false, "text": "Compatibility"]),
                 identity: identity, fix: nil, now: now)
-            precondition(TAKChatMessage.parse(aliasXML, ownUID: "other")?.title == "Alias Room")
+            precondition(aliasXML.contains("chatroom=\"Alias Room\""))
         }
         let unrelated = try GarminRelayProtocol.incoming(directXML, ownUID: "unrelated")
         precondition(unrelated == nil)

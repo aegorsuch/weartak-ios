@@ -941,6 +941,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func sendContactChat(uid: String, route: ContactChatRoute, text: String, isGroup: Bool = false) async throws {
+        if isGroup, uid != TAKChatMessage.allChatRoomsUID {
+            throw ContactChatFailure.message("Group replies require verified recipient routing, which is not available on this transport yet.")
+        }
         let conversation = ContactConversation(uid: uid, route: route, isGroup: isGroup)
         let contact = incomingEntities.first(where: { $0.id == uid && $0.chatRoute == route })
         guard contact != nil || contactMessages[conversation] != nil || uid == TAKChatMessage.allChatRoomsUID else {

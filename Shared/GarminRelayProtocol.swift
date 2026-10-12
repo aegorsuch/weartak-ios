@@ -169,6 +169,9 @@ enum GarminRelayProtocol {
             else if p["conversationTitle"] != nil { title = try envelope.string("conversationTitle") }
             else if p["title"] != nil { title = try envelope.string("title") }
             else { title = recipient }
+            if isGroup, recipient != TAKChatMessage.allChatRoomsUID {
+                throw Failure.unsupported("custom-group recipient routing")
+            }
             let text = (p["text"] as? String) ?? (p["msg"] as? String) ?? ""
             return try TAKChatMessage.outgoing(senderUID: identity.uid, senderCallSign: identity.resolvedCallSign,
                 recipientUID: recipient, recipientCallSign: title, text: text, now: now,

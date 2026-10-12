@@ -858,8 +858,12 @@ or opening a conversation does not promote it over newer received conversations.
 The All Chat Rooms action lets you choose the source transport/server explicitly;
 it uses ATAK's `All Chat Rooms` GeoChat room identity, not a direct-user fallback.
 Private replies retain their recipient UID and directed server destination.
-Group replies retain their original room identity and source. This supports
-received group conversations, not group creation or membership management.
+Received groups retain their original room identity and source. Non-All group
+replies currently return an explicit unsupported-routing error on both Apple
+Watch and Garmin instead of generating a potential server-wide broadcast.
+Verified group-member routing is still required before enabling those replies.
+This supports received group conversations, not group creation or membership
+management.
 
 Apple Watch Companion delivery already relays raw GeoChat XML unchanged (including
 `__chat` room ID/title and `chatgrp` members), rather than an ATAK JSON chat envelope.
