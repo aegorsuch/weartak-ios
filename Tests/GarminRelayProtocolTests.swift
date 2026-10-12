@@ -58,7 +58,7 @@ struct GarminRelayProtocolTests {
         precondition(restoredMetrics == metrics)
         let groupEnvelope = try envelope("chat", ["messageId": "group-1", "roomUid": "team-room",
             "roomTitle": "Team & Friends", "isGroup": true, "text": "Group reply",
-            "conversationUid": "ignored-alias", "title": "Ignored alias"])
+            "conversationUid": "team-room", "title": "Team & Friends"])
         do {
             _ = try GarminRelayProtocol.outgoingCoT(groupEnvelope, identity: identity, fix: nil, now: now)
             fatalError("Unsupported group routing must not become a server broadcast")
@@ -128,7 +128,13 @@ struct GarminRelayProtocolTests {
             ["messageId": "bad-4", "recipientUid": 123, "text": "Invalid legacy direct UID"],
             ["messageId": "bad-5", "roomUid": "", "conversationUid": "ignored", "isGroup": false, "text": "Invalid canonical UID"],
             ["messageId": "bad-6", "roomUid": "room", "roomTitle": "", "title": "ignored", "isGroup": true, "text": "Invalid canonical title"],
-            ["messageId": "bad-7", "roomUid": "room", "text": "Missing canonical group flag"]
+            ["messageId": "bad-7", "roomUid": "room", "text": "Missing canonical group flag"],
+            ["messageId": "bad-8", "roomUid": "other", "conversationUid": "conflict", "isGroup": false, "text": "Private"],
+            ["messageId": "bad-9", "roomUid": "other", "recipientUid": "conflict", "isGroup": false, "text": "Private"],
+            ["messageId": "bad-10", "roomUid": "other", "roomTitle": "Other", "title": "Conflict", "isGroup": false, "text": "Private"],
+            ["messageId": "bad-11", "roomUid": "other", "isGroup": false, "msg": "One", "text": "Two"],
+            ["messageId": "bad-12", "roomUid": TAKChatMessage.allChatRoomsUID, "recipientUid": TAKChatMessage.allChatRoomsUID, "isGroup": true, "text": "All"],
+            ["messageId": "bad-13", "roomUid": "other", "isGroup": false, "msg": 123, "text": "Valid alias"]
         ] as [[String: Any]] {
             do {
                 _ = try GarminRelayProtocol.outgoingCoT(envelope("chat", invalid), identity: identity, fix: nil, now: now)

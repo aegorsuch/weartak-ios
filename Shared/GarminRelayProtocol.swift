@@ -154,25 +154,30 @@ enum GarminRelayProtocol {
         let escape = PhonePLI.escape
         let messageID = try envelope.string("messageId", maximum: 128)
         if envelope.type == "chat" {
+            func consistent(_ keys: [String]) throws -> String? {
+                let values = try keys.filter { p[$0] != nil }.map { try envelope.string($0) }
+                guard Set(values).count <= 1 else { throw Failure.invalid("conflicting \(keys[0]) aliases") }
+                return values.first
+            }
             let hasConversation = p["roomUid"] != nil || p["conversationUid"] != nil
-            let recipient: String
-            if p["roomUid"] != nil { recipient = try envelope.string("roomUid") }
-            else if p["conversationUid"] != nil { recipient = try envelope.string("conversationUid") }
-            else if p["recipientUid"] != nil { recipient = try envelope.string("recipientUid") }
-            else if p["replyTo"] != nil { recipient = try envelope.string("replyTo") }
-            else { recipient = TAKChatMessage.allChatRoomsUID }
+            let recipient = try consistent(["roomUid", "conversationUid", "recipientUid", "replyTo"]) ??
+                TAKChatMessage.allChatRoomsUID
             let isGroup = p["isGroup"] == nil ? recipient == TAKChatMessage.allChatRoomsUID : try envelope.boolean("isGroup")
             guard !hasConversation || p["isGroup"] != nil else { throw Failure.invalid("isGroup") }
             guard recipient != TAKChatMessage.allChatRoomsUID || isGroup else { throw Failure.invalid("conversationUid") }
-            let title: String
-            if p["roomTitle"] != nil { title = try envelope.string("roomTitle") }
-            else if p["conversationTitle"] != nil { title = try envelope.string("conversationTitle") }
-            else if p["title"] != nil { title = try envelope.string("title") }
-            else { title = recipient }
+            guard !isGroup || p["recipientUid"] == nil && p["replyTo"] == nil else {
+                throw Failure.invalid("group with direct recipient aliases")
+            }
+            let title = try consistent(["roomTitle", "conversationTitle", "title"]) ?? recipient
+            let texts = try ["msg", "text"].filter { p[$0] != nil }.map { key -> String in
+                guard let value = p[key] as? String else { throw Failure.invalid(key) }
+                return value
+            }
+            guard Set(texts).count <= 1 else { throw Failure.invalid("conflicting text aliases") }
             if isGroup, recipient != TAKChatMessage.allChatRoomsUID {
                 throw Failure.unsupported("custom-group recipient routing")
             }
-            let text = (p["text"] as? String) ?? (p["msg"] as? String) ?? ""
+            let text = texts.first ?? ""
             return try TAKChatMessage.outgoing(senderUID: identity.uid, senderCallSign: identity.resolvedCallSign,
                 recipientUID: recipient, recipientCallSign: title, text: text, now: now,
                 messageID: messageID, isGroup: isGroup)

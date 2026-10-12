@@ -884,7 +884,9 @@ the message ID and `senderUid`/`senderCallsign` identify the individual sender.
 Watch-to-phone replies consume canonical `roomUid`, `roomTitle`
 and `isGroup`. Earlier `conversationUid`/`conversationTitle`/`title` input aliases
 and legacy `recipientUid`/`replyTo` direct messages remain supported; canonical
-fields take precedence and invalid explicit fields cannot fall back to broadcast.
+fields must agree when supplied together. Conflicting destination, title or
+message aliases, malformed explicit fields, and group payloads with direct-only
+recipient aliases are rejected rather than falling back to broadcast.
 The bridge does not emit the incompatible `title` chat alias. Cross-platform
 Android/Garmin integration still requires device/relay validation.
 The sender adapter also provides canonical `msg` and local `receivedAt`
