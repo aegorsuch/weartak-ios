@@ -1187,10 +1187,27 @@ private struct PluginsView: View {
 
     var body: some View {
         List {
-            NavigationLink {
-                DataSyncMenuView(model: model, client: model.companionClient, settings: settings)
-            } label: {
-                Label("DataSync", systemImage: "arrow.triangle.2.circlepath")
+            ForEach(WatchPluginEntry.current) { plugin in
+                switch plugin.content {
+                case .dataSync:
+                    NavigationLink {
+                        DataSyncMenuView(model: model, client: model.companionClient, settings: settings)
+                    } label: {
+                        Label(plugin.title, systemImage: "arrow.triangle.2.circlepath")
+                    }
+                case .placeholder:
+                    Toggle(isOn: .constant(false)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(plugin.title)
+                            Text(String(localized: plugin.subtitle, table: "WatchSettings"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    }
+                    .disabled(true)
+                }
             }
         }
         .navigationTitle(String(localized: "Plugins", table: "WatchSettings"))

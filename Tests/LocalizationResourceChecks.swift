@@ -25,6 +25,8 @@ struct LocalizationResourceChecks {
                 let value = watch.localizedString(forKey: key, value: nil, table: "WatchSettings")
                 precondition(!value.isEmpty && value != key, "Missing \(language) translation for \(key)")
             }
+            let placeholder = watch.localizedString(forKey: "Unfunded Request", value: nil, table: "WatchSettings")
+            precondition(placeholder == "Unfunded Request", "Unexpected plugin placeholder subtitle in \(language)")
             let injury = watch.localizedString(forKey: "Injury", value: nil, table: "WatchMain")
             precondition(injury != "Injury" && !injury.isEmpty)
             if language == "es" { precondition(injury == "Lesión") }

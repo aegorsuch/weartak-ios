@@ -40566,6 +40566,17 @@
         }
       }
     },
+    "Unfunded Request" : {
+      "comment" : "Fixed subtitle for unimplemented plugin placeholders",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unfunded Request"
+          }
+        }
+      }
+    },
     "Uniform Pants Length" : {
       "localizations" : {
         "ar" : {
