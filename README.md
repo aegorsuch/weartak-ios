@@ -183,7 +183,7 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.3`, Build `18`, with separate Apple-compatible
+- The project uses Version `5.8.3`, Build `20`, with separate Apple-compatible
   version/build fields. Increment the build number for each subsequent upload.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
@@ -220,7 +220,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.3`, Build `18`.
+The current checkout includes its app-icon image and Version `5.8.3`, Build `20`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
@@ -483,6 +483,11 @@ WearTAK Companion now supports two watch routes:
   authorized watch if more than one is listed. Garmin relay traffic does not
   require an Apple Watch.
 
+The Companion target includes `@executable_path/Frameworks` in its runtime
+search paths so Xcode embeds and loads the Connect IQ framework. Simulator
+builds can show the route-selection interface; Garmin pairing and relay
+delivery must be verified on a physical iPhone and Garmin watch.
+
 ### Garmin relay acknowledgements
 
 Companion advertises `reliableDelivery` in a session-correlated `relay_status`
@@ -575,6 +580,9 @@ watch pairing state, independently of whether the watch app is foregrounded.
 Pairing status is not TAK server health or live-message availability.
 
 ### User metrics import
+
+**User Metrics** is collapsed by default in Companion. Tap the row to reveal
+the profile fields and import buttons.
 
 Companion can import local profile values for **Birth year, Height, Weight,
 Sex, and Blood Type** without editing them by hand:

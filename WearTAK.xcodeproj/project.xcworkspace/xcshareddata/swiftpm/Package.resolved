@@ -2,6 +2,14 @@
   "originHash" : "feea1df358239d89db2a6299d8075eb59f31070248bd5808bb859af7411458bd",
   "pins" : [
     {
+      "identity" : "connectiq-companion-app-sdk-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/garmin/connectiq-companion-app-sdk-ios.git",
+      "state" : {
+        "revision" : "f0d29ff691d700a132d86205ed9bb091e336c2f7"
+      }
+    },
+    {
       "identity" : "dittoswiftpackage",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/getditto/DittoSwiftPackage",
