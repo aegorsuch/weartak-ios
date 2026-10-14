@@ -983,8 +983,11 @@ green square; unknown or pending is a yellow quatrefoil. Types that aren't
 2525D symbols (for example `b-m-p-*` spot markers) remain yellow pins. Each server row shows how many missions are
 subscribed or its current state; Refresh reloads the list.
 
-The Everywhere Comms and Somewear Labs entries in Plugins are disabled
+The Everywhere Comms, GoTenna and Somewear Labs entries in Plugins are disabled
 placeholders labeled “Unfunded Request”; they do not enable or open a feature.
+Sensor Manager is also labeled “Unfunded Request” and has a saved enable/disable
+switch (off by default). Opening it shows “Unfunded Request”, “Button is
+Placeholder” and an inert Scan button; no scanning or pairing is performed.
 
 Companion performs the requests on the watch's behalf. TAK Server uses the
 client certificate on HTTPS port `8443` (`GET /Marti/api/missions`,

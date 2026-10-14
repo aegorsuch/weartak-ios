@@ -4,6 +4,7 @@ struct WatchPluginEntry: Identifiable, Equatable {
     enum Content: Equatable {
         case dataSync
         case placeholder
+        case sensorManager
     }
 
     let id: String
@@ -14,7 +15,7 @@ struct WatchPluginEntry: Identifiable, Equatable {
         switch content {
         case .dataSync:
             return ""
-        case .placeholder:
+        case .placeholder, .sensorManager:
             return "Unfunded Request"
         }
     }
@@ -22,6 +23,8 @@ struct WatchPluginEntry: Identifiable, Equatable {
     static let current = alphabetized([
         WatchPluginEntry(id: "data-sync", title: "DataSync", content: .dataSync),
         WatchPluginEntry(id: "everywhere-comms", title: "Everywhere Comms", content: .placeholder),
+        WatchPluginEntry(id: "gotenna", title: "GoTenna", content: .placeholder),
+        WatchPluginEntry(id: "sensor-manager", title: "Sensor Manager", content: .sensorManager),
         WatchPluginEntry(id: "somewear-labs", title: "Somewear Labs", content: .placeholder)
     ])
 

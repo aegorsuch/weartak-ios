@@ -1207,10 +1207,37 @@ private struct PluginsView: View {
                         }
                     }
                     .disabled(true)
+                case .sensorManager:
+                    Toggle(isOn: $settings.sensorManagerEnabled) {
+                        NavigationLink {
+                            SensorManagerView()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(plugin.title)
+                                Text(String(localized: plugin.subtitle, table: "WatchSettings"))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                    }
                 }
             }
         }
         .navigationTitle(String(localized: "Plugins", table: "WatchSettings"))
+    }
+}
+
+private struct SensorManagerView: View {
+    var body: some View {
+        List {
+            Text(String(localized: "Unfunded Request", table: "WatchSettings"))
+            Text(String(localized: "Button is Placeholder", table: "WatchSettings"))
+                .foregroundStyle(.secondary)
+            Button(String(localized: "Scan", table: "WatchSettings")) {}
+        }
+        .navigationTitle("Sensor Manager")
     }
 }
 

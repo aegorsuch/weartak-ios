@@ -148,6 +148,7 @@ final class AppSettings: ObservableObject {
         static let physiologicalAlertsEnabled = "WearTAK.physiologicalAlertsEnabled"
         static let physiologicalMonitoringEnabled = "WearTAK.physiologicalMonitoringEnabled"
         static let batdokCotEnabled = "WearTAK.batdokCotEnabled"
+        static let sensorManagerEnabled = "WearTAK.sensorManagerEnabled"
         static let bloodhoundProximityRadius = "WearTAK.bloodhoundProximityRadius"
         static let bloodhoundProximityVibrationEnabled = "WearTAK.bloodhoundProximityVibrationEnabled"
         static let bloodhoundProximityIntensity = "WearTAK.bloodhoundProximityIntensity"
@@ -449,6 +450,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(batdokCotEnabled, forKey: Keys.batdokCotEnabled) }
     }
 
+    @Published var sensorManagerEnabled: Bool {
+        didSet { defaults.set(sensorManagerEnabled, forKey: Keys.sensorManagerEnabled) }
+    }
+
     @Published var bloodhoundProximityRadius: Int {
         didSet {
             let clamped = min(max(bloodhoundProximityRadius, 10), 200)
@@ -595,6 +600,7 @@ final class AppSettings: ObservableObject {
         physiologicalAlertsEnabled = defaults.object(forKey: Keys.physiologicalAlertsEnabled) as? Bool ?? false
         physiologicalMonitoringEnabled = defaults.object(forKey: Keys.physiologicalMonitoringEnabled) as? Bool ?? true
         batdokCotEnabled = defaults.object(forKey: Keys.batdokCotEnabled) as? Bool ?? true
+        sensorManagerEnabled = defaults.object(forKey: Keys.sensorManagerEnabled) as? Bool ?? false
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true
         bloodhoundProximityIntensity = defaults.string(forKey: Keys.bloodhoundProximityIntensity) ?? "Single Burst"

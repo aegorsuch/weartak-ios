@@ -40566,6 +40566,28 @@
         }
       }
     },
+    "Button is Placeholder" : {
+      "comment" : "Sensor Manager placeholder notice",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Button is Placeholder"
+          }
+        }
+      }
+    },
+    "Scan" : {
+      "comment" : "Inert Sensor Manager placeholder button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan"
+          }
+        }
+      }
+    },
     "Unfunded Request" : {
       "comment" : "Fixed subtitle for unimplemented plugin placeholders",
       "localizations" : {

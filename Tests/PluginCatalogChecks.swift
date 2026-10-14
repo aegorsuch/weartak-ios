@@ -6,6 +6,8 @@ struct PluginCatalogChecks {
         precondition(WatchPluginEntry.current.map(\.title) == [
             "DataSync",
             "Everywhere Comms",
+            "GoTenna",
+            "Sensor Manager",
             "Somewear Labs"
         ])
 
@@ -23,8 +25,12 @@ struct PluginCatalogChecks {
         let placeholders = WatchPluginEntry.current.filter { $0.content == .placeholder }
         precondition(placeholders.map(\.subtitle) == [
             "Unfunded Request",
+            "Unfunded Request",
             "Unfunded Request"
         ])
+        let sensorManager = WatchPluginEntry.current.first { $0.id == "sensor-manager" }
+        precondition(sensorManager?.content == .sensorManager)
+        precondition(sensorManager?.subtitle == "Unfunded Request")
         print("PASS: plugin catalog ordering and placeholder labels")
     }
 }
