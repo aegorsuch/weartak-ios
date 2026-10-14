@@ -462,7 +462,11 @@ final class SitxClient: ObservableObject, TAKTransport {
 
     func sendPLI(coordinate: CLLocationCoordinate2D, reportingInterval: TimeInterval = 60) async throws {
         biometricsReportingInterval = reportingInterval
-        let now = Date()
+        try await deliver(pliXML(coordinate: coordinate, reportingInterval: reportingInterval))
+    }
+
+    /// The watch's self-PLI event, shared by TAK delivery and Companion's Ditto peer.
+    func pliXML(coordinate: CLLocationCoordinate2D, reportingInterval: TimeInterval, now: Date = Date()) -> String {
         let os = ProcessInfo.processInfo.operatingSystemVersion
         let detail = SitxCoT.pliDetail(
             uid: Self.deviceID(), callSign: settings.callSign, team: settings.teamColor.rawValue, role: settings.role,
@@ -471,8 +475,8 @@ final class SitxClient: ObservableObject, TAKTransport {
             biometrics.fresh(reportingInterval: reportingInterval, now: now)
                 .pliDetail(uid: Self.deviceID(), now: now, reportingInterval: reportingInterval)
         let lifetime = WatchBiometrics.staleLifetime(reportingInterval: reportingInterval)
-        try await deliver(SitxCoT.event(uid: Self.deviceID(), type: SitxCoT.pliType, coordinate: coordinate,
-                                      detail: detail, lifetime: lifetime, now: now))
+        return SitxCoT.event(uid: Self.deviceID(), type: SitxCoT.pliType, coordinate: coordinate,
+                             detail: detail, lifetime: lifetime, now: now)
     }
 
     func sendMarker(_ marker: WatchMarker) async throws {

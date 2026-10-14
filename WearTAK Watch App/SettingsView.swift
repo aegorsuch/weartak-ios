@@ -1184,16 +1184,51 @@ private struct ToolPreferencesView: View {
 private struct PluginsView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
+    @State private var dittoError: String?
 
     var body: some View {
         List {
             ForEach(WatchPluginEntry.current) { plugin in
                 switch plugin.content {
+                case .commands:
+                    HStack {
+                        NavigationLink {
+                            ChatCommandSettingsView(settings: settings)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(plugin.title)
+                                Text(settings.commandsEnabled ? "Enabled" : "Disabled")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Toggle(isOn: $settings.commandsEnabled) { EmptyView() }
+                            .labelsHidden()
+                    }
                 case .dataSync:
                     NavigationLink {
                         DataSyncMenuView(model: model, client: model.companionClient, settings: settings)
                     } label: {
                         Label(plugin.title, systemImage: "arrow.triangle.2.circlepath")
+                    }
+                case .ditto:
+                    HStack {
+                        NavigationLink {
+                            DittoSettingsView(model: model, settings: settings)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(plugin.title)
+                                Text(dittoSubtitle)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Toggle(isOn: dittoEnabledBinding) { EmptyView() }
+                            .labelsHidden()
                     }
                 case .placeholder:
                     Toggle(isOn: .constant(false)) {
@@ -1226,6 +1261,37 @@ private struct PluginsView: View {
             }
         }
         .navigationTitle(String(localized: "Plugins", table: "WatchSettings"))
+        .alert("Ditto settings", isPresented: Binding(
+            get: { dittoError != nil },
+            set: { if !$0 { dittoError = nil } }
+        )) {
+            Button("OK", role: .cancel) { dittoError = nil }
+        } message: {
+            Text(dittoError ?? "")
+        }
+    }
+
+    private var dittoSubtitle: String {
+        switch settings.dittoIdentitySource {
+        case .community:
+            return "Community"
+        case .custom:
+            return "Custom"
+        }
+    }
+
+    private var dittoEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { settings.dittoEnabled },
+            set: { enabled in
+                guard !enabled || settings.dittoIdentitySource == .community || settings.dittoCustomPDL != nil else {
+                    dittoError = "Save a custom PDL before enabling Ditto."
+                    return
+                }
+                settings.dittoEnabled = enabled
+                Task { await model.companionClient.updateDittoConfiguration() }
+            }
+        )
     }
 }
 

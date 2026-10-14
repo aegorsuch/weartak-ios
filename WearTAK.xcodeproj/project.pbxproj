@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		99D100000000000000000003 /* DittoSwift in Companion Frameworks */ = {isa = PBXBuildFile; productRef = 99D100000000000000000002 /* DittoSwift */; };
 		99C100000000000000000003 /* ConnectIQ in Companion Frameworks */ = {isa = PBXBuildFile; productRef = 99C100000000000000000002 /* ConnectIQ */; };
 		99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */ = {isa = PBXBuildFile; productRef = 99B100000000000000000006 /* SwiftASN1 */; };
 		99A20000000000000000000A /* WearTAK Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 12858C89306DD75A002BB8CC /* WearTAK Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -39,6 +40,7 @@
 /* Begin PBXFileReference section */
 		12858C89306DD75A002BB8CC /* WearTAK Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WearTAK Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		99A200000000000000000001 /* WearTAK.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WearTAK.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		99D100000000000000000004 /* Companion.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = BuildConfiguration/Companion.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -63,7 +65,7 @@
 		99B100000000000000000004 /* Companion Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */, 99C100000000000000000003 /* ConnectIQ in Companion Frameworks */, );
+			files = (99B100000000000000000007 /* SwiftASN1 in Companion Frameworks */, 99C100000000000000000003 /* ConnectIQ in Companion Frameworks */, 99D100000000000000000003 /* DittoSwift in Companion Frameworks */, );
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		12858C86306DD75A002BB8CC /* Frameworks */ = {
@@ -83,6 +85,7 @@
 				99B100000000000000000001 /* WearTAK Companion */,
 				99B100000000000000000002 /* Shared */,
 				12858C8A306DD75A002BB8CC /* Products */,
+				99D100000000000000000004 /* Companion.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -143,6 +146,7 @@
 			packageProductDependencies = (
 				99B100000000000000000006 /* SwiftASN1 */,
 				99C100000000000000000002 /* ConnectIQ */,
+				99D100000000000000000002 /* DittoSwift */,
 			);
 			productName = WearTAK;
 			productReference = 99A200000000000000000001 /* WearTAK.app */;
@@ -214,6 +218,7 @@
 			packageReferences = (
 				99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */,
 				99C100000000000000000001 /* XCRemoteSwiftPackageReference ConnectIQ */,
+				99D100000000000000000001 /* XCRemoteSwiftPackageReference DittoSwiftPackage */,
 			);
 			targets = (
 				12858C88306DD75A002BB8CC /* WearTAK Watch App */,
@@ -296,6 +301,11 @@
 			repositoryURL = "https://github.com/apple/swift-asn1.git";
 			requirement = {kind = upToNextMajorVersion; minimumVersion = 1.3.1; };
 		};
+		99D100000000000000000001 /* XCRemoteSwiftPackageReference DittoSwiftPackage */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getditto/DittoSwiftPackage";
+			requirement = {kind = upToNextMajorVersion; minimumVersion = 5.1.0; };
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -308,6 +318,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 99B100000000000000000005 /* XCRemoteSwiftPackageReference swift-asn1 */;
 			productName = SwiftASN1;
+		};
+		99D100000000000000000002 /* DittoSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 99D100000000000000000001 /* XCRemoteSwiftPackageReference DittoSwiftPackage */;
+			productName = DittoSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 
@@ -531,6 +546,7 @@
 		};
 		99A200000000000000000004 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 99D100000000000000000004 /* Companion.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Manual;
@@ -563,6 +579,7 @@
 		};
 		99A200000000000000000005 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 99D100000000000000000004 /* Companion.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "WearTAK Container App Store";

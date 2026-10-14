@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, missions, missionUpdate }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, missions, missionUpdate }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -54,6 +54,10 @@ enum BridgeWire {
         var relayPaused: String?
         /// Connected emergency ingress sources; nil on older Companion versions.
         var remoteAlertSourceIDs: [UUID]?
+        /// Watch → iPhone Ditto configuration. Custom PDLs are sent only in this direction.
+        var dittoConfig: DittoBridgeConfiguration?
+        /// iPhone → watch Ditto runtime state. Never contains PDL credentials.
+        var dittoStatus: DittoBridgeStatus?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -65,7 +69,7 @@ enum BridgeWire {
             guard data.count <= BridgeWire.maximumMessageBytes else { throw Failure.tooLarge }
             let message = try JSONDecoder().decode(Self.self, from: data)
             guard message.version == BridgeWire.version else { throw Failure.unsupportedVersion }
-            if message.kind == .cot {
+            if message.kind == .cot || message.kind == .dittoTrack {
                 guard let xml = message.xml, CoTStreamFramer.isEvent(Data(xml.utf8)) else { throw Failure.invalidCoT }
             }
             if let events = message.mapEvents {
@@ -92,6 +96,19 @@ enum BridgeWire {
             if message.kind == .sitxConfig {
                 guard let config = message.sitxConfig, config.isValid else { throw Failure.invalidSitxConfig }
             }
+            if let config = message.dittoConfig {
+                guard (message.kind == .hello || message.kind == .dittoConfig), config.isValid else {
+                    throw Failure.invalidDittoConfig
+                }
+            }
+            if message.kind == .dittoConfig, message.dittoConfig == nil {
+                throw Failure.invalidDittoConfig
+            }
+            if let status = message.dittoStatus {
+                guard (message.kind == .status || message.kind == .acknowledgement), status.isValid else {
+                    throw Failure.invalidDittoStatus
+                }
+            }
             if let events = message.chatEvents {
                 guard message.kind == .status, events.count <= CompanionChatBuffer.maximumEvents,
                       events.allSatisfy({ CompanionChatBuffer.isValid($0) }) else { throw Failure.invalidCoT }
@@ -101,10 +118,12 @@ enum BridgeWire {
     }
 
     enum Failure: LocalizedError {
-        case tooLarge, unsupportedVersion, invalidCoT, invalidSitxConfig, invalidMission
+        case tooLarge, unsupportedVersion, invalidCoT, invalidSitxConfig, invalidMission, invalidDittoConfig, invalidDittoStatus
         var errorDescription: String? {
             switch self {
             case .invalidMission: return "The Data Sync mission request from the watch is invalid."
+            case .invalidDittoConfig: return "The Ditto settings from the watch are invalid."
+            case .invalidDittoStatus: return "The Ditto status from Companion is invalid."
             case .invalidSitxConfig: return "The Sit(x) relay settings from the watch are invalid."
             case .tooLarge: return "The Companion message exceeds the supported size."
             case .unsupportedVersion: return "Update both WearTAK apps to matching versions."
@@ -112,6 +131,41 @@ enum BridgeWire {
             }
         }
     }
+}
+
+enum DittoIdentitySource: String, Codable, CaseIterable, Identifiable {
+    case community, custom
+
+    var id: String { rawValue }
+    var title: String { self == .community ? "Community" : "Custom" }
+}
+
+struct DittoBridgeConfiguration: Codable, Equatable {
+    static let maximumPDLBytes = 20_000
+    var enabled: Bool
+    var source: DittoIdentitySource
+    var customPDL: String?
+
+    var isValid: Bool {
+        guard let customPDL else {
+            return true
+        }
+        guard source == .custom, !customPDL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              customPDL.utf8.count <= Self.maximumPDLBytes else { return false }
+        return true
+    }
+}
+
+struct DittoBridgeStatus: Codable, Equatable {
+    static let contextKey = "WearTAKCompanion.dittoStatus"
+    enum State: String, Codable { case off, waiting, starting, syncing, paused, failed }
+
+    var enabled: Bool
+    var source: DittoIdentitySource
+    var state: State
+    var detail: String
+
+    var isValid: Bool { detail.utf8.count <= 512 }
 }
 
 /// Watch → phone hand-off of Sit(x) streaming. watchOS hardware blocks WebSockets (TN3135), so Companion holds

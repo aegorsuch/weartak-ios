@@ -69,6 +69,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     /// Companion's Sit(x) relay state: nil when unknown, empty when the phone holds no Sit(x) configuration.
     @Published private(set) var sitxRelayStatus: String?
     @Published private(set) var sitxSettings: SitxSettingsSnapshot?
+    @Published private(set) var dittoStatus: DittoBridgeStatus?
     /// Sit(x) set up in Companion itself, reported through the phone's application context.
     private var phoneSitxSetUp = false {
         didSet {
@@ -77,6 +78,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             refresh()
         }
     }
+    private var lastAcceptedDittoConfig: DittoBridgeConfiguration?
+    private var dittoConfigInFlight = false
     private var usesCompanion: Bool { settings.relayProvider == .companion || sitxRelayRequested || phoneSitxSetUp }
 
     var isReady: Bool {
@@ -178,6 +181,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         let reachable = WCSession.isSupported() &&
             WCSession.default.activationState == .activated && WCSession.default.isReachable
         if isPhoneReachable != reachable { isPhoneReachable = reachable }
+        if active, reachable, !dittoConfigInFlight,
+           let configuration = currentDittoConfiguration(), configuration.isValid,
+           configuration != lastAcceptedDittoConfig {
+            Task { await updateDittoConfiguration() }
+        }
         guard active, usesCompanion, WCSession.default.activationState == .activated,
               WCSession.default.isReachable else {
             if active, usesCompanion {
@@ -199,15 +207,24 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             onStateChange?()
         }
         updateLinkState()
-        guard !handshakeInFlight else { return }
+        let configuration = currentDittoConfiguration()
+        let awaitingConfiguration = configuration.map { $0.isValid && $0 != lastAcceptedDittoConfig } ?? false
+        guard !handshakeInFlight, !dittoConfigInFlight, !awaitingConfiguration else { return }
         handshakeInFlight = true
         Task {
             defer { handshakeInFlight = false }
             do {
-                let reply = try await request(BridgeWire.Message(kind: .hello))
+                let configuration = currentDittoConfiguration()
+                let pendingConfiguration = configuration?.isValid == true &&
+                    configuration != lastAcceptedDittoConfig ? configuration : nil
+                let reply = try await request(BridgeWire.Message(kind: .hello, dittoConfig: pendingConfiguration))
                 guard active else { return }
                 guard reply.kind == .status else { throw TAKTransportError.notConfigured }
                 apply(reply)
+                if let pendingConfiguration, let received = reply.dittoStatus,
+                   received.enabled == pendingConfiguration.enabled, received.source == pendingConfiguration.source {
+                    lastAcceptedDittoConfig = pendingConfiguration
+                }
                 if mapLastChecked.map({ Date().timeIntervalSince($0) >= 30 }) ?? true {
                     Task { await self.refreshMap() }
                 }
@@ -265,6 +282,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         phoneLocationEnabled = message.phoneLocationEnabled == true
         if let sitxStatus = message.sitxStatus { sitxRelayStatus = sitxStatus }
         if let settings = message.sitxSettings { sitxSettings = settings }
+        if let ditto = message.dittoStatus { dittoStatus = ditto }
         lastConfirmation = Date()
         pauseReason = serverReady ? nil : message.relayPaused
         checkingSince = nil
@@ -286,6 +304,69 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         } catch {
             sitxRelayStatus = "Sit(x) settings sync failed: \(error.localizedDescription)"
         }
+    }
+
+    private func applyDittoStatusContext(_ context: [String: Any]) {
+        guard let data = context[DittoBridgeStatus.contextKey] as? Data else { return }
+        do {
+            dittoStatus = try JSONDecoder().decode(DittoBridgeStatus.self, from: data)
+        } catch {
+            dittoStatus = DittoBridgeStatus(enabled: settings.dittoEnabled,
+                source: settings.dittoIdentitySource, state: .failed,
+                detail: "Ditto status sync failed: \(error.localizedDescription)")
+        }
+    }
+
+    func updateDittoConfiguration() async {
+        guard let configuration = currentDittoConfiguration() else { return }
+        guard configuration.isValid else {
+            dittoStatus = DittoBridgeStatus(enabled: configuration.enabled, source: configuration.source,
+                state: .failed, detail: "Save a custom PDL before enabling Ditto.")
+            return
+        }
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated,
+              WCSession.default.isReachable else {
+            dittoStatus = DittoBridgeStatus(enabled: configuration.enabled, source: configuration.source,
+                state: .waiting, detail: "Waiting for iPhone Companion to accept the Ditto settings.")
+            return
+        }
+        guard !dittoConfigInFlight, !handshakeInFlight else { return }
+        dittoConfigInFlight = true
+        defer { dittoConfigInFlight = false }
+        do {
+            let reply = try await request(BridgeWire.Message(kind: .dittoConfig, dittoConfig: configuration),
+                timeoutSeconds: 20)
+            guard reply.kind == .acknowledgement, let received = reply.dittoStatus else {
+                throw CompanionRefreshFailure.message(reply.detail ?? "iPhone Companion did not acknowledge Ditto settings.")
+            }
+            dittoStatus = received
+            if received.enabled == configuration.enabled && received.source == configuration.source {
+                lastAcceptedDittoConfig = configuration
+            }
+        } catch {
+            dittoStatus = DittoBridgeStatus(enabled: configuration.enabled, source: configuration.source,
+                state: .waiting, detail: "Waiting for iPhone Companion: \(String(error.localizedDescription.prefix(400)))")
+        }
+    }
+
+    /// Hands the watch's PLI to Companion's Ditto peer; works on every TAK route, even with no TAK server connected.
+    @discardableResult
+    func sendDittoTrack(_ xml: String) async -> Bool {
+        guard active, settings.dittoEnabled, dittoStatus?.state == .syncing,
+              WCSession.isSupported(), WCSession.default.activationState == .activated else { return false }
+        do {
+            let reply = try await request(BridgeWire.Message(kind: .dittoTrack, xml: xml))
+            if let status = reply.dittoStatus { dittoStatus = status }
+            return reply.kind == .acknowledgement && reply.ready == true
+        } catch {
+            return false
+        }
+    }
+
+    private func currentDittoConfiguration() -> DittoBridgeConfiguration? {
+        let source = settings.dittoIdentitySource
+        return DittoBridgeConfiguration(enabled: settings.dittoEnabled, source: source,
+            customPDL: source == .custom ? settings.dittoCustomPDL : nil)
     }
 
     #if DEBUG && targetEnvironment(simulator)
@@ -567,6 +648,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         Task { @MainActor [weak self] in
             self?.configured = configured
             self?.applySitxSettingsContext(session.receivedApplicationContext)
+            self?.applyDittoStatusContext(session.receivedApplicationContext)
             self?.phoneSitxSetUp = sitxSetUp
             self?.publishIdentity(force: true)
             self?.refresh()
@@ -586,6 +668,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             guard let self else { return }
             if let configured { self.configured = configured }
             self.applySitxSettingsContext(context)
+            self.applyDittoStatusContext(context)
             self.phoneSitxSetUp = sitxSetUp
             if unavailable && !self.handshakeInFlight && !self.mapRefreshing {
                 self.pauseReason = paused.map { String($0.prefix(200)) }

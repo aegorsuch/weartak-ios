@@ -125,6 +125,15 @@ struct CompanionSetupView: View {
                         Text(error).font(.caption).foregroundStyle(.orange)
                     }
                 }
+                Section("Ditto peer-to-peer") {
+                    LabeledContent("Status", value: bridge.dittoStatus.state.rawValue.capitalized)
+                    Text(bridge.dittoStatus.detail)
+                        .font(.caption)
+                        .foregroundStyle(bridge.dittoStatus.state == .failed ? .orange : .secondary)
+                    Text("Ditto runs on this iPhone. Sync pauses when Companion is in the background; iOS does not guarantee continuous background peer-to-peer sync.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Section("User Metrics") {
                     ForEach(UserMetrics.Field.allCases) { field in
                         LabeledContent(field.title, value: bridge.userMetrics.value(field) ?? "Not available")

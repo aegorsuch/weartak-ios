@@ -317,6 +317,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private let locationManager = CLLocationManager()
+    private let chatCommandRuntime = WatchChatCommandRuntime()
     private let transport: TAKTransport
     let sitxClient: SitxClient
     let multicastClient: MulticastTAKTransport
@@ -327,6 +328,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var identitySubscription: AnyCancellable?
     private var sitxRelaySubscriptions: Set<AnyCancellable> = []
     private var isSendingPLI = false
+    private var isPublishingDittoTrack = false
+    private var lastDittoTrackAt: Date?
     #if DEBUG && targetEnvironment(simulator)
     private var simulatedBiometricsTimer: Timer?
     #endif
@@ -563,7 +566,16 @@ final class WatchSessionModel: NSObject, ObservableObject {
         reportingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.forwardOfflineEvents()
-                guard let self, self.isAppActive, self.connectionState == .connected,
+                guard let self, self.isAppActive else { return }
+                if self.needsWatchDittoTrack {
+                    if let location = self.lastLocation, abs(location.timestamp.timeIntervalSinceNow) < 120 {
+                        self.publishDittoTrackIfDue(for: location)
+                    } else if self.lastFixRequestAt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
+                        self.lastFixRequestAt = Date()
+                        self.requestLocation()
+                    }
+                }
+                guard self.connectionState == .connected,
                       self.transport.pliReportingRoute == .standaloneSitx else { return }
                 if let location = self.lastLocation, abs(location.timestamp.timeIntervalSinceNow) < 120 {
                     self.sendPLIIfDue(for: location)
@@ -940,13 +952,15 @@ final class WatchSessionModel: NSObject, ObservableObject {
         return nil
     }
 
-    func sendContactChat(uid: String, route: ContactChatRoute, text: String, isGroup: Bool = false) async throws {
+    func sendContactChat(uid: String, route: ContactChatRoute, text: String, isGroup: Bool = false,
+                         allowUnknownDirectRecipient: Bool = false) async throws {
         if isGroup, uid != TAKChatMessage.allChatRoomsUID {
             throw ContactChatFailure.message("Group replies require verified recipient routing, which is not available on this transport yet.")
         }
         let conversation = ContactConversation(uid: uid, route: route, isGroup: isGroup)
         let contact = incomingEntities.first(where: { $0.id == uid && $0.chatRoute == route })
-        guard contact != nil || contactMessages[conversation] != nil || uid == TAKChatMessage.allChatRoomsUID else {
+        guard contact != nil || contactMessages[conversation] != nil || uid == TAKChatMessage.allChatRoomsUID ||
+                (allowUnknownDirectRecipient && !isGroup && !uid.isEmpty && uid != SitxClient.deviceID()) else {
             throw ContactChatFailure.message("This contact is no longer available on that transport.")
         }
         if !isGroup, let contact, let reason = chatUnavailableReason(for: contact) { throw ContactChatFailure.message(reason) }
@@ -966,9 +980,31 @@ final class WatchSessionModel: NSObject, ObservableObject {
         recordChat(message, route: route)
     }
 
+    func saveDittoPDLFromChat(_ text: String) throws {
+        try settings.storeDittoCustomPDL(text)
+    }
+
     private func recordChat(_ message: TAKChatMessage, route: ContactChatRoute) {
         let ownUID = SitxClient.deviceID()
         let key = ContactConversation(uid: message.conversationUID(ownUID: ownUID), route: route, isGroup: message.isGroup)
+        switch chatCommandRuntime.handle(message, ownUID: ownUID, settings: settings) {
+        case .notCommand:
+            break
+        case .consumed:
+            return
+        case .reply(let text):
+            chatInbox.open(key)
+            Task { @MainActor [weak self] in
+                do {
+                    try await self?.sendContactChat(uid: message.senderUID, route: route, text: text,
+                        allowUnknownDirectRecipient: true)
+                }
+                catch {
+                    self?.chatLogger.error("Chat command reply failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            return
+        }
         if chatInbox.record(message, conversation: key, ownUID: ownUID) {
             WKInterfaceDevice.current().play(.notification)
             chatLogger.notice("New unread GeoChat recorded; notification haptic requested")
@@ -1904,16 +1940,31 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         lastOfflineAttempt = nil
         forwardOfflineEvents()
         checkBloodhoundProximity(at: location)
+        publishDittoTrackIfDue(for: location)
         guard connectionState == .connected else { return }
         sendPLIIfDue(for: location)
     }
 
-    private func sendPLIIfDue(for location: CLLocation) {
-          guard isAppActive, !isSendingPLI, location.horizontalAccuracy >= 0,
+    /// Companion's Ditto peer publishes the watch to the `track` collection at the PLI reporting interval.
+    /// When the iPhone reports with phone GPS it publishes that PLI itself, so the watch stays quiet.
+    private var needsWatchDittoTrack: Bool {
+        settings.dittoEnabled && companionClient.dittoStatus?.state == .syncing && !companionClient.phoneLocationEnabled
+    }
+
+    private func publishDittoTrackIfDue(for location: CLLocation) {
+        guard isAppActive, !isPublishingDittoTrack, needsWatchDittoTrack, location.horizontalAccuracy >= 0,
               abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
-        #if DEBUG && targetEnvironment(simulator)
-        stepSimulatedBiometrics()
-        #endif
+        let interval = pliReportingInterval(for: location)
+        guard lastDittoTrackAt.map({ Date().timeIntervalSince($0) >= interval }) ?? true else { return }
+        let xml = sitxClient.pliXML(coordinate: location.coordinate, reportingInterval: interval)
+        isPublishingDittoTrack = true
+        Task {
+            defer { isPublishingDittoTrack = false }
+            if await companionClient.sendDittoTrack(xml) { lastDittoTrackAt = Date() }
+        }
+    }
+
+    private func pliReportingInterval(for location: CLLocation) -> TimeInterval {
         let hasActiveAlert = activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
         let interval: TimeInterval
         if hasActiveAlert {
@@ -1927,8 +1978,16 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         } else {
             interval = TimeInterval(settings.vehicleReportingInterval)
         }
+        return settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)
+    }
 
-        let effectiveInterval = settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)
+    private func sendPLIIfDue(for location: CLLocation) {
+          guard isAppActive, !isSendingPLI, location.horizontalAccuracy >= 0,
+              abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
+        #if DEBUG && targetEnvironment(simulator)
+        stepSimulatedBiometrics()
+        #endif
+        let effectiveInterval = pliReportingInterval(for: location)
         guard transport.pliReportingRoute == .standaloneSitx else {
             Task {
                 try? await transport.sendPLI(coordinate: location.coordinate, reportingInterval: effectiveInterval)

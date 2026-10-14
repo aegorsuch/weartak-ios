@@ -1727,6 +1727,7 @@ private struct ContactChatView: View {
     @State private var sending = false
     @State private var error: String?
     @State private var sent = false
+    @State private var pdlSaved = false
     @Environment(\.scenePhase) private var scenePhase
     private var conversation: ContactConversation { ContactConversation(uid: uid, route: route, isGroup: isGroup) }
 
@@ -1737,6 +1738,19 @@ private struct ContactChatView: View {
                     Text(message.senderUID == SitxClient.deviceID() ? String(localized: "You", table: "WatchMain") : message.senderCallSign)
                         .font(.caption2).foregroundStyle(.secondary)
                     Text(message.text)
+                        .contextMenu {
+                            if !isGroup, message.senderUID != SitxClient.deviceID() {
+                                Button("Save as Custom Ditto PDL", systemImage: "key.fill") {
+                                    do {
+                                        try model.saveDittoPDLFromChat(message.text)
+                                        pdlSaved = true
+                                        error = nil
+                                    } catch {
+                                        self.error = error.localizedDescription
+                                    }
+                                }
+                            }
+                        }
                 }
             }
             TextField(String(localized: "Message", table: "WatchMain"), text: $text)
@@ -1747,6 +1761,7 @@ private struct ContactChatView: View {
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
             if sent { Text(model.offlineNotice ?? String(localized: "Chat stored for forwarding.", table: "WatchMain")).font(.caption) }
+            if pdlSaved { Text("Custom Ditto PDL saved securely in Keychain.").font(.caption) }
             Section(String(localized: "Quick Messages", table: "WatchMain")) {
                 ForEach(TAKChatMessage.quickMessages, id: \.self) { message in
                     Button(message) {

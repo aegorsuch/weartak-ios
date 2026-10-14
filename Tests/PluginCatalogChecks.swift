@@ -4,7 +4,9 @@ import Foundation
 struct PluginCatalogChecks {
     static func main() {
         precondition(WatchPluginEntry.current.map(\.title) == [
+            "Commands",
             "DataSync",
+            "Ditto",
             "Everywhere Comms",
             "GoTenna",
             "Sensor Manager",

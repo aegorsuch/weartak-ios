@@ -2,6 +2,15 @@ import Combine
 import Foundation
 import Network
 
+private enum DittoPDLSettingsFailure: LocalizedError {
+    case tooLarge
+    var errorDescription: String? {
+        switch self {
+        case .tooLarge: return "The Ditto PDL exceeds the 20,000-byte limit."
+        }
+    }
+}
+
 enum DashboardMetric: String, CaseIterable, Identifiable {
     case exertion = "Exertion"
     case heartRate = "Heart Rate"
@@ -17,6 +26,7 @@ enum DashboardMetric: String, CaseIterable, Identifiable {
         case .mgrs: return "square.grid.3x3"
         }
     }
+
     var isCoordinate: Bool { self == .latLon || self == .mgrs }
 }
 
@@ -112,6 +122,10 @@ final class AppSettings: ObservableObject {
         static let hiddenMapRoles = "WearTAK.hiddenMapRoles"
         static let watchLabel = "WearTAK.watchLabel"
         static let callSign = "WearTAK.callSign"
+        static let commandsEnabled = "WearTAK.commandsEnabled"
+        static let commandSenderUIDs = "WearTAK.commandSenderUIDs"
+        static let dittoEnabled = "WearTAK.dittoEnabled"
+        static let dittoIdentitySource = "WearTAK.dittoIdentitySource"
         static let teamColor = "WearTAK.teamColor"
         static let roleGroup = "WearTAK.roleGroup"
         static let role = "WearTAK.role"
@@ -172,6 +186,7 @@ final class AppSettings: ObservableObject {
     static let bloodhoundProximityIntensityOptions = ["Single Burst", "Triple Burst", "Until In Position"]
 
     private let defaults: UserDefaults
+    private let dittoPDLStore = SecurePDLStore(service: "com.aegorsuch.weartak.watch.ditto")
     private var developerUnlockTaps = 0
 
     @Published var developerMode: Bool {
@@ -196,6 +211,27 @@ final class AppSettings: ObservableObject {
 
     func resetVersionTaps() {
         developerUnlockTaps = 0
+    }
+
+    func storeCommandSenderUIDs(_ text: String) {
+        commandSenderUIDs = ChatCommandAuthorizer.parseAllowList(text)
+        defaults.set(commandSenderUIDs, forKey: Keys.commandSenderUIDs)
+    }
+
+    func storeDittoCustomPDL(_ text: String) throws {
+        let pdl = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard pdl.utf8.count <= DittoBridgeConfiguration.maximumPDLBytes else {
+            throw DittoPDLSettingsFailure.tooLarge
+        }
+        if pdl.isEmpty {
+            try dittoPDLStore.delete()
+            dittoCustomPDL = nil
+        } else {
+            _ = try DittoPDLParser.parse(pdl)
+            try dittoPDLStore.write(pdl)
+            dittoCustomPDL = pdl
+        }
+        dittoKeychainError = nil
     }
 
     @Published var dashboardMetric: DashboardMetric {
@@ -227,6 +263,23 @@ final class AppSettings: ObservableObject {
     @Published var callSign: String {
         didSet { defaults.set(callSign, forKey: Keys.callSign) }
     }
+
+    @Published var commandsEnabled: Bool {
+        didSet { defaults.set(commandsEnabled, forKey: Keys.commandsEnabled) }
+    }
+
+    @Published private(set) var commandSenderUIDs: [String]
+
+    @Published var dittoEnabled: Bool {
+        didSet { defaults.set(dittoEnabled, forKey: Keys.dittoEnabled) }
+    }
+
+    @Published var dittoIdentitySource: DittoIdentitySource {
+        didSet { defaults.set(dittoIdentitySource.rawValue, forKey: Keys.dittoIdentitySource) }
+    }
+
+    @Published private(set) var dittoCustomPDL: String?
+    @Published private(set) var dittoKeychainError: String?
 
     @Published var teamColor: TeamColor {
         didSet { defaults.set(teamColor.rawValue, forKey: Keys.teamColor) }
@@ -559,6 +612,19 @@ final class AppSettings: ObservableObject {
         constantReportingInterval = defaults.object(forKey: Keys.constantReportingInterval) as? Int ?? 60
         watchLabel = defaults.string(forKey: Keys.watchLabel) ?? "WearTAK Apple Watch"
         callSign = defaults.string(forKey: Keys.callSign) ?? ""
+        commandsEnabled = defaults.bool(forKey: Keys.commandsEnabled)
+        commandSenderUIDs = ChatCommandAuthorizer.parseAllowList(
+            (defaults.stringArray(forKey: Keys.commandSenderUIDs) ?? []).joined(separator: ","))
+        dittoEnabled = defaults.bool(forKey: Keys.dittoEnabled)
+        dittoIdentitySource = DittoIdentitySource(
+            rawValue: defaults.string(forKey: Keys.dittoIdentitySource) ?? "") ?? .community
+        do {
+            dittoCustomPDL = try dittoPDLStore.read()
+            dittoKeychainError = nil
+        } catch {
+            dittoCustomPDL = nil
+            dittoKeychainError = error.localizedDescription
+        }
         teamColor = TeamColor(rawValue: defaults.string(forKey: Keys.teamColor) ?? "White") ?? .white
         roleGroup = defaults.string(forKey: Keys.roleGroup).flatMap(UserRoleGroup.init(rawValue:))
         role = defaults.string(forKey: Keys.role) ?? ""

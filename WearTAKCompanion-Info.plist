@@ -11,12 +11,18 @@
 			<string>com.aegorsuch.weartak.garmin</string>
 		</dict>
 	</array>
+	<key>DITTO_COMMUNITY_PDL</key>
+	<string>$(DITTO_COMMUNITY_PDL)</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array><string>gcm-ciq</string></array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>WearTAK Companion communicates with the Garmin watch you authorize to relay TAK messages.</string>
+	<string>WearTAK Companion communicates with nearby Ditto peers and the Garmin watch you authorize to relay TAK messages.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>WearTAK Companion communicates with your authorized Garmin watch.</string>
+	<string>WearTAK Companion communicates with nearby Ditto peers and your authorized Garmin watch.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http-alt._tcp.</string>
+	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Import the birth year, height, weight, sex and blood type you choose from Apple Health into your local WearTAK profile.</string>
 	<key>NSHealthUpdateUsageDescription</key>

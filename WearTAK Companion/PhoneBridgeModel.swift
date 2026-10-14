@@ -24,6 +24,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     @Published private(set) var watchRoute: WatchRoute
     @Published private(set) var configured = false
     @Published private(set) var connected = false
+    @Published private(set) var dittoStatus = DittoBridgeStatus(enabled: false, source: .community,
+        state: .off, detail: "Ditto sync is off.")
     @Published private(set) var mapCacheError: String?
     @Published private(set) var tlsDiscoveryError: String?
     @Published private(set) var garminStatus = "Choose a Garmin watch in Garmin Connect."
@@ -89,12 +91,15 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     // An active phone location session keeps Companion running, so server sessions stay up while it reports.
     private var canRelay: Bool { active || backgroundTask != .invalid || reporter.isRunning }
     private let reporter: PhoneLocationReporter
+    private let dittoRuntime: DittoPeerRuntime
     private var watchIdentity: Result<WatchReportingIdentity, WatchReportingIdentity.Failure> = .failure(.missing)
     private var lastPhoneReportAt: Date?
     private var phoneReportsByServer: [UUID: Date] = [:]
     private var latestPhoneFix: PhoneLocationFix?
     private var phoneInterval = PhoneReportingPolicy.minimumInterval
     private var phoneSendInFlight = false
+    private var phoneDittoTrackInFlight = false
+    private var lastPhoneDittoTrackAt: Date?
     private var evaluatingReporting = false
     private var requestedWhenInUse = false
     private var completedMessages: [UUID: Set<UUID>] = [:]
@@ -132,8 +137,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         developerMode = defaults.bool(forKey: Self.developerModeKey)
         adminLockEnabled = defaults.bool(forKey: Self.adminLockKey)
         reporter = PhoneLocationReporter(defaults: defaults)
+        dittoRuntime = DittoPeerRuntime(defaults: defaults,
+            communityPDL: Bundle.main.object(forInfoDictionaryKey: "DITTO_COMMUNITY_PDL") as? String,
+            pdlStore: SecurePDLStore(service: "com.aegorsuch.weartak.ditto"))
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
+        dittoRuntime.onStatusChange = { [weak self] status in
+            guard let self else { return }
+            self.dittoStatus = status
+            self.publishState()
+        }
         do {
             let url = try GarminDeliveryLedger.storageURL()
             if FileManager.default.fileExists(atPath: url.path) {
@@ -169,6 +182,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             self?.reportingLogger.error("Phone GPS: \(message, privacy: .public)")
         }
         active = UIApplication.shared.applicationState == .active
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = await self.dittoRuntime.restore(isForeground: self.active)
+        }
         if let data = defaults.data(forKey: Self.mapStorageKey) {
             do {
                 mapCache = try JSONDecoder().decode(CompanionMapCache.self, from: data)
@@ -348,7 +365,14 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     func setActive(_ active: Bool) {
+        let foregroundChanged = self.active != active
         self.active = active
+        if foregroundChanged {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                _ = await self.dittoRuntime.setForeground(active)
+            }
+        }
         if !active { mapCacheWrites.flush() }
         if active {
             endBackgroundRefresh()
@@ -673,7 +697,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                    sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary,
                    phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
                    sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason,
-                   remoteAlertSourceIDs: Array(connectedAlertSourceIDs))
+                   remoteAlertSourceIDs: Array(connectedAlertSourceIDs), dittoStatus: dittoStatus)
     }
 
     /// Non-nil while Companion is backgrounded without phone location reporting: iOS then only grants short
@@ -781,6 +805,17 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         if reporter.isRunning != wasRunning { synchronize() }
     }
 
+    /// Phone GPS reporting is the watch identity's position source, so it also feeds Ditto `track`.
+    private func publishPhoneDittoTrack(_ xml: String, interval: TimeInterval) {
+        guard watchRoute == .apple, dittoRuntime.status.state == .syncing, !phoneDittoTrackInFlight,
+              lastPhoneDittoTrackAt.map({ Date().timeIntervalSince($0) >= interval }) ?? true else { return }
+        phoneDittoTrackInFlight = true
+        Task {
+            defer { self.phoneDittoTrackInFlight = false }
+            if await self.dittoRuntime.publishTrack(pliXML: xml) { self.lastPhoneDittoTrackAt = Date() }
+        }
+    }
+
     private func reportPhoneFix(_ fix: PhoneLocationFix) {
         guard reporter.isRunning, case .success(let identity) = watchIdentity else { return }
         latestPhoneFix = fix
@@ -794,18 +829,19 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         phoneInterval = interval
         phoneReporting.interval = interval
         guard !phoneSendInFlight, PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt, interval: interval) else { return }
-        let ready = readyOutputs()
-        guard !ready.isEmpty else {
-            updatePhoneReportingState(String(localized: "Waiting for TAK server connection", table: "PhoneBridgeStatus"),
-                detail: String(localized: "No enabled TAK server is connected; Companion retries automatically.", table: "PhoneBridgeStatus"))
-            return
-        }
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let biometrics = watchRoute == .garmin ? garminBiometrics :
             WatchBiometrics.decode(contextValue: WCSession.default.receivedApplicationContext[WatchBiometrics.contextKey])
         let xml = PhonePLI.event(identity: identity, fix: fix, interval: interval, appVersion: version,
                                  osVersion: "iOS \(UIDevice.current.systemVersion)",
                                  biometrics: biometrics ?? WatchBiometrics())
+        publishPhoneDittoTrack(xml, interval: interval)
+        let ready = readyOutputs()
+        guard !ready.isEmpty else {
+            updatePhoneReportingState(String(localized: "Waiting for TAK server connection", table: "PhoneBridgeStatus"),
+                detail: String(localized: "No enabled TAK server is connected; Companion retries automatically.", table: "PhoneBridgeStatus"))
+            return
+        }
         phoneSendInFlight = true
         Task {
             defer {
@@ -1049,10 +1085,34 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
     }
 
+    /// Publishes the watch's own PLI to Ditto `track`. Phone GPS reporting publishes its own PLI instead, so a
+    /// watch fix is acknowledged without overwriting it.
+    private func dittoTrackReply(to message: BridgeWire.Message, xml: String) async -> BridgeWire.Message {
+        let publishedIdentity = try? WatchReportingIdentity.decode(
+            contextValue: WCSession.default.receivedApplicationContext[WatchReportingIdentity.contextKey])
+        // Ditto runs on every watch TAK route, so this checks the published UID, not Companion relay selection.
+        guard let uid = publishedIdentity?.uid, PhonePLI.isSelfPLI(xml, uid: uid) else {
+            return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: false,
+                detail: "Ditto accepts only this watch's own position.", dittoStatus: dittoRuntime.status)
+        }
+        let published = reporter.isRunning ? true : await dittoRuntime.publishTrack(pliXML: xml)
+        return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: published,
+            dittoStatus: dittoRuntime.status)
+    }
+
     private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
         if message.kind == .hello {
+            if let config = message.dittoConfig { _ = await dittoRuntime.apply(config) }
             chatBuffer.prune(enabledServerIDs: enabledSourceIDs)
             return try chatBuffer.filling(snapshot(id: message.id))
+        }
+        if message.kind == .dittoConfig, let config = message.dittoConfig {
+            let current = await dittoRuntime.apply(config)
+            return BridgeWire.Message(kind: .acknowledgement, id: message.id,
+                ready: current.state != .failed, detail: current.detail, dittoStatus: current)
+        }
+        if message.kind == .dittoTrack, let xml = message.xml {
+            return await dittoTrackReply(to: message, xml: xml)
         }
         if message.kind == .sitxConfig, let config = message.sitxConfig {
             var released: SitxRelayConfig?
@@ -1212,6 +1272,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         if let reason = relayPauseReason { context["WearTAKCompanion.relayPaused"] = reason }
         do {
             context[SitxSettingsSnapshot.contextKey] = try JSONEncoder().encode(sitx.settingsSnapshot)
+            context[DittoBridgeStatus.contextKey] = try JSONEncoder().encode(dittoStatus)
             try session.updateApplicationContext(context)
             watchSetupError = nil
         } catch {

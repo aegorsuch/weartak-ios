@@ -51,6 +51,44 @@ struct BridgeProtocolChecks {
         let removedReply = try BridgeWire.Message.decode(
             BridgeWire.Message(kind: .status, sitxSettings: removedSitx).encoded())
         precondition(removedReply.sitxSettings == removedSitx)
+        let customPDL = "encoded-custom-pdl"
+        let dittoConfig = DittoBridgeConfiguration(enabled: true, source: .custom, customPDL: customPDL)
+        let decodedDittoConfig = try BridgeWire.Message.decode(
+            BridgeWire.Message(kind: .dittoConfig, dittoConfig: dittoConfig).encoded())
+        precondition(decodedDittoConfig.dittoConfig == dittoConfig)
+        let dittoStatus = DittoBridgeStatus(enabled: true, source: .custom, state: .syncing,
+            detail: "Sync enabled while Companion is foregrounded.")
+        let encodedDittoStatus = try BridgeWire.Message(kind: .status, dittoStatus: dittoStatus).encoded()
+        let decodedDittoStatus = try BridgeWire.Message.decode(encodedDittoStatus)
+        precondition(decodedDittoStatus.dittoStatus == dittoStatus)
+        precondition(!String(decoding: encodedDittoStatus, as: UTF8.self).contains(customPDL))
+        #if canImport(Compression)
+        let pdlFixture = "eJw1y0EKgDAMBdG7_HUKtXQhvYJLTxBtwFKpYIIg4t1FwVk-mAsHUiAUQ8I4gMBIMFFzmY0nVgFBf9OFd8muygnCu3y6llmairOtSgNBkGLnQ4yx92_3AyLgHk4"
+        let parsedPDL = try DittoPDLParser.parse(pdlFixture, now: Date(timeIntervalSince1970: 1_700_000_000))
+        precondition(parsedPDL.appID == "test-database" && parsedPDL.sharedKey == "test-shared-key")
+        precondition(parsedPDL.licenseToken == "test-license-token")
+        do {
+            _ = try DittoPDLParser.parse(
+                "eJw1y0EKgDAMBMC_7DmF6rFf8OgLol2wVCqYIIj4d1HwOjAXDqReUBwJ4wCBIsFpHrK6TmqEwH6zRXfmUHlC8JZP1zKzGYNvlQ0CInUxxvsBG4EchA",
+                now: Date(timeIntervalSince1970: 1_700_000_000))
+            fatalError("Expired Ditto PDL accepted")
+        } catch DittoPDLError.expired {}
+        do {
+            _ = try DittoPDLParser.parse("not-a-pdl")
+            fatalError("Invalid Ditto PDL accepted")
+        } catch DittoPDLError.invalidBase64 {}
+        #endif
+        do {
+            _ = try BridgeWire.Message.decode(
+                BridgeWire.Message(kind: .status, dittoConfig: dittoConfig).encoded())
+            fatalError("Ditto credentials accepted in a phone-to-watch status")
+        } catch BridgeWire.Failure.invalidDittoConfig {}
+        do {
+            _ = try BridgeWire.Message.decode(
+                BridgeWire.Message(kind: .dittoConfig,
+                    dittoConfig: DittoBridgeConfiguration(enabled: false, source: .custom, customPDL: " ")).encoded())
+            fatalError("Whitespace-only Ditto PDL accepted")
+        } catch BridgeWire.Failure.invalidDittoConfig {}
         let removeSitx = SitxRelayConfig(enabled: false, host: "", flowTag: "", removeConnection: true)
         let removal = try BridgeWire.Message.decode(
             BridgeWire.Message(kind: .sitxConfig, sitxConfig: removeSitx).encoded())

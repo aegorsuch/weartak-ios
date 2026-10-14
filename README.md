@@ -989,6 +989,36 @@ Sensor Manager is also labeled “Unfunded Request” and has a saved enable/dis
 switch (off by default). Opening it shows “Unfunded Request”, “Button is
 Placeholder” and an inert Scan button; no scanning or pairing is performed.
 
+### Commands and Ditto
+
+Commands are off until enabled in Settings → Tool Preferences → Plugins →
+Commands. Save exact sender CoT UIDs in the allow-list; allowed direct-chat
+commands can update callsign, team, role and profile metrics. Unsupported
+`enrollserver` and `loadprofile` requests receive an explicit rejection.
+Unknown command names are rejected, while ordinary chat remains unchanged.
+UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
+impersonate an allowed sender.
+
+Ditto is an iPhone Companion service; its SDK is linked only to the iOS target.
+It is off by default and uses a locally provisioned Community PDL unless Custom
+is selected. Before building, create the ignored file
+`BuildConfiguration/Companion.local.xcconfig` with
+`DITTO_COMMUNITY_PDL = <Community PDL>`; this value is embedded in the iPhone
+app's Info.plist and must not be committed. Custom PDLs can be saved from a
+direct watch chat message using its press-and-hold action or entered in the
+Ditto settings. They are validated and stored in each device's Keychain, then
+the watch sends the selected identity to the iPhone over WatchConnectivity.
+Status messages never include the PDL. Companion subscribes to the `track`
+collection and reports startup, syncing, pause and failure states to the watch.
+While syncing, Companion also upserts this watch's position into `track` using
+WearTAK-Tracker's document format (`_id` = watch UID, fields `a`–`w`), at the
+watch's PLI reporting interval and even when no TAK server is connected. When
+phone GPS reporting is on, the phone-GPS PLI is published; otherwise the watch
+sends its own fix to Companion for publishing, on any TAK route.
+Ditto is stopped when Companion backgrounds; iOS does not guarantee continuous
+background peer-to-peer sync. Nearby-peer discovery and record exchange require
+testing on physical devices.
+
 Companion performs the requests on the watch's behalf. TAK Server uses the
 client certificate on HTTPS port `8443` (`GET /Marti/api/missions`,
 `PUT`/`DELETE /Marti/api/missions/<name>/subscription?uid=<watch UID>`,
@@ -1341,6 +1371,17 @@ swiftc -parse-as-library Shared\OfflineOutbox.swift Tests\OfflineOutboxChecks.sw
 if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-offline-checks.exe" }
 ```
 
+Command parsing/authorization, plugin ordering and Ditto `track` document checks run on Windows:
+
+```powershell
+swiftc -swift-version 5 -parse-as-library Shared\ChatCommands.swift Tests\ChatCommandChecks.swift -o "$env:TEMP\weartak-command-checks.exe"
+if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-command-checks.exe" }
+swiftc -swift-version 5 -parse-as-library 'WearTAK Watch App\PluginCatalog.swift' Tests\PluginCatalogChecks.swift -o "$env:TEMP\weartak-plugin-checks.exe"
+if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-plugin-checks.exe" }
+swiftc -swift-version 5 -parse-as-library Shared\DittoTrack.swift Tests\DittoTrackChecks.swift -o "$env:TEMP\weartak-ditto-track-checks.exe"
+if ($LASTEXITCODE -eq 0) { & "$env:TEMP\weartak-ditto-track-checks.exe" }
+```
+
 The shared device-authorization retry checks also run on Windows. They cover
 the exact backoff, retry budget, server polling minimum, error classification,
 and visible retry status:
@@ -1421,6 +1462,7 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/CompanionEndpoint.swift \
   Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
+  Shared/DittoPDL.swift \
   Tests/BridgeProtocolChecks.swift -o /tmp/weartak-bridge-checks
 /tmp/weartak-bridge-checks
 ```
