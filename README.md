@@ -290,8 +290,10 @@ Position reports expire, and physiological values in them are marked
 unavailable, after two reporting intervals plus 15 seconds. The BATDOK
 preference controls whether PLI includes an `_atmist_` vital-sign element and
 the `<biometrics>` block; it defaults on to match Wear OS.
-Network Preferences can be locked from the developer-only Beta Features page;
-the lock blocks its Settings and dashboard shortcuts.
+Network Preferences can be locked from Admin Preferences. Admin Preferences and
+Developer Preferences always appear in Settings but stay disabled until
+developer mode is unlocked; the lock blocks Network Preferences' Settings and
+dashboard shortcuts.
 
 The watch Info.plist includes both HealthKit read and update purpose strings
 required by App Store validation. The current monitor requests read access only

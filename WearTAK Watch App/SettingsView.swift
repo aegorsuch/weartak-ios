@@ -58,17 +58,19 @@ struct SettingsView: View {
             NavigationLink(String(localized: "Tool Preferences", table: "WatchSettings")) {
                 ToolPreferencesView(model: model, settings: settings)
             }
+            NavigationLink(String(localized: "Admin Preferences", table: "WatchSettings")) {
+                AdminPreferencesView(settings: settings)
+            }
+            .disabled(!settings.developerMode)
+            NavigationLink(String(localized: "Developer Preferences", table: "WatchSettings")) {
+                DeveloperPreferencesView(settings: settings)
+            }
+            .disabled(!settings.developerMode)
             Button {
                 showDeveloperModeEnabled = settings.registerVersionTap()
             } label: {
                 Text(String(localized: "Version \(versionLabel)", table: "WatchSettings"))
                     .foregroundStyle(.secondary)
-            }
-            if settings.developerMode {
-                Toggle(String(localized: "Developer mode", table: "WatchSettings"), isOn: $settings.developerMode)
-                NavigationLink(String(localized: "Beta Features", table: "WatchSettings")) {
-                    BetaFeaturesView(settings: settings)
-                }
             }
         }
         .navigationTitle(String(localized: "Settings", table: "WatchSettings"))
@@ -79,15 +81,26 @@ struct SettingsView: View {
     }
 }
 
-private struct BetaFeaturesView: View {
+private struct AdminPreferencesView: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
         List {
-            Toggle(String(localized: "Lock Network Preferences", table: "WatchSettings"),
+            Toggle(String(localized: "Network Preferences Lock", table: "WatchSettings"),
                    isOn: $settings.networkPreferencesLocked)
         }
-        .navigationTitle(String(localized: "Beta Features", table: "WatchSettings"))
+        .navigationTitle(String(localized: "Admin Preferences", table: "WatchSettings"))
+    }
+}
+
+private struct DeveloperPreferencesView: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        List {
+            Toggle(String(localized: "Developer mode", table: "WatchSettings"), isOn: $settings.developerMode)
+        }
+        .navigationTitle(String(localized: "Developer Preferences", table: "WatchSettings"))
     }
 }
 
