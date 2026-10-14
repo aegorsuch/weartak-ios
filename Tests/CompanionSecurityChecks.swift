@@ -60,7 +60,7 @@ struct CompanionSecurityChecks {
             fatalError("Wrong .p12 password accepted")
         } catch CompanionFailure.message {}
         try checkServerTrust(in: directory, client: leaf)
-        try checkEnrollmentCAResponses(in: directory)
+        try checkEnrollmentCAResponses(in: directory, key: key)
         try await checkCertificateInspection(in: directory)
         let diagnostics = TLSConnectionDiagnostics()
         diagnostics.record(CompanionFailure.message("Hostname mismatch"))
@@ -88,7 +88,7 @@ struct CompanionSecurityChecks {
         print("PASS: CSR, identity, expiry, server trust, hostname rejection, explicit CA and TLS diagnostics checks")
     }
 
-    static func checkEnrollmentCAResponses(in directory: URL) throws {
+    static func checkEnrollmentCAResponses(in directory: URL, key: SecKey) throws {
         let leaf = try String(contentsOf: directory.appendingPathComponent("client.pem"), encoding: .utf8)
         let ca = try String(contentsOf: directory.appendingPathComponent("ca.pem"), encoding: .utf8)
         let otherCA = try String(contentsOf: directory.appendingPathComponent("other-ca.pem"), encoding: .utf8)
@@ -111,10 +111,76 @@ struct CompanionSecurityChecks {
             _ = try chain(["signedCert": leaf, "ca": "invalid certificate"])
             fatalError("Malformed OpenTAKServer CA accepted")
         } catch {}
-        do {
-            _ = try EnrollmentClient.signingChain(from: Data(#"{"signedCert":"invalid","ca":42}"#.utf8))
-            fatalError("Non-string enrollment CA accepted")
-        } catch {}
+        for name in ["ca", "ca0", "ca1", "ca10"] {
+            for value: Any in [NSNull(), 42, true, ["nested"], ["value": "nested"]] {
+                let data = try JSONSerialization.data(withJSONObject: ["signedCert": leaf, name: value])
+                do {
+                    _ = try EnrollmentClient.signingChain(from: data)
+                    fatalError("Non-string enrollment CA accepted")
+                } catch is DecodingError {}
+            }
+            do {
+                _ = try chain(["signedCert": leaf, name: "invalid certificate"])
+                fatalError("Malformed enrollment CA accepted")
+            } catch CompanionFailure.message {}
+        }
+
+        let endpoint = "enrollment-ca-check-\(UUID().uuidString)"
+        let previous = try CertificateStore.read(endpoint: endpoint)
+        precondition(previous == nil,
+                     "Fixture endpoint must not replace an existing identity")
+        let certificateQuery: [CFString: Any] = [
+            kSecClass: kSecClassCertificate,
+            kSecMatchItemList: [leafCertificate(leafData)] as CFArray
+        ]
+        let certificateStatus = SecItemCopyMatching(certificateQuery as CFDictionary, nil)
+        guard certificateStatus == errSecSuccess || certificateStatus == errSecItemNotFound else {
+            throw CompanionFailure.message("Fixture certificate lookup failed (\(certificateStatus)).")
+        }
+        let stored = try CertificateStore.enrolled(key: key, chain: openTAKChain)
+        guard let keyTag = stored.keyTag else { fatalError("Enrolled fixture has no key tag") }
+        defer {
+            do {
+                try CertificateStore.remove(endpoint: endpoint)
+                let remaining = try CertificateStore.read(endpoint: endpoint)
+                precondition(remaining == nil, "Fixture identity cleanup failed")
+            } catch {
+                fatalError("Fixture identity cleanup failed: \(error)")
+            }
+            let keyStatus = SecItemDelete([
+                kSecClass: kSecClassKey, kSecAttrApplicationTag: keyTag
+            ] as CFDictionary)
+            precondition(keyStatus == errSecSuccess || keyStatus == errSecItemNotFound,
+                         "Fixture private-key cleanup failed (\(keyStatus))")
+            if certificateStatus == errSecItemNotFound {
+                let status = SecItemDelete(certificateQuery as CFDictionary)
+                precondition(status == errSecSuccess || status == errSecItemNotFound,
+                             "Fixture certificate cleanup failed (\(status))")
+            }
+        }
+        try CertificateStore.save(stored, endpoint: endpoint)
+        guard let reloaded = try CertificateStore.read(endpoint: endpoint) else {
+            fatalError("Enrolled identity was not persisted")
+        }
+        precondition(reloaded.chain == [leafData, caData])
+        let resolved = try CertificateStore.resolve(reloaded)
+        precondition(resolved.certificates.map { SecCertificateCopyData($0) as Data } == openTAKChain)
+        let serverData = try CertificateStore.decodeCertificate(
+            String(contentsOf: directory.appendingPathComponent("server.pem"), encoding: .utf8))
+        var trust: SecTrust?
+        precondition(SecTrustCreateWithCertificates(leafCertificate(serverData),
+            SecPolicyCreateSSL(true, "fixture.example" as CFString), &trust) == errSecSuccess)
+        guard let trust else { fatalError("Unable to create enrolled-CA fixture trust") }
+        SecTrustSetNetworkFetchAllowed(trust, false)
+        try CertificateStore.evaluateServerTrust(trust, host: "fixture.example",
+                                                 certificates: resolved.certificates, trustedCA: nil)
+    }
+
+    private static func leafCertificate(_ data: Data) -> SecCertificate {
+        guard let certificate = SecCertificateCreateWithData(nil, data as CFData) else {
+            fatalError("Invalid fixture certificate")
+        }
+        return certificate
     }
 
     static func checkServerTrust(in directory: URL, client: SecCertificate) throws {

@@ -529,8 +529,20 @@ identities and import passwords are stored in endpoint-scoped Keychain entries.
 Enrollment passwords are not persisted; renew by enrolling again. The UI
 identifies whether an HTTP enrollment failure came from configuration or
 certificate signing and shows the endpoint without query parameters or credentials.
-Signing responses accept the required `signedCert` and optional `ca` or numbered
-`caN` certificates, with the unnumbered CA first in the stored chain.
+The Companion's JSON `/Marti/api/tls/signClient/v2` signing response accepts the
+required `signedCert` and optional CA fields matching `ca[0-9]*`: OpenTAKServer's
+unnumbered `ca` comes first, followed by `ca0`, `ca1`, `ca2`, `ca10`, etc. in
+numeric order (including indices larger than a machine integer). Non-text CA
+values and invalid certificate data reject the entire response, not just that CA.
+The leaf and all returned CAs are retained in the endpoint's Keychain identity,
+restored for the client chain, and used to supplement system roots for server
+trust; explicit server-CA restrictions and hostname verification remain enforced.
+There is no XML signing-response parser: XML signing responses, including duplicate
+CA fields, are rejected as non-JSON. Enrollment's XML configuration parser reads
+subject `nameEntry` attributes only, not CA certificates. The watch and Shared
+bridge do not enroll or import TAK identities; Companion owns enrollment and
+the watch relays through it. No new watch or XML enrollment flow is introduced
+for WEARTAK-101/102/103.
 HTTP 401 means the endpoint rejected enrollment authorization; it is separate
 from CoT stream TLS identity validation.
 The UI reports certificate expiration and a renewal warning within three days.
@@ -1577,13 +1589,32 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 /tmp/weartak-phone-checks
 ```
 
+Portable enrollment response regressions exercise the same Foundation-only decoder
+used by Companion, without Security, SwiftASN1, Keychain, or Xcode:
+
+```powershell
+swiftc -swift-version 5 -parse-as-library 'WearTAK Companion\EnrollmentSigningResponse.swift' Tests\EnrollmentSigningResponseChecks.swift -o .\enrollment-signing-checks.exe
+.\enrollment-signing-checks.exe
+Remove-Item .\enrollment-signing-checks.exe, .\enrollment-signing-checks.lib, .\enrollment-signing-checks.exp -ErrorAction SilentlyContinue
+```
+
+These cover unnumbered/numbered/mixed/absent CAs, numeric and leading-zero ordering,
+large indices, ignored non-CA keys, non-text CA rejection with a valid text leaf,
+and rejection of XML signing responses (including duplicate `ca`/`ca0` fields).
+They do not validate DER certificates, Apple trust evaluation, or Keychain storage.
+
 `Tests/CompanionSecurityChecks.swift` also checks generated CSR signatures,
 certificate/key matching, expiry, `.p12` import/password handling, private-CA
 server trust, hostname rejection, explicit CA restrictions, invalid CA data,
 and endpoint/error diagnostics with temporary test identities. It requires the resolved SwiftASN1 module linked
-alongside CertificateStore, EnrollmentClient, TAKHTTPS, TAKServerConnection and
+alongside CertificateStore, EnrollmentClient, EnrollmentSigningResponse, TAKHTTPS, TAKServerConnection and
 its Shared dependencies (CompanionEndpoint, CompanionServer, BridgeWire,
-CompanionMapSnapshot, TAKChannelModels and TAKMissionModels).
+CompanionMapSnapshot, TAKChannelModels and TAKMissionModels). Enrollment-specific
+checks use real certificates for `ca`/`caN` chain ordering and malformed CA
+rejection; an OpenTAKServer-style response is installed, saved/read through
+Keychain, resolved into the client certificate chain, and used to trust a
+private-CA server without an explicit CA override. These Apple-framework checks
+require macOS and are separate from the portable parser checks.
 It also checks exact DNS SAN extraction, no Common Name
 fallback, inspection trust/expiry rejection, and a local TLS listener proving
 that inspection returns names without completing TLS; cancellation and repeated
