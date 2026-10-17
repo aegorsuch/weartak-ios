@@ -115,6 +115,45 @@ should translate (Injury is Lesión in Spanish); custom categories stay unchange
 Check admin controls and reporting behavior on real paired devices.
 Simulator demo alerts are excluded from release builds.
 
+### CI and release archives
+
+GitHub Actions runs the portable Garmin relay, route, and delivery-ledger checks
+and builds the Companion with its embedded Watch app for the iOS Simulator on
+pushes to `main`/`develop` and pull requests. The simulator `.app` is retained
+as a short-lived CI artifact; it is not a device-installable release.
+
+GitLab CI runs the same checks and simulator build on a macOS runner tagged
+`macos`. On a version tag such as `v5.8.4`, it archives the `WearTAK App Store`
+scheme, signs and exports the app, and can upload the IPA to App Store Connect
+for TestFlight processing. The upload job is manual, so CI validation works
+before release credentials are configured; start the job from the tag pipeline
+after adding the variables below. The upload does **not** automatically submit
+a new version for App Review or release it to the public App Store. The signed
+archive and IPA are retained as CI artifacts for 30 days.
+
+Configure these protected GitLab CI/CD variables before using a release tag:
+
+- `APPLE_DISTRIBUTION_CERTIFICATE_P12`: **File** variable containing the
+  Apple Distribution `.p12` certificate.
+- `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD`: masked variable for the `.p12`
+  password.
+- `APPLE_CONTAINER_APP_STORE_PROFILE`: **File** variable containing the
+  `WearTAK Container App Store` provisioning profile.
+- `APPLE_WATCH_APP_STORE_PROFILE`: **File** variable containing the
+  `WearTAK App Store` provisioning profile.
+- `APP_STORE_CONNECT_API_PRIVATE_KEY`: **File** variable containing the
+  App Store Connect API `.p8` key.
+- `APP_STORE_CONNECT_API_KEY_ID`: App Store Connect API key ID.
+- `APP_STORE_CONNECT_API_ISSUER_ID`: App Store Connect issuer UUID.
+
+Protect version tags so only authorized maintainers can trigger signed
+releases. CI creates a per-run temporary workspace and keychain, validates and
+installs both profiles, and removes the temporary signing material at job exit.
+The App Store Connect API key needs permission to upload builds for the WearTAK
+app. The release tag supplies the marketing version; the GitLab pipeline IID
+supplies the build number, so each upload gets a new build number. Ensure that
+IID is greater than the latest build already uploaded to App Store Connect.
+
 ### Developers: build from source onto a watch
 
 This path requires a Mac, Xcode with the watchOS 26.2 SDK or newer, and an Apple
@@ -522,6 +561,63 @@ Portable delivery-ledger checks can be run with Swift:
 `swiftc Shared/GarminDeliveryLedger.swift Tests/GarminDeliveryLedgerTests.swift -o garmin-ledger-tests`,
 then execute `garmin-ledger-tests`. The full Companion/ConnectIQ SDK build still
 requires Xcode on macOS.
+
+### Garmin route transport
+
+Route-capable Garmin watches advertise `routeVersion: 1` in `relay_hello` and
+`entity_sync_request`; Companion advertises version 1 in `relay_status`. Older
+watches retain their existing entity/chat behavior and receive no route traffic.
+Entity snapshot requests accept `limit` values from 1 through 999 for Garmin's
+local retention-limit compatibility; replies still contain at most 50 entities.
+Companion normalizes TAK route CoT (`b-m-r`, including subtypes) from live server
+streams and subscribed Data Sync mission `/cot` responses. Ordered direct
+`detail/link` `point="lat,lon[,hae]"` vertices become route points; the event's
+anchor point is not substituted for route geometry. Altitude is not transported.
+The `contact` callsign names a route, link callsigns/names label points, and a
+`p-p` link optionally identifies its sender.
+
+Wire messages use the existing `{msgType, payload}` Connect IQ envelope:
+
+- `route`: `{routeVersion:1, serverId, uid, name, points:[{lat,lon,name?}],
+  missionName?, senderUid?}`.
+- `route_remove`: `{routeVersion:1, serverId, uid}`.
+- `routes_reset`: `{routeVersion:1}`, followed by the complete retained route
+  set after capability negotiation and each requested entity snapshot.
+- `routes_error`: `{routeVersion:1, error}`, with at most 256 UTF-8 error bytes.
+
+Limits are **8 routes, 64 points per route, 128 retained points total**, and
+**6,000 bytes for the complete serialized JSON envelope**. Routes require at
+least two finite, in-range latitude/longitude pairs. UTF-8 text limits are 64
+bytes for `serverId`, `name`, and each point name, and 128 bytes for `uid`,
+`missionName`, and `senderUid`; controls and empty supplied strings are rejected.
+Oversize/invalid routes are rejected whole, never simplified, truncated, split
+into unreliable chunks, or reduced to their anchor. A rejected update preserves
+the previous valid route; a rejected mission refresh preserves its previous
+complete route set. Status and version-1 watch errors explain rejection without
+logging raw route data.
+
+Routes are persisted locally, keyed by server plus UID, and have no CoT-stale
+expiry timer. CoT delete events remove the matching route on that server only.
+A successful mission refresh removes missing mission routes, confirmed
+unsubscribe/deletion removes that mission's ownership, and routes still owned
+by another mission or live stream remain. Disabling/removing a server, changing
+its stream endpoint/channels, or disabling Sit(x) removes the affected routes.
+Reset/replay batches are admitted to the serial 64-message reply queue together
+or deferred in full. SDK handoff is not a watch-receipt acknowledgement: after
+send failure, queue overflow, or reconnect, request a map refresh to recover the
+authoritative route set. iPhone still does not implement synchronized
+Bloodhound coordination; local Garmin route-point tracking is watch-side.
+Apple Watch UI and its existing point-based mission model are unchanged.
+
+Portable route normalization/lifecycle/budget checks (Windows PowerShell):
+
+```powershell
+swiftc -swift-version 5 -parse-as-library Shared\GarminRoutes.swift Tests\GarminRouteChecks.swift -o .\garmin-route-checks.exe
+.\garmin-route-checks.exe
+```
+
+These checks do not validate UIKit/WatchConnectivity/Connect IQ SDK linking or
+physical iPhone/Garmin radio delivery; those still require Xcode and devices.
 
 Enrollment uses HTTPS `8446` by default; an explicit HTTPS URL port overrides
 that enrollment port, not the separately entered CoT stream port. Client

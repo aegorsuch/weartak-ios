@@ -1,0 +1,40 @@
+stages:
+  - verify
+  - publish
+
+default:
+  tags:
+    - macos
+
+variables:
+  DERIVED_DATA_PATH: "$CI_PROJECT_DIR/build/DerivedData"
+
+verify:
+  stage: verify
+  script:
+    - bash scripts/run-portable-garmin-checks.sh
+    - xcodebuild -project WearTAK.xcodeproj -scheme "WearTAK Companion" -destination "generic/platform=iOS Simulator" -derivedDataPath "$DERIVED_DATA_PATH" CODE_SIGNING_ALLOWED=NO build
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - build/DerivedData/Build/Products/Debug-iphonesimulator/WearTAK.app
+
+app_store_connect_upload:
+  stage: publish
+  needs:
+    - verify
+  resource_group: app-store-connect
+  script:
+    - bash scripts/release-app-store-connect.sh
+  artifacts:
+    when: always
+    name: "WearTAK-$CI_COMMIT_TAG-app-store-connect"
+    expire_in: 30 days
+    paths:
+      - build/app-store-connect-output.*/WearTAK*.ipa
+      - build/app-store-connect-output.*/WearTAK*.xcarchive/
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$/'
+      when: manual
+      allow_failure: true
