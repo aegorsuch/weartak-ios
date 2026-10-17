@@ -25,6 +25,19 @@ struct GarminRelayProtocolTests {
         let hello = try GarminRelayProtocol.request(envelope("relay_hello", ["protocolVersion": 1]),
             identity: nil, fix: nil, channelServers: [])
         precondition(hello.kind == .hello)
+        for limit in [50, 999] {
+            let snapshot = try GarminRelayProtocol.request(envelope("entity_sync_request", [
+                "limit": limit, "protocolVersion": 1, "routeVersion": 1
+            ]), identity: nil, fix: nil, channelServers: [])
+            precondition(snapshot.kind == .mapSnapshot)
+        }
+        for limit in [0, 1000] {
+            do {
+                _ = try GarminRelayProtocol.request(envelope("entity_sync_request", ["limit": limit]),
+                    identity: nil, fix: nil, channelServers: [])
+                fatalError("Invalid snapshot limit accepted")
+            } catch GarminRelayProtocol.Failure.invalid {}
+        }
         let events = [
             try envelope("marker", ["messageId": "marker-1", "uid": "garmin-marker-1", "type": "a-f-G-T",
                                     "lat": 38.0, "lon": -77.0, "title": "A & B"]),

@@ -113,7 +113,8 @@ enum GarminRelayProtocol {
             guard try envelope.integer("protocolVersion", range: 1...1) == 1 else { throw Failure.invalid("version") }
             return BridgeWire.Message(kind: .hello)
         case "entity_sync_request":
-            _ = try envelope.integer("limit", range: 1...maximumEntities)
+            // Watches may request their larger local retention limit; replies remain capped below.
+            _ = try envelope.integer("limit", range: 1...999)
             return BridgeWire.Message(kind: .mapSnapshot)
         case "channels_servers_request": return BridgeWire.Message(kind: .channels)
         case "channels_request", "channels_update":

@@ -128,6 +128,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var garminLedgerError: String?
     private var garminWrites = Set<UUID>()
     private var garminReceivesInFlight = 0
+    private var garminRoutes = GarminRouteStore()
+    private var garminRouteVersion: Int?
+    private var garminSitxRouteConfig: CompanionSitxSession.Config?
+    private static let garminRoutesStorageKey = "WearTAK.companion.garminRoutes"
 
     override convenience init() { self.init(defaults: .standard) }
 
@@ -142,6 +146,12 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             pdlStore: SecurePDLStore(service: "com.aegorsuch.weartak.ditto"))
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
+        garminSitxRouteConfig = sitx.config
+        if let data = defaults.data(forKey: Self.garminRoutesStorageKey), data.count <= 100_000,
+           let saved = try? JSONDecoder().decode(GarminRouteStore.self, from: data),
+           let restored = try? saved.validated() {
+            garminRoutes = restored
+        }
         dittoRuntime.onStatusChange = { [weak self] status in
             guard let self else { return }
             self.dittoStatus = status
@@ -166,6 +176,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             guard let self else { return }
             let id = SitxRelayConfig.serverID
             let wasConnected = self.serverStates[id]?.connected == true
+            if self.garminSitxRouteConfig != self.sitx.config {
+                self.garminSitxRouteConfig = self.sitx.config
+                self.sourceGenerations[id, default: 0] += 1
+                try? self.updateGarminRoutes { $0.removeServer(id.uuidString) }
+            }
             if self.sitx.isConfigured { self.serverStates[id] = state } else { self.serverStates.removeValue(forKey: id) }
             if !self.sitx.isConfigured {
                 self.mapCache.remove(sourceID: id)
@@ -214,6 +229,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             synchronize()
         } catch {
             servers = []
+            try? updateGarminRoutes { $0.retainServers(Set(enabledSourceIDs.map(\.uuidString))) }
             status = String(localized: "Unable to load server settings", table: "PhoneBridgeStatus")
         }
         if WCSession.isSupported() {
@@ -235,6 +251,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         garminChannelServers = []
         garminQueue = []
         garminSending = false
+        garminRouteVersion = nil
         garminReady = false
         garminMetricsRequestID = nil
         garminMetricsPreview = nil
@@ -266,6 +283,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         garminChannelServers = []
         garminQueue = []
         garminSending = false
+        garminRouteVersion = nil
         garminMetricsRequestID = nil
         garminMetricsPreview = nil
         garminMetricsError = nil
@@ -298,6 +316,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 self.garminGeneration = UUID()
                 self.garminQueue = []
                 self.garminSending = false
+                self.garminRouteVersion = nil
             }
             self.garminStatus = status
             self.garminReady = ready
@@ -309,6 +328,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 self.garminGeneration = UUID()
                 self.garminQueue = []
                 self.garminSending = false
+                self.garminRouteVersion = nil
                 self.garminIdentity = nil
                 self.setWatchIdentity(.failure(.watchUnavailable))
             }
@@ -337,6 +357,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         if let previous, previous.endpoint.key != server.endpoint.key {
             sessions.removeValue(forKey: server.id)?.stop()
             mapCache.remove(sourceID: server.id)
+            try updateGarminRoutes { $0.removeServer(server.id.uuidString) }
             sourceGenerations[server.id, default: 0] += 1
             try? CertificateStore.remove(endpoint: previous.endpoint.key)
         }
@@ -587,6 +608,79 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         flushGarmin()
     }
 
+    private func replayGarminRoutes() {
+        guard garminRouteVersion == GarminRoute.version, watchRoute == .garmin, garminReady else { return }
+        let messages = [GarminEnvelope("routes_reset", ["routeVersion": GarminRoute.version])] +
+            garminRoutes.routes.map { GarminEnvelope("route", $0.payload) }
+        // Admit the entire reset/replay or none; a partial reset must not erase good watch routes.
+        guard garminQueue.count + messages.count <= 64 else {
+            reportGarminRouteError("Garmin route snapshot deferred: reply queue is full. Refresh the watch map to retry.")
+            return
+        }
+        garminQueue.append(contentsOf: messages)
+        flushGarmin()
+    }
+
+    private func reportGarminRouteError(_ detail: String) {
+        garminStatus = detail
+        guard garminRouteVersion == GarminRoute.version else { return }
+        var error = detail
+        while error.utf8.count > 256 { error.removeLast() }
+        // Error text is generated locally; never echo raw server route XML or metadata.
+        enqueueGarmin(GarminEnvelope("routes_error", ["routeVersion": GarminRoute.version,
+                                                      "error": error]))
+    }
+
+    private func updateGarminRoutes(_ update: (inout GarminRouteStore) throws -> Void) throws {
+        let previous = garminRoutes.routes
+        var candidate = garminRoutes
+        try update(&candidate)
+        _ = try candidate.validated()
+        if let data = try? JSONEncoder().encode(candidate) {
+            defaults.set(data, forKey: Self.garminRoutesStorageKey)
+        }
+        garminRoutes = candidate
+        guard previous != garminRoutes.routes else { return }
+        guard garminRouteVersion == GarminRoute.version, watchRoute == .garmin, garminReady else { return }
+        var messages: [GarminEnvelope] = []
+        for route in previous where !garminRoutes.routes.contains(where: {
+            $0.serverId == route.serverId && $0.uid == route.uid
+        }) {
+            messages.append(GarminEnvelope("route_remove", route.removalPayload))
+        }
+        for route in garminRoutes.routes where !previous.contains(route) {
+            messages.append(GarminEnvelope("route", route.payload))
+        }
+        guard garminQueue.count + messages.count <= 64 else {
+            reportGarminRouteError("Garmin route update deferred: reply queue is full. Refresh the watch map to retry.")
+            return
+        }
+        garminQueue.append(contentsOf: messages)
+        flushGarmin()
+    }
+
+    private func receiveGarminRoutes(_ xml: String, sourceID: UUID) -> Bool {
+        guard enabledSourceIDs.contains(sourceID) else { return false }
+        do {
+            let events = try GarminRouteCoT.parse(Data(xml.utf8), serverId: sourceID.uuidString)
+            guard !events.isEmpty else { return false }
+            try updateGarminRoutes { store in
+                for event in events {
+                    switch event {
+                    case .route(let route): try store.upsert(route)
+                    case .remove(let uid): store.remove(serverId: sourceID.uuidString, uid: uid)
+                    }
+                }
+            }
+            return events.contains { if case .route = $0 { return true }; return false }
+        } catch {
+            // Invalid route geometry must not degrade to a misleading single map point.
+            let isRoute = xml.contains("b-m-r")
+            if isRoute { reportGarminRouteError(error.localizedDescription) }
+            return isRoute
+        }
+    }
+
     private func flushGarmin() {
         guard watchRoute == .garmin, garminReady, !garminSending, let garmin, !garminQueue.isEmpty else { return }
         do {
@@ -619,6 +713,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private func synchronize() {
         let validIDs = Set(servers.map(\.id))
         mapCache.prune(enabledServerIDs: enabledSourceIDs)
+        try? updateGarminRoutes { $0.retainServers(Set(enabledSourceIDs.map(\.uuidString))) }
         chatBuffer.prune(enabledServerIDs: enabledSourceIDs)
         saveMapCache()
         for id in Array(sessions.keys) where !validIDs.contains(id) { sessions.removeValue(forKey: id)?.stop() }
@@ -643,9 +738,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                     try await self.requestTLSApproval(serverID: server.id, isAPI: isAPI)
                 }
                 session.onChannelsChanged = { [weak self] in
-                    self?.sourceGenerations[server.id, default: 0] += 1
-                    self?.mapCache.remove(sourceID: server.id)
-                    self?.saveMapCache()
+                    guard let self else { return }
+                    self.sourceGenerations[server.id, default: 0] += 1
+                    self.mapCache.remove(sourceID: server.id)
+                    self.saveMapCache()
+                    try? self.updateGarminRoutes { $0.removeServer(server.id.uuidString) }
                 }
                 sessions[server.id] = session
             }
@@ -680,6 +777,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         try sitx.apply(config)
         serverStates[SitxRelayConfig.serverID] = sitx.isConfigured ? sitx.state : nil
         if !sitx.isConfigured { mapCache.remove(sourceID: SitxRelayConfig.serverID); saveMapCache() }
+        try updateGarminRoutes { $0.retainServers(Set(enabledSourceIDs.map(\.uuidString))) }
         publishState()
     }
 
@@ -1002,9 +1100,12 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 "ready": reply.ready == true, "detail": reply.detail ?? "",
                 "reliableDelivery": true,
                 "chatGroups": false,
+                "routeVersion": GarminRoute.version,
             ]
             if let session = request.payload["relaySession"] as? String { payload["relaySession"] = session }
             enqueueGarmin(GarminEnvelope("relay_status", payload))
+            garminRouteVersion = (try? request.integer("routeVersion", range: 1...1))
+            replayGarminRoutes()
             return
         }
         switch reply.kind {
@@ -1017,7 +1118,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 enqueueGarmin(GarminEnvelope("relay_result", payload))
             }
         case .mapSnapshot:
+            garminRouteVersion = (try? request.integer("routeVersion", range: 1...1))
+            replayGarminRoutes()
             for event in (reply.mapEvents ?? []).prefix(GarminRelayProtocol.maximumEntities) {
+                if event.header?.type.hasPrefix("b-m-r") == true { continue }
                 if let envelope = try GarminRelayProtocol.incoming(event.xml, ownUID: garminIdentity?.uid ?? "") {
                     enqueueGarmin(envelope)
                 }
@@ -1298,7 +1402,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         if event.isValid { lastMapEventReceivedAt = event.receivedAt }
         mapCache.receive(event)
         mapCacheWrites.schedule()
+        // Delete events and routes need not contain a valid anchor point, unlike entity-cache headers.
+        let isRoute = receiveGarminRoutes(xml, sourceID: sourceID)
         if watchRoute == .garmin {
+            if isRoute { return }
             guard canRelay, connected, garminReady, let envelope = try? GarminRelayProtocol.incoming(xml,
                 ownUID: garminIdentity?.uid ?? "", receivedAt: event.receivedAt) else {
                 return
@@ -1519,6 +1626,7 @@ extension PhoneBridgeModel {
                     _ = try await request(path, subscribe ? "PUT" : "DELETE", [URLQueryItem(name: "uid", value: uid)])
                     if subscribe { names.insert(name) } else { names.remove(name) }
                     setSubscribedMissions(names, for: id)
+                    try updateGarminRoutes { $0.retainMissions(serverId: id.uuidString, names: names) }
                     missionLogger.notice("Data Sync \(subscribe ? "subscribed to" : "unsubscribed from", privacy: .public) mission on \(snapshots[index].name, privacy: .public)")
                 }
                 if message.kind == .missionUpdate, id == message.serverID,
@@ -1528,6 +1636,7 @@ extension PhoneBridgeModel {
                     do {
                         _ = try await request(path, "DELETE", [URLQueryItem(name: "uid", value: removeUID),
                                                                 URLQueryItem(name: "creatorUid", value: uid)])
+                        try updateGarminRoutes { $0.removeMissionItem(serverId: id.uuidString, name: name, uid: removeUID) }
                         missionLogger.notice("Data Sync removed an item from a mission on \(snapshots[index].name, privacy: .public)")
                     } catch {
                         missionLogger.error("Data Sync item removal failed: \(error.localizedDescription, privacy: .public)")
@@ -1550,6 +1659,7 @@ extension PhoneBridgeModel {
                     missions.append(TAKMission(name: name, error: "Mission not listed by the server; keeping saved items."))
                 }
                 setSubscribedMissions(names, for: id)
+                try updateGarminRoutes { $0.retainMissions(serverId: id.uuidString, names: names) }
                 for i in missions.indices where names.contains(missions[i].name) {
                     missions[i].subscribed = true
                     guard missions[i].error == nil else { continue }
@@ -1563,20 +1673,41 @@ extension PhoneBridgeModel {
                         }
                         missions[i].canEdit = role.flatMap(TAKMissionAPI.parseCanEdit)
                     }
-                    guard budget > 0, let path = TAKMissionAPI.path(missions[i].name, "/cot") else {
+                    guard budget > 0 || watchRoute == .garmin,
+                          let path = TAKMissionAPI.path(missions[i].name, "/cot") else {
                         missions[i].error = "Watch item limit reached."
                         continue
                     }
                     do {
                         let limit = min(budget, TAKMissionAPI.maximumItemsPerMission)
-                        var items = TAKMissionAPI.parseItems(try await request(path, "GET", []),
+                        let routeGeneration = sourceGenerations[id, default: 0]
+                        let data = try await request(path, "GET", [])
+                        if watchRoute == .garmin, enabledSourceIDs.contains(id),
+                           sourceGenerations[id, default: 0] == routeGeneration,
+                           subscribedMissions(id).contains(missions[i].name) {
+                            do {
+                                let events = try GarminRouteCoT.parse(data, serverId: id.uuidString,
+                                                                     missionName: missions[i].name)
+                                let routes = events.compactMap { event -> GarminRoute? in
+                                    if case .route(let route) = event { return route }
+                                    return nil
+                                }
+                                try updateGarminRoutes {
+                                    try $0.replaceMission(serverId: id.uuidString, name: missions[i].name, routes: routes)
+                                }
+                            } catch {
+                                reportGarminRouteError(error.localizedDescription)
+                                missions[i].error = error.localizedDescription
+                            }
+                        }
+                        var items = TAKMissionAPI.parseItems(data,
                                                              limit: TAKMissionAPI.maximumParsedItems)
                         let available = items.count
                         items = TAKMissionAPI.nearest(items, limit: limit, latitude: message.latitude, longitude: message.longitude)
                         missions[i].items = items
                         missions[i].itemTotal = items.count
                         missionItemPages[Self.missionPageKey(id, missions[i].name)] = items
-                        if available > items.count {
+                        if available > items.count, missions[i].error == nil {
                             let scope = message.latitude == nil ? "first" : "nearest"
                             missions[i].error = "Showing \(scope) \(items.count) of \(available) items (watch limit)."
                         }
