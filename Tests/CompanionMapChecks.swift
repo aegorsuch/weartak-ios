@@ -62,6 +62,11 @@ struct CompanionMapChecks {
     }
     @MainActor
     static func main() async throws {
+        for type in ["b-m-r", "b-m-r-test", "b-f-t-r"] {
+            let xml = "<event uid=\"route\" type=\"\(type)\"><point lat=\"0\" lon=\"0\"/></event>"
+            let event = CompanionMapEvent(xml: xml, sourceServerID: UUID(), sourceGeneration: 0, receivedAt: Date())
+            precondition(!event.isValid, "Routes and package advertisements must not become anchor-point entities")
+        }
         var writes = 0
         var latestValue = 0
         var persistedValue = 0

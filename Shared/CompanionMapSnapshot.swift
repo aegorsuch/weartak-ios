@@ -37,7 +37,8 @@ struct CompanionMapEvent: Codable {
 
     var isValid: Bool {
         sourceGeneration >= 0 && receivedAt.timeIntervalSince1970.isFinite &&
-            header != nil && header?.type != "b-t-f"
+            header != nil && header?.type != "b-t-f" && header?.type != "b-f-t-r" &&
+            header?.type != "b-m-r" && header?.type?.hasPrefix("b-m-r-") != true
     }
 
     var lastSeen: Date { min(header?.time ?? receivedAt, receivedAt) }

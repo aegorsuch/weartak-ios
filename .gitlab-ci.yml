@@ -13,7 +13,7 @@ verify:
   stage: verify
   script:
     - bash scripts/run-portable-garmin-checks.sh
-    - xcodebuild -project WearTAK.xcodeproj -scheme "WearTAK Companion" -destination "generic/platform=iOS Simulator" -derivedDataPath "$DERIVED_DATA_PATH" CODE_SIGNING_ALLOWED=NO build
+    - xcodebuild -project WearTAK.xcodeproj -scheme "WearTAK Companion" -destination "generic/platform=iOS Simulator" -derivedDataPath "$DERIVED_DATA_PATH" EXCLUDED_ARCHS=x86_64 CODE_SIGNING_ALLOWED=NO build
   artifacts:
     when: always
     expire_in: 7 days

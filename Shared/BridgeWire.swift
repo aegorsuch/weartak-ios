@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, missions, missionUpdate }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, missions, missionUpdate, routes }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -58,6 +58,9 @@ enum BridgeWire {
         var dittoConfig: DittoBridgeConfiguration?
         /// iPhone → watch Ditto runtime state. Never contains PDL credentials.
         var dittoStatus: DittoBridgeStatus?
+        /// Separate from expiring entities; at most 8 routes / 128 points.
+        var routes: [GarminRoute]?
+        var routeError: String?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -69,6 +72,13 @@ enum BridgeWire {
             guard data.count <= BridgeWire.maximumMessageBytes else { throw Failure.tooLarge }
             let message = try JSONDecoder().decode(Self.self, from: data)
             guard message.version == BridgeWire.version else { throw Failure.unsupportedVersion }
+            if let routes = message.routes {
+                guard message.kind == .routes else { throw Failure.invalidCoT }
+                var store = GarminRouteStore()
+                for route in routes { try store.upsert(route) }
+                guard store.routes.count == routes.count else { throw Failure.invalidCoT }
+            }
+            if let error = message.routeError, error.utf8.count > 512 { throw Failure.tooLarge }
             if message.kind == .cot || message.kind == .dittoTrack {
                 guard let xml = message.xml, CoTStreamFramer.isEvent(Data(xml.utf8)) else { throw Failure.invalidCoT }
             }

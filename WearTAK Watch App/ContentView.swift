@@ -412,7 +412,7 @@ private struct WatchDashboardView: View {
     private func navigationRow(small: Bool) -> some View {
         HStack(spacing: 8) {
             NavigationLink {
-                BloodhoundView(model: model)
+                BloodhoundView(model: model, settings: settings)
             } label: {
                 HStack(spacing: 6) {
                     let reading = model.lastLocation.flatMap { model.bloodhoundCompassReading(from: $0) }
@@ -897,6 +897,7 @@ private struct TacticalMapView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     var selectingChatUser = false
+    var initialFocus: [CLLocationCoordinate2D] = []
     @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var cameraHeading: Double = 0
@@ -912,6 +913,8 @@ private struct TacticalMapView: View {
     @State private var incomingSelection: MapContactSelection?
     @State private var showLayersMenu = false
     @State private var showChannelsMenu = false
+    @State private var selectedRouteKey: String?
+    @State private var showRoutes = false
     @State private var longPressStart: CGPoint?
     @State private var longPressTask: Task<Void, Never>?
 
@@ -925,6 +928,13 @@ private struct TacticalMapView: View {
                     visibleRegion = context.region
                     cameraHeading = context.camera.heading
                 }
+                .simultaneousGesture(SpatialTapGesture().onEnded { value in
+                    guard !selectingChatUser else { return }
+                    if let key = routeKey(at: value.location, project: { proxy.convert($0, to: .local) }) {
+                        selectedRouteKey = key
+                        showRoutes = true
+                    }
+                })
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .onChanged { value in
@@ -1142,10 +1152,67 @@ private struct TacticalMapView: View {
                 #endif
             }
         }
+        .sheet(isPresented: $showRoutes) {
+            NavigationStack {
+                if let route = model.watchRoutes.routes.first(where: { WatchRoutes.key($0) == selectedRouteKey }) {
+                    WatchRouteDetailView(model: model, key: WatchRoutes.key(route))
+                } else {
+                    WatchRouteListView(model: model)
+                }
+            }
+        }
+    }
+
+    private func routeKey(at tap: CGPoint, project: (CLLocationCoordinate2D) -> CGPoint?) -> String? {
+        guard !selectableMapPoints().contains(where: {
+            guard let point = project($0.coordinate) else { return false }
+            return hypot(tap.x - point.x, tap.y - point.y) <= 22
+        }) else { return nil }
+        var nearest: (String, CGFloat)?
+        for route in model.watchRoutes.routes {
+            let points = route.points.map { project(CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)) }
+            for index in points.indices.dropFirst() {
+                guard let a = points[index - 1], let b = points[index] else { continue }
+                let dx = b.x - a.x, dy = b.y - a.y
+                let length = dx * dx + dy * dy
+                let t = length > 0 ? min(1, max(0, ((tap.x - a.x) * dx + (tap.y - a.y) * dy) / length)) : 0
+                let distance = hypot(tap.x - a.x - t * dx, tap.y - a.y - t * dy)
+                if distance <= 22, nearest.map({ distance < $0.1 }) ?? true {
+                    nearest = (WatchRoutes.key(route), distance)
+                }
+            }
+        }
+        return nearest?.0
     }
 
     @MapContentBuilder
     private var tacticalMapContent: some MapContent {
+        if initialFocus.count == 1, let coordinate = initialFocus.first {
+            Annotation(String(localized: "Selected target"), coordinate: coordinate) {
+                Image("ATAKCrosshair").resizable().scaledToFit()
+                    .frame(width: 24, height: 24).foregroundStyle(.white)
+                    .padding(4).background(.black.opacity(0.75), in: Circle())
+                    .accessibilityLabel(Text("Selected target"))
+            }
+        }
+
+        ForEach(model.watchRoutes.routes) { route in
+            MapPolyline(coordinates: route.points.map {
+                CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
+            })
+            .stroke(.orange, lineWidth: 4)
+            Annotation(route.name, coordinate: CLLocationCoordinate2D(
+                latitude: route.points[0].lat, longitude: route.points[0].lon)) {
+                Button {
+                    selectedRouteKey = WatchRoutes.key(route)
+                    showRoutes = true
+                } label: {
+                    Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(Text("Route: \(route.name)"))
+            }
+        }
         if let location = model.lastLocation {
             if let target = model.bloodhoundTarget {
                 MapPolyline(coordinates: [location.coordinate, target.coordinate])
@@ -1347,7 +1414,19 @@ private struct TacticalMapView: View {
 
     private func centerOnce() {
         guard !hasCentered else { return }
-        centerOnLocation()
+        if let bounds = BloodhoundMapBounds(points: initialFocus.map {
+            GarminRoute.Point(lat: $0.latitude, lon: $0.longitude)
+        }) {
+            let region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: bounds.latitude, longitude: bounds.longitude),
+                span: MKCoordinateSpan(latitudeDelta: bounds.latitudeDelta, longitudeDelta: bounds.longitudeDelta)
+            )
+            visibleRegion = region
+            cameraPosition = .region(region)
+            hasCentered = true
+        } else {
+            centerOnLocation()
+        }
     }
 
     private func centerOnLocation() {
@@ -1386,6 +1465,11 @@ private struct MapLayersMenuView: View {
     var body: some View {
         List {
             Toggle(String(localized: "Map Buttons", table: "WatchMain"), isOn: $settings.mapButtonsVisible)
+            NavigationLink {
+                WatchRouteListView(model: model)
+            } label: {
+                Label("Routes (\(model.watchRoutes.routes.count))", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+            }
             if model.incomingUserTeams.isEmpty {
                 Text("Team Colors (\(model.incomingUserTeams.count))", tableName: "WatchMain")
                     .font(.headline)
@@ -2048,136 +2132,173 @@ private struct IncomingUserMarker: View {
 
 private struct BloodhoundView: View {
     @ObservedObject var model: WatchSessionModel
+    @ObservedObject var settings: AppSettings
     @State private var responseError: String?
     @State private var selectedPoint: IncomingMapEntity?
+    @State private var detailTarget: BloodhoundPicker.Target?
+    @State private var mapTarget: BloodhoundPicker.Target?
+    @State private var routeToStart: BloodhoundPicker.Target?
     @State private var confirmRemoveAll = false
+    @State private var showNavigation = false
 
-    private func pointTitle(_ item: IncomingMapEntity) -> String {
-        item.displayTitle
+    private func distance(to points: [GarminRoute.Point]) -> String? {
+        guard let location = model.routeLocation,
+              let index = RouteFollower.nearestIndex(in: points, to: location) else { return nil }
+        return distanceLabel(RouteFollower.distanceMeters(from: location, to: points[index]))
+    }
+
+    private func distanceLabel(_ meters: Double) -> String {
+        if meters >= 1_000 {
+            let value = (meters / 1_000).formatted(.number.precision(.fractionLength(1)))
+            return String(localized: "\(value) km")
+        }
+        return String(localized: "\(Int(meters.rounded())) m")
+    }
+
+    private func subtitle(_ type: String, points: [GarminRoute.Point]) -> String {
+        type + " · " + (distance(to: points) ?? String(localized: "Distance unavailable"))
+    }
+
+    private func routeSubtitle(_ route: GarminRoute) -> String {
+        if let follow = model.routeFollow, follow.routeID == route.id {
+            let progress = String(localized: "Pt \(follow.targetIndex + 1) of \(follow.points.count)")
+            if let location = model.routeLocation, let remaining = follow.remainingDistanceMeters(from: location) {
+                let value = distanceLabel(remaining)
+                return progress + " · " + String(localized: "\(value) left")
+            }
+            return progress + " · " + String(localized: "Remaining distance unavailable")
+        }
+        let count = String(localized: "Route · \(route.points.count) pts")
+        return subtitle(count, points: route.points)
     }
 
     private func pointDetail(_ item: IncomingMapEntity) -> String {
-        let affiliation: String
+        var text = subtitle(String(localized: "Point", table: "WatchMain"),
+                             points: item.hasUsableLocation ? [.init(lat: item.latitude, lon: item.longitude)] : [])
         if item.isAlert {
-            affiliation = incomingAlertCategoryLabel(item.alertCategory) +
-                (item.isStaleAlert ? " · " + String(localized: "Stale", table: "WatchMain") : "") +
-                (item.isLastKnownAlertLocation ? "\n" + String(localized: "Last-known location", table: "WatchMain") : "") +
-                (!item.hasUsableLocation ? "\n" + String(localized: "Alert location unavailable", table: "WatchMain") : "")
-        } else {
-            switch item.type.split(separator: "-").dropFirst().first {
-            case "f": affiliation = String(localized: "Friendly", table: "WatchMain")
-            case "h": affiliation = String(localized: "Hostile", table: "WatchMain")
-            case "n": affiliation = String(localized: "Neutral", table: "WatchMain")
-            case "u": affiliation = String(localized: "Unknown", table: "WatchMain")
-            default: affiliation = String(localized: "Point", table: "WatchMain")
-            }
+            text = incomingAlertCategoryLabel(item.alertCategory) + " · " + text
+            if item.isStaleAlert { text += " · " + String(localized: "Stale", table: "WatchMain") }
+            if item.isLastKnownAlertLocation { text += "\n" + String(localized: "Last-known location", table: "WatchMain") }
+            if !item.hasUsableLocation { text += "\n" + String(localized: "Alert location unavailable", table: "WatchMain") }
         }
-        let mission = item.missionName.map { "\n" + String(localized: "Mission: \($0)", table: "WatchMain") } ?? ""
-        guard item.hasUsableLocation, let location = model.lastLocation else { return affiliation + mission }
-        let meters = Int(location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)))
-        return "\(affiliation) · \(meters) m" + mission
+        if let mission = item.missionName { text += "\n" + String(localized: "Mission: \(mission)", table: "WatchMain") }
+        return text
+    }
+
+    private func perform(_ action: BloodhoundPicker.Action, target: BloodhoundPicker.Target) {
+        switch BloodhoundPicker.command(for: action, target: target, active: model.activeBloodhoundPickerTarget) {
+        case .showOnMap(let target): mapTarget = target
+        case .chooseRoute(let id): routeToStart = .route(id)
+        case .stop: model.stopBloodhoundLocally()
+        case .start(let target): model.startPickerBloodhound(target)
+        }
+    }
+
+    private func row(_ target: BloodhoundPicker.Target, title: String, subtitle: String,
+                     glyph: String, available: Bool = true, detail: @escaping () -> Void) -> some View {
+        BloodhoundPickerRow(title: title, subtitle: subtitle, glyph: glyph,
+            active: target == model.activeBloodhoundPickerTarget, available: available,
+            showDetail: detail,
+            showMap: { perform(.showOnMap, target: target) },
+            navigate: { perform(.bloodhound, target: target) })
+            .listRowInsets(EdgeInsets(top: 3, leading: 0, bottom: 3, trailing: 0))
+            .listRowBackground(Color.clear)
+    }
+
+    private func pointRow(_ item: IncomingMapEntity) -> some View {
+        row(.point(item.id), title: item.displayTitle, subtitle: pointDetail(item),
+            glyph: item.isAlert ? "exclamationmark.triangle.fill" : "mappin", available: item.hasUsableLocation) {
+                if item.isAlert { detailTarget = .point(item.id) }
+                else { selectedPoint = item }
+            }
+    }
+
+    private func coordinates(for target: BloodhoundPicker.Target) -> [CLLocationCoordinate2D] {
+        switch target {
+        case .route(let id):
+            return model.watchRoutes.routes.first { $0.id == id }?.points.map {
+                CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
+            } ?? []
+        case .marker(let id): return model.markers.first { $0.id == id }.map { [$0.coordinate] } ?? []
+        case .contact(let id): return model.incomingEntities.first { $0.id == id && $0.isUser && $0.hasUsableLocation }.map { [$0.coordinate] } ?? []
+        case .point(let id): return model.incomingMapPoints.first { $0.id == id && $0.hasUsableLocation }.map { [$0.coordinate] } ?? []
+        }
     }
 
     @ViewBuilder
-    private func pointRow(_ item: IncomingMapEntity) -> some View {
-        if item.isAlert {
-            NavigationLink {
-                IncomingPointDetailView(model: model, id: item.id)
-            } label: {
-                pointRowContent(item)
-            }
-        } else {
-            Button { selectedPoint = item } label: {
-                pointRowContent(item)
-            }
-        }
-    }
-
-    private func pointRowContent(_ item: IncomingMapEntity) -> some View {
-        HStack {
-            if item.isAlert {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.black, .yellow)
-                    .accessibilityLabel(String(localized: "Active Alert", table: "WatchMain"))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pointTitle(item))
-                    .lineLimit(2)
-                Text(pointDetail(item))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+    private func detail(for target: BloodhoundPicker.Target) -> some View {
+        switch target {
+        case .route(let id): WatchRouteDetailView(model: model, key: id)
+        case .marker(let id):
+            if let marker = model.markers.first(where: { $0.id == id }) { PointDetailView(model: model, marker: marker) }
+            else { Text("Point unavailable", tableName: "WatchMain") }
+        case .contact(let id): MapContactDetailView(model: model, uid: id)
+        case .point(let id): IncomingPointDetailView(model: model, id: id)
         }
     }
 
     var body: some View {
-        Group {
-            if let target = model.bloodhoundTarget {
-                VStack(spacing: 8) {
-                    if let notice = model.alertNavigationNotice {
-                        Text(notice).font(.caption2).foregroundStyle(.yellow)
-                    }
-                    if let location = model.lastLocation,
-                       let reading = model.bloodhoundCompassReading(from: location) {
-                        Image(systemName: "location.north.fill")
-                            .font(.largeTitle)
-                            .rotationEffect(.degrees(reading.relativeBearingDegrees))
-                            .animation(.linear(duration: 0.2), value: reading.relativeBearingDegrees)
-                        Text(target.displayTitle)
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                        Text("Range: \(Int(reading.rangeMeters)) m", tableName: "WatchMain")
-                            .font(.caption2)
-                        if !reading.isCompassRelative {
-                            Text("Compass unavailable", tableName: "WatchMain")
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                        }
-                    } else {
-                        Text("Location unavailable", tableName: "WatchMain")
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("nPos") {
-                        Task {
-                            do { try await model.markInPosition() }
-                            catch { responseError = error.localizedDescription }
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            } else {
-                List {
-                    if let error = model.remoteAlertError {
-                        Text(error).font(.caption2).foregroundStyle(.orange)
-                    }
-                    if model.bloodhoundOrderPoints.isEmpty {
-                        Text("No incoming points")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        let alerts = model.bloodhoundOrderPoints.filter(\.isAlert)
-                        if !alerts.isEmpty {
-                            Section(String(localized: "Active Alert", table: "WatchMain")) {
-                                ForEach(alerts) { item in pointRow(item) }
-                            }
-                        }
-                        Section {
-                            Button("Remove All", role: .destructive) {
-                                confirmRemoveAll = true
-                            }
-                        }
-                        Section("Incoming Points") {
-                            ForEach(model.bloodhoundOrderPoints.filter { !$0.isAlert }) { item in
-                                pointRow(item)
-                            }
-                        }
-                    }
+        List {
+            if model.bloodhoundTarget != nil {
+                Button { showNavigation = true } label: {
+                    Label("Open navigation", systemImage: "location.north.fill")
                 }
             }
+            if let message = model.routeCompletionMessage { Text(message).foregroundStyle(.green) }
+            if let error = model.routeError { Text(error).font(.caption2).foregroundStyle(.orange) }
+            if let error = model.remoteAlertError { Text(error).font(.caption2).foregroundStyle(.orange) }
+            let alerts = model.bloodhoundOrderPoints.filter(\.isAlert)
+            if !alerts.isEmpty {
+                Section(String(localized: "Active Alert", table: "WatchMain")) {
+                    ForEach(alerts) { item in pointRow(item) }
+                }
+            }
+            ForEach(model.watchRoutes.routes) { route in
+                row(.route(route.id), title: route.name, subtitle: routeSubtitle(route),
+                    glyph: "point.topleft.down.to.point.bottomright.curvepath") { detailTarget = .route(route.id) }
+            }
+            ForEach(model.markers) { marker in
+                row(.marker(marker.id), title: marker.displayTitle,
+                    subtitle: subtitle(String(localized: "Marker"),
+                        points: [.init(lat: marker.latitude, lon: marker.longitude)]),
+                    glyph: "mappin.circle.fill") { detailTarget = .marker(marker.id) }
+            }
+            ForEach(model.incomingEntities.filter(\.isUser)) { contact in
+                row(.contact(contact.id), title: contact.callSign ?? contact.id,
+                    subtitle: subtitle(String(localized: "Contact", table: "WatchMain"),
+                        points: contact.hasUsableLocation ? [.init(lat: contact.latitude, lon: contact.longitude)] : []),
+                    glyph: "person.fill", available: contact.hasUsableLocation) { detailTarget = .contact(contact.id) }
+            }
+            ForEach(model.bloodhoundOrderPoints.filter { !$0.isAlert }) { item in pointRow(item) }
+            if model.watchRoutes.routes.isEmpty && model.markers.isEmpty &&
+                !model.incomingEntities.contains(where: \.isUser) && model.bloodhoundOrderPoints.isEmpty {
+                Text("No incoming points").foregroundStyle(.secondary)
+            }
+            if model.bloodhoundOrderPoints.contains(where: { !$0.isAlert }) {
+                Button("Remove All", role: .destructive) { confirmRemoveAll = true }
+            }
         }
-        .confirmationDialog(selectedPoint.map(pointTitle) ?? String(localized: "Incoming Point", table: "WatchMain"), isPresented: Binding(
-            get: { selectedPoint != nil },
-            set: { if !$0 { selectedPoint = nil } }
+        .listStyle(.plain)
+        .navigationTitle("Bloodhound")
+        .navigationDestination(isPresented: $showNavigation) {
+            BloodhoundNavigationView(model: model)
+        }
+        .sheet(item: $detailTarget) { target in NavigationStack { detail(for: target) } }
+        .sheet(item: $mapTarget) { target in
+            NavigationStack {
+                let points = coordinates(for: target)
+                if !points.isEmpty {
+                    TacticalMapView(model: model, settings: settings, initialFocus: points)
+                } else { Text("Point unavailable", tableName: "WatchMain") }
+            }
+        }
+        .sheet(item: $routeToStart) { target in
+            if case .route(let id) = target {
+                BloodhoundRouteStartView(model: model, routeID: id)
+            }
+        }
+        .confirmationDialog(selectedPoint?.displayTitle ?? String(localized: "Incoming Point", table: "WatchMain"), isPresented: Binding(
+            get: { selectedPoint != nil }, set: { if !$0 { selectedPoint = nil } }
         ), titleVisibility: .visible, presenting: selectedPoint) { item in
             Button("RGR") {
                 selectedPoint = nil
@@ -2191,18 +2312,16 @@ private struct BloodhoundView: View {
                 model.removeIncomingPoint(item.id)
             }
             Button(String(localized: "Cancel", table: "WatchMain"), role: .cancel) { selectedPoint = nil }
-        } message: { item in
-            Text(pointDetail(item))
-        }
+        } message: { item in Text(pointDetail(item)) }
         .confirmationDialog("Remove all incoming points?", isPresented: $confirmRemoveAll) {
             Button("Remove All", role: .destructive) {
-                for id in model.bloodhoundOrderPoints.filter({ !$0.isAlert }).map(\.id) {
-                    model.removeIncomingPoint(id)
-                }
+                for id in model.bloodhoundOrderPoints.filter({ !$0.isAlert }).map(\.id) { model.removeIncomingPoint(id) }
             }
         }
-        .navigationTitle(model.bloodhoundTarget == nil ? "Compass" : "Navigation")
-        .onAppear { model.markIncomingPointsSeen() }
+        .onAppear {
+            model.markIncomingPointsSeen()
+            model.requestLocation()
+        }
         .onChange(of: model.unseenIncomingPointIDs) { _, ids in
             if !ids.isEmpty { model.markIncomingPointsSeen() }
         }
@@ -2210,13 +2329,72 @@ private struct BloodhoundView: View {
             if let selectedPoint, !ids.contains(selectedPoint.id) { self.selectedPoint = nil }
         }
         .alert(String(localized: "Bloodhound response", table: "WatchMain"), isPresented: Binding(
-            get: { responseError != nil },
-            set: { if !$0 { responseError = nil } }
+            get: { responseError != nil }, set: { if !$0 { responseError = nil } }
         )) {
             Button(String(localized: "OK", table: "WatchMain"), role: .cancel) { responseError = nil }
-        } message: {
-            Text(responseError ?? "")
+        } message: { Text(responseError ?? "") }
+    }
+}
+
+private struct BloodhoundNavigationView: View {
+    @ObservedObject var model: WatchSessionModel
+    @State private var responseError: String?
+
+    var body: some View {
+        Group {
+            if let target = model.bloodhoundTarget {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        if let notice = model.alertNavigationNotice {
+                            Text(notice).font(.caption2).foregroundStyle(.yellow)
+                        }
+                        if let location = model.lastLocation,
+                           let reading = model.bloodhoundCompassReading(from: location) {
+                            Image(systemName: "location.north.fill")
+                                .font(.largeTitle)
+                                .rotationEffect(.degrees(reading.relativeBearingDegrees))
+                                .animation(.linear(duration: 0.2), value: reading.relativeBearingDegrees)
+                            Text(target.displayTitle)
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
+                            Text("Range: \(Int(reading.rangeMeters)) m", tableName: "WatchMain")
+                                .font(.caption2)
+                            if !reading.isCompassRelative {
+                                Text("Compass unavailable", tableName: "WatchMain")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                            }
+                        } else {
+                            Text("Location unavailable", tableName: "WatchMain")
+                                .foregroundStyle(.secondary)
+                        }
+                        if model.routeFollow != nil {
+                            WatchRouteProgressView(model: model)
+                            Button("Stop route", role: .destructive) { model.stopRouteFollowing() }
+                                .buttonStyle(.borderedProminent)
+                        } else {
+                            Button("nPos") {
+                                Task {
+                                    do { try await model.markInPosition() }
+                                    catch { responseError = error.localizedDescription }
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
+            } else if let message = model.routeCompletionMessage {
+                Text(message).foregroundStyle(.green)
+            } else {
+                Text("No active Bloodhound target").foregroundStyle(.secondary)
+            }
         }
+        .navigationTitle("Navigation")
+        .alert(String(localized: "Bloodhound response", table: "WatchMain"), isPresented: Binding(
+            get: { responseError != nil }, set: { if !$0 { responseError = nil } }
+        )) {
+            Button(String(localized: "OK", table: "WatchMain"), role: .cancel) { responseError = nil }
+        } message: { Text(responseError ?? "") }
     }
 }
 

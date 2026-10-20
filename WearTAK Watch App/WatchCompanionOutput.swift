@@ -31,6 +31,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     var onSourceRefresh: ((UUID, Int) -> Void)?
     var onBridgeRestart: (() -> Void)?
     var onMapSnapshot: (([CompanionMapEvent], [UUID]) -> Void)?
+    var onRoutes: (([GarminRoute]?, String?) -> Void)?
+    @Published private(set) var routeRefreshError: String?
     var onRemoteAlertSources: (([UUID]) -> Void)?
     /// A server's mission list loaded; its subscribed missions carry their current map items.
     var onMissions: ((TAKMissionServer) -> Void)?
@@ -261,6 +263,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             }
             apply(reply)
             onMapSnapshot?(events, enabled)
+            await refreshRoutes()
             mapLastChecked = Date()
             Task { await self.syncMissions() }
             mapRefreshError = reply.refreshError
@@ -294,6 +297,20 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         for event in message.chatEvents ?? [] {
             onCoT?(BridgeWire.Message(kind: .cot, xml: event.xml, sourceServerID: event.sourceServerID,
                 sourceGeneration: event.sourceGeneration, sessionID: message.sessionID))
+        }
+    }
+
+    func refreshRoutes() async {
+        do {
+            let reply = try await request(BridgeWire.Message(kind: .routes))
+            guard reply.kind == .routes, let routes = reply.routes else {
+                throw CompanionRefreshFailure.message("Update Companion to load routes.")
+            }
+            routeRefreshError = reply.routeError
+            onRoutes?(routes, reply.routeError)
+        } catch {
+            routeRefreshError = "Route refresh failed: \(error.localizedDescription)"
+            onRoutes?(nil, routeRefreshError)
         }
     }
 
@@ -682,8 +699,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
 
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data) {
         Task { @MainActor [weak self] in
-            guard let self, self.active, let message = try? BridgeWire.Message.decode(data), message.kind == .status else { return }
-            self.apply(message)
+            guard let self, self.active, let message = try? BridgeWire.Message.decode(data) else { return }
+            if message.kind == .routes, let routes = message.routes {
+                self.routeRefreshError = message.routeError
+                self.onRoutes?(routes, message.routeError)
+            } else if message.kind == .status { self.apply(message) }
         }
 
     }

@@ -129,6 +129,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var garminWrites = Set<UUID>()
     private var garminReceivesInFlight = 0
     private var garminRoutes = GarminRouteStore()
+    private var routePackageInFlight = Set<UUID>()
+    private var routePackageAttempts: [UUID: Date] = [:]
+    private var routePackageError: String?
+    private lazy var appleRouteWrites = MapCacheWriteBatcher { [weak self] in self?.sendAppleRoutes() }
     private var garminRouteVersion: Int?
     private var garminSitxRouteConfig: CompanionSitxSession.Config?
     private static let garminRoutesStorageKey = "WearTAK.companion.garminRoutes"
@@ -147,10 +151,15 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
         garminSitxRouteConfig = sitx.config
-        if let data = defaults.data(forKey: Self.garminRoutesStorageKey), data.count <= 100_000,
-           let saved = try? JSONDecoder().decode(GarminRouteStore.self, from: data),
-           let restored = try? saved.validated() {
-            garminRoutes = restored
+        if let data = defaults.data(forKey: Self.garminRoutesStorageKey) {
+            do {
+                guard data.count <= 100_000 else { throw GarminRoute.Failure.capacity }
+                let saved = try JSONDecoder().decode(GarminRouteStore.self, from: data)
+                garminRoutes = try saved.validated()
+            } catch {
+                routePackageError = "Saved routes could not be loaded: \(error.localizedDescription)"
+                chatLogger.error("Saved routes could not be loaded: \(error.localizedDescription, privacy: .public)")
+            }
         }
         dittoRuntime.onStatusChange = { [weak self] status in
             guard let self else { return }
@@ -636,11 +645,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         var candidate = garminRoutes
         try update(&candidate)
         _ = try candidate.validated()
-        if let data = try? JSONEncoder().encode(candidate) {
-            defaults.set(data, forKey: Self.garminRoutesStorageKey)
-        }
+        let data = try JSONEncoder().encode(candidate)
+        defaults.set(data, forKey: Self.garminRoutesStorageKey)
         garminRoutes = candidate
         guard previous != garminRoutes.routes else { return }
+        if watchRoute == .apple { publishAppleRoutes() }
         guard garminRouteVersion == GarminRoute.version, watchRoute == .garmin, garminReady else { return }
         var messages: [GarminEnvelope] = []
         for route in previous where !garminRoutes.routes.contains(where: {
@@ -664,6 +673,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         do {
             let events = try GarminRouteCoT.parse(Data(xml.utf8), serverId: sourceID.uuidString)
             guard !events.isEmpty else { return false }
+            routePackageError = nil
             try updateGarminRoutes { store in
                 for event in events {
                     switch event {
@@ -672,11 +682,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                     }
                 }
             }
+            if watchRoute == .apple { publishAppleRoutes() }
             return events.contains { if case .route = $0 { return true }; return false }
         } catch {
             // Invalid route geometry must not degrade to a misleading single map point.
             let isRoute = xml.contains("b-m-r")
-            if isRoute { reportGarminRouteError(error.localizedDescription) }
+            if isRoute {
+                routePackageError = error.localizedDescription
+                if watchRoute == .apple { publishAppleRoutes() }
+                else { reportGarminRouteError(error.localizedDescription) }
+            }
             return isRoute
         }
     }
@@ -1121,7 +1136,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             garminRouteVersion = (try? request.integer("routeVersion", range: 1...1))
             replayGarminRoutes()
             for event in (reply.mapEvents ?? []).prefix(GarminRelayProtocol.maximumEntities) {
-                if event.header?.type.hasPrefix("b-m-r") == true { continue }
+                if event.header?.type?.hasPrefix("b-m-r") == true { continue }
                 if let envelope = try GarminRelayProtocol.incoming(event.xml, ownUID: garminIdentity?.uid ?? "") {
                     enqueueGarmin(envelope)
                 }
@@ -1232,6 +1247,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true,
                 sitxConfig: released, sitxStatus: sitxStatusSummary ?? "", sitxSettings: sitx.settingsSnapshot)
         }
+        if message.kind == .routes { return appleRouteSnapshot(id: message.id) }
         if message.kind == .mapSnapshot { return try await mapReply(to: message) }
         if message.kind == .channels || message.kind == .channelUpdate { return await channelReply(to: message) }
         if message.kind == .missions, message.missionItemOffset != nil { return missionItemPageReply(to: message) }
@@ -1391,7 +1407,82 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         Set(enabledSourceIDs.filter { serverStates[$0]?.connected == true })
     }
 
+    private func appleRouteSnapshot(id: UUID = UUID()) -> BridgeWire.Message {
+        BridgeWire.Message(kind: .routes, id: id,
+            routes: garminRoutes.routes.filter { route in
+                enabledSourceIDs.contains { $0.uuidString == route.serverId }
+            }, routeError: routePackageError)
+    }
+
+    private func publishAppleRoutes() {
+        guard watchRoute == .apple, WCSession.default.isReachable else { return }
+        appleRouteWrites.schedule()
+    }
+
+    private func sendAppleRoutes() {
+        guard watchRoute == .apple, WCSession.default.isReachable else { return }
+        do {
+            let data = try appleRouteSnapshot().encoded()
+            WCSession.default.sendMessageData(data, replyHandler: nil, errorHandler: { [weak self] error in
+                Task { @MainActor in
+                    self?.chatLogger.error("Route snapshot delivery failed: \(error.localizedDescription, privacy: .public)")
+                }
+            })
+        } catch {
+            chatLogger.error("Route snapshot encoding failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func receiveRoutePackage(_ xml: String, sourceID: UUID) -> Bool {
+        guard xml.contains("b-f-t-r") else { return false }
+        do {
+            guard let advertisement = try TAKRoutePackage.Advertisement.parse(xml) else { return false }
+            guard servers.contains(where: { $0.id == sourceID && $0.enabled }),
+                  let session = sessions[sourceID] else {
+                throw CompanionFailure.message("Route Data Packages require a configured TAK server. Sit(x) and multicast package downloads are not supported.")
+            }
+            guard !routePackageInFlight.contains(sourceID), routePackageInFlight.count < 2,
+                  routePackageAttempts[sourceID].map({ Date().timeIntervalSince($0) >= 10 }) ?? true else {
+                throw CompanionFailure.message("Route package import is busy. Resend the package after 10 seconds.")
+            }
+            routePackageAttempts[sourceID] = Date()
+            routePackageInFlight.insert(sourceID)
+            let generation = sourceGenerations[sourceID, default: 0]
+            Task {
+                defer { routePackageInFlight.remove(sourceID) }
+                do {
+                    let data = try await session.routePackage(advertisement)
+                    let routes = try RoutePackageZIP.routes(data, advertisement: advertisement,
+                                                            serverID: sourceID.uuidString)
+                    guard enabledSourceIDs.contains(sourceID),
+                          sourceGenerations[sourceID, default: 0] == generation else { return }
+                    routePackageError = nil
+                    try updateGarminRoutes { store in
+                        for route in routes { try store.upsert(route) }
+                    }
+                    publishAppleRoutes()
+                } catch {
+                    guard enabledSourceIDs.contains(sourceID),
+                          sourceGenerations[sourceID, default: 0] == generation else { return }
+                    routePackageError = "Route package import failed: \(error.localizedDescription)"
+                    chatLogger.error("Route package import failed: \(error.localizedDescription, privacy: .public)")
+                    publishAppleRoutes()
+                    if watchRoute == .garmin {
+                        reportGarminRouteError("Route package import failed: \(error.localizedDescription)")
+                    }
+                }
+            }
+        } catch {
+            routePackageError = error.localizedDescription
+            chatLogger.error("Route package rejected: \(error.localizedDescription, privacy: .public)")
+            publishAppleRoutes()
+            if watchRoute == .garmin { reportGarminRouteError(error.localizedDescription) }
+        }
+        return true
+    }
+
     private func forward(_ xml: String, sourceID: UUID) {
+        if receiveRoutePackage(xml, sourceID: sourceID) { return }
         let event = CompanionMapEvent(xml: xml, sourceServerID: sourceID,
                                       sourceGeneration: sourceGenerations[sourceID, default: 0], receivedAt: Date())
         let isChat = event.header?.type == "b-t-f"
@@ -1404,8 +1495,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         mapCacheWrites.schedule()
         // Delete events and routes need not contain a valid anchor point, unlike entity-cache headers.
         let isRoute = receiveGarminRoutes(xml, sourceID: sourceID)
+        if isRoute { return }
         if watchRoute == .garmin {
-            if isRoute { return }
             guard canRelay, connected, garminReady, let envelope = try? GarminRelayProtocol.incoming(xml,
                 ownUID: garminIdentity?.uid ?? "", receivedAt: event.receivedAt) else {
                 return
@@ -1673,8 +1764,7 @@ extension PhoneBridgeModel {
                         }
                         missions[i].canEdit = role.flatMap(TAKMissionAPI.parseCanEdit)
                     }
-                    guard budget > 0 || watchRoute == .garmin,
-                          let path = TAKMissionAPI.path(missions[i].name, "/cot") else {
+                    guard let path = TAKMissionAPI.path(missions[i].name, "/cot") else {
                         missions[i].error = "Watch item limit reached."
                         continue
                     }
@@ -1682,7 +1772,7 @@ extension PhoneBridgeModel {
                         let limit = min(budget, TAKMissionAPI.maximumItemsPerMission)
                         let routeGeneration = sourceGenerations[id, default: 0]
                         let data = try await request(path, "GET", [])
-                        if watchRoute == .garmin, enabledSourceIDs.contains(id),
+                        if enabledSourceIDs.contains(id),
                            sourceGenerations[id, default: 0] == routeGeneration,
                            subscribedMissions(id).contains(missions[i].name) {
                             do {
@@ -1692,16 +1782,20 @@ extension PhoneBridgeModel {
                                     if case .route(let route) = event { return route }
                                     return nil
                                 }
+                                routePackageError = nil
                                 try updateGarminRoutes {
                                     try $0.replaceMission(serverId: id.uuidString, name: missions[i].name, routes: routes)
                                 }
                             } catch {
-                                reportGarminRouteError(error.localizedDescription)
+                                routePackageError = error.localizedDescription
+                                if watchRoute == .apple { publishAppleRoutes() }
+                                else { reportGarminRouteError(error.localizedDescription) }
                                 missions[i].error = error.localizedDescription
                             }
                         }
                         var items = TAKMissionAPI.parseItems(data,
                                                              limit: TAKMissionAPI.maximumParsedItems)
+                        items.removeAll { $0.type == "b-m-r" || $0.type.hasPrefix("b-m-r-") }
                         let available = items.count
                         items = TAKMissionAPI.nearest(items, limit: limit, latitude: message.latitude, longitude: message.longitude)
                         missions[i].items = items
@@ -1914,6 +2008,18 @@ private final class CompanionServerSession {
 
     func missionRequest(path: String, method: String = "GET", query: [URLQueryItem] = []) async throws -> Data {
         try await retryAPIOnApproval { try await self.missionRequestOnce(path: path, method: method, query: query) }
+    }
+
+    func routePackage(_ advertisement: TAKRoutePackage.Advertisement) async throws -> Data {
+        guard active, state.connected, let record, record.enabled,
+              let stored = try CertificateStore.read(endpoint: record.endpoint.key) else {
+            throw CompanionFailure.message("TAK server is not connected.")
+        }
+        let ca = UserDefaults.standard.data(forKey: "WearTAK.bridge.serverCA.\(record.endpoint.key)")
+        let client = try TAKChannelClient(host: record.host, identity: CertificateStore.resolve(stored),
+                                          trustedCA: ca, requestTimeout: 20, apiTLSName: record.apiTLSName)
+        defer { client.cancel() }
+        return try await client.routePackage(advertisement)
     }
 
     private func missionRequestOnce(path: String, method: String, query: [URLQueryItem]) async throws -> Data {
