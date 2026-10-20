@@ -150,7 +150,7 @@ watch_profile_uuid="$(install_profile \
 security create-keychain -p "$keychain_password" "$keychain_path"
 security set-keychain-settings -lut 21600 "$keychain_path"
 security unlock-keychain -p "$keychain_password" "$keychain_path"
-security import "$APPLE_DISTRIBUTION_CERTIFICATE_P12" \
+security import "$APPLE_DISTRIBUTION_CERTIFICATE_P12" -f pkcs12 \
   -k "$keychain_path" -P "$APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD" \
   -T /usr/bin/codesign -T /usr/bin/security
 security set-key-partition-list \
