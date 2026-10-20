@@ -20,6 +20,32 @@ final class TAKChannelClient {
 
     func cancel() { session.invalidateAndCancel() }
 
+    func routePackage(_ advertisement: TAKRoutePackage.Advertisement) async throws -> Data {
+        // Reconstruct the sole permitted resource; never request an advertised URL.
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.port = 8443
+        components.path = "/Marti/sync/content"
+        components.queryItems = [URLQueryItem(name: "hash", value: advertisement.hash)]
+        guard let url = components.url else { throw TAKRoutePackage.Failure.invalidAdvertisement }
+        var request = URLRequest(url: url)
+        request.setValue("application/zip", forHTTPHeaderField: "Accept")
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let response = response as? HTTPURLResponse, response.statusCode == 200,
+              response.expectedContentLength < 0 || response.expectedContentLength == advertisement.size else {
+            throw TAKRoutePackage.Failure.invalidArchive
+        }
+        var data = Data()
+        data.reserveCapacity(advertisement.size)
+        for try await byte in bytes {
+            guard data.count < advertisement.size else { throw TAKRoutePackage.Failure.hashMismatch }
+            data.append(byte)
+        }
+        guard data.count == advertisement.size else { throw TAKRoutePackage.Failure.hashMismatch }
+        return data
+    }
+
     func load(checkSupport: Bool, sendLatestSA: Bool) async throws -> TAKChannelGroups {
         if checkSupport {
             let data = try await execute(path: "/Marti/api/groups/groupCacheEnabled")
@@ -100,7 +126,8 @@ private final class ChannelTrustDelegate: NSObject, URLSessionDelegate, URLSessi
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         logger.notice("Channels authentication challenge: \(challenge.protectionSpace.authenticationMethod, privacy: .public)")
-        guard challenge.protectionSpace.host.caseInsensitiveCompare(host) == .orderedSame else {
+        guard challenge.protectionSpace.host.caseInsensitiveCompare(host) == .orderedSame,
+              challenge.protectionSpace.port == 8443 else {
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
         }

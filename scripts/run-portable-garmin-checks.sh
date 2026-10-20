@@ -12,6 +12,7 @@ swiftc -swift-version 5 -parse-as-library \
   Shared/PhoneLocationReporting.swift \
   Shared/UserMetrics.swift \
   Shared/BridgeWire.swift \
+  Shared/GarminRoutes.swift \
   Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift \
   Shared/TAKMissionModels.swift \
@@ -22,9 +23,39 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/garmin-relay-checks"
 
 swiftc -swift-version 5 -parse-as-library \
+  Shared/GarminRoutes.swift Shared/RouteFollower.swift Shared/BloodhoundPicker.swift \
+  Tests/BloodhoundPickerChecks.swift -o "$build_dir/bloodhound-picker-checks"
+"$build_dir/bloodhound-picker-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/GarminRoutes.swift Shared/RouteFollower.swift Tests/RouteFollowerChecks.swift \
+  -o "$build_dir/route-follower-checks"
+"$build_dir/route-follower-checks"
+
+swiftc -swift-version 5 -parse-as-library \
   Shared/GarminRoutes.swift Tests/GarminRouteChecks.swift \
   -o "$build_dir/garmin-route-checks"
 "$build_dir/garmin-route-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/GarminRoutes.swift Shared/TAKRoutePackage.swift Shared/WatchRoutes.swift \
+  "WearTAK Companion/RoutePackageZIP.swift" Tests/RoutePackageChecks.swift \
+  -lz -o "$build_dir/route-package-checks"
+"$build_dir/route-package-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
+  Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
+  Shared/DittoPDL.swift Tests/BridgeProtocolChecks.swift \
+  -o "$build_dir/bridge-checks"
+"$build_dir/bridge-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Tests/CompanionMapChecks.swift \
+  -o "$build_dir/map-checks"
+"$build_dir/map-checks"
 
 swiftc -swift-version 5 -parse-as-library \
   Shared/GarminDeliveryLedger.swift Tests/GarminDeliveryLedgerTests.swift \

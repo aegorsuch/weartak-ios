@@ -91,6 +91,24 @@ trap cleanup EXIT
 keychain_password="$(openssl rand -hex 32)"
 mkdir -p "$profile_dir" "$api_key_dir" "$profile_backup_dir"
 chmod 700 "$api_key_dir"
+
+# GitLab variables hold text, so binary DER files (.p12, .mobileprovision) may be
+# supplied base64-encoded; decode those into the temporary workspace.
+decode_if_base64() {
+  local variable=$1 decoded
+  if [[ "$(head -c 2 "${!variable}")" == "MI" ]]; then
+    decoded="$work_dir/$variable.der"
+    if ! tr -d ' \r\n\t' < "${!variable}" | base64 -D > "$decoded" 2>/dev/null ||
+       [[ ! -s "$decoded" ]]; then
+      printf 'ERROR: GitLab CI variable %s is not valid base64.\n' "$variable" >&2
+      exit 1
+    fi
+    printf -v "$variable" '%s' "$decoded"
+  fi
+}
+decode_if_base64 APPLE_DISTRIBUTION_CERTIFICATE_P12
+decode_if_base64 APPLE_CONTAINER_APP_STORE_PROFILE
+decode_if_base64 APPLE_WATCH_APP_STORE_PROFILE
 export API_PRIVATE_KEYS_DIR="$api_key_dir"
 
 previous_default_keychain="$(security default-keychain -d user | sed 's/^ *"\(.*\)"$/\1/')"

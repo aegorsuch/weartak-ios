@@ -228,6 +228,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var lastLocation: CLLocation?
     @Published private(set) var markers: [WatchMarker] = []
     @Published private(set) var incomingEntities: [IncomingMapEntity] = []
+    @Published private(set) var watchRoutes = WatchRoutes()
+    @Published private(set) var routeError: String?
+    @Published private(set) var routeBloodhoundKey: String?
+    @Published private(set) var routeBloodhoundIndex: Int?
+    @Published private(set) var routeFollow: RouteFollower?
+    @Published private(set) var routeCompletionMessage: String?
+    private static let routesStorageKey = "WearTAK.watchRoutes"
     var incomingUserTeams: [MapUserGroup] {
         MapUserGroup.make(values: incomingEntities.filter(\.isUser).compactMap(\.team))
     }
@@ -359,6 +366,19 @@ final class WatchSessionModel: NSObject, ObservableObject {
         self.transport = transport ?? client
         self.settings = settings
         super.init()
+        if let data = UserDefaults.standard.data(forKey: Self.routesStorageKey) {
+            do {
+                guard data.count <= 100_000 else { throw GarminRoute.Failure.capacity }
+                var saved = try JSONDecoder().decode(WatchRoutes.self, from: data)
+                try saved.replace(saved.routes)
+                watchRoutes = saved
+            } catch { routeError = "Saved routes could not be loaded: \(error.localizedDescription)" }
+        }
+        companionClient.onRoutes = { [weak self] routes, error in
+            guard let self else { return }
+            if let routes { self.updateWatchRoutes { try $0.replace(routes) } }
+            if let error { self.routeError = error }
+        }
         do {
             offlineOutbox = try OfflineOutbox()
             expireOfflineEvents()
@@ -435,6 +455,18 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         companionClient.onCoT = { [weak self] message in
             guard let self, let xml = message.xml else { return }
+            if let id = message.sourceServerID {
+                do {
+                    let events = try GarminRouteCoT.parse(Data(xml.utf8), serverId: id.uuidString)
+                    if !events.isEmpty {
+                        self.updateWatchRoutes { try $0.receive(events, serverID: id.uuidString) }
+                        if events.contains(where: { if case .route = $0 { return true }; return false }) { return }
+                    }
+                } catch {
+                    self.routeError = error.localizedDescription
+                    if xml.contains("b-m-r") { return }
+                }
+            }
             if let source = message.sourceServerID,
                let chat = TAKChatMessage.parse(xml, ownUID: SitxClient.deviceID()) {
                 self.chatLogger.notice("Companion GeoChat parsed for this watch")
@@ -602,7 +634,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         sitxClient.setAppActive(active)
         if active {
             sitxClient.resumeAuthorization()
-            if liveLocationRequested { startLiveLocation() }
+            if liveLocationRequested || routeFollow != nil { startLiveLocation() }
         } else { locationManager.stopUpdatingLocation() }
     }
 
@@ -620,7 +652,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private func stopLocationUpdatesIfIdle() {
-        if liveLocationRequested, isAppActive { return }
+        if (liveLocationRequested || routeFollow != nil), isAppActive { return }
         if connectionState == .connected, transport.pliReportingRoute == .standaloneSitx { return }
         locationManager.stopUpdatingLocation()
     }
@@ -807,7 +839,132 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
     }
 
+    private func updateWatchRoutes(_ update: (inout WatchRoutes) throws -> Void) {
+        do {
+            var candidate = watchRoutes
+            try update(&candidate)
+            let data = try JSONEncoder().encode(candidate)
+            guard data.count <= 100_000 else { throw GarminRoute.Failure.capacity }
+            UserDefaults.standard.set(data, forKey: Self.routesStorageKey)
+            if let key = routeBloodhoundKey,
+               candidate.routes.first(where: { WatchRoutes.key($0) == key })?.points !=
+                watchRoutes.routes.first(where: { WatchRoutes.key($0) == key })?.points {
+                clearRouteBloodhound()
+            }
+            watchRoutes = candidate
+            routeError = nil
+        } catch { routeError = "Route update failed: \(error.localizedDescription)" }
+    }
+
+    func removeRouteFromWatch(_ route: GarminRoute) {
+        updateWatchRoutes { $0.remove(route) }
+    }
+
+    /// Only a recent, valid watch fix may choose the nearest vertex or advance a route.
+    var routeLocation: GarminRoute.Point? {
+        guard let location = lastLocation, location.horizontalAccuracy >= 0,
+              abs(location.timestamp.timeIntervalSinceNow) < 120,
+              CLLocationCoordinate2DIsValid(location.coordinate) else { return nil }
+        return GarminRoute.Point(lat: location.coordinate.latitude, lon: location.coordinate.longitude)
+    }
+
+    func startRouteFollowing(_ route: GarminRoute, start: RouteFollower.Start) {
+        guard let current = watchRoutes.routes.first(where: { $0.id == route.id }),
+              let follow = RouteFollower(route: current, start: start, location: routeLocation) else { return }
+        clearRouteBloodhound()
+        bloodhoundTargetID = nil
+        bloodhoundContactID = nil
+        bloodhoundMapItemID = nil
+        routeFollow = follow
+        routeBloodhoundKey = current.id
+        routeBloodhoundIndex = follow.targetIndex
+        if let location = routeLocation { advanceRouteFollowing(at: location) }
+        if routeFollow != nil {
+            requestLocation()
+            startLiveLocation()
+        }
+    }
+
+    var activeBloodhoundPickerTarget: BloodhoundPicker.Target? {
+        if let key = routeBloodhoundKey { return .route(key) }
+        if let id = bloodhoundTargetID { return .marker(id) }
+        if let id = bloodhoundContactID { return .contact(id) }
+        if let id = bloodhoundMapItemID { return .point(id) }
+        return nil
+    }
+
+    /// Picker navigation is immediate and local; explicit detail actions retain their GeoChat behavior.
+    func startPickerBloodhound(_ target: BloodhoundPicker.Target) {
+        switch target {
+        case .route: return // Whole routes require an explicit starting mode.
+        case .marker(let id):
+            guard markers.contains(where: { $0.id == id }) else { return }
+        case .contact(let id):
+            guard incomingEntities.contains(where: { $0.id == id && $0.isUser && $0.hasUsableLocation }) else { return }
+        case .point(let id):
+            guard incomingMapPoints.contains(where: { $0.id == id && $0.hasUsableLocation }) else { return }
+        }
+        stopBloodhoundLocally()
+        switch target {
+        case .marker(let id): bloodhoundTargetID = id
+        case .contact(let id): bloodhoundContactID = id
+        case .point(let id): bloodhoundMapItemID = id
+        case .route: break
+        }
+        requestLocation()
+    }
+
+    func stopBloodhoundLocally() {
+        clearRouteBloodhound()
+        bloodhoundTargetID = nil
+        bloodhoundContactID = nil
+        bloodhoundMapItemID = nil
+        bloodhoundProximityNotified = false
+    }
+
+    func stopRouteFollowing() {
+        clearRouteBloodhound()
+    }
+
+    private func advanceRouteFollowing(at location: GarminRoute.Point) {
+        guard var follow = routeFollow else { return }
+        follow.advance(at: location)
+        if follow.isComplete {
+            let name = watchRoutes.routes.first(where: { $0.id == follow.routeID })?.name ?? ""
+            clearRouteBloodhound()
+            routeCompletionMessage = String(localized: "Route complete: \(name)")
+            WKInterfaceDevice.current().play(.success)
+        } else {
+            if routeBloodhoundIndex != follow.targetIndex { bloodhoundProximityNotified = false }
+            routeFollow = follow
+            routeBloodhoundIndex = follow.targetIndex
+        }
+    }
+
+    func toggleRouteBloodhound(_ route: GarminRoute, index: Int) {
+        guard let current = watchRoutes.routes.first(where: { $0.id == route.id }),
+              current.points.indices.contains(index) else { return }
+        let stopping = routeFollow == nil && routeBloodhoundKey == current.id && routeBloodhoundIndex == index
+        clearRouteBloodhound()
+        bloodhoundTargetID = nil
+        bloodhoundContactID = nil
+        bloodhoundMapItemID = nil
+        routeBloodhoundKey = stopping ? nil : current.id
+        routeBloodhoundIndex = stopping ? nil : index
+        if !stopping { requestLocation() }
+    }
+
+    private func clearRouteBloodhound() {
+        routeFollow = nil
+        routeBloodhoundKey = nil
+        routeBloodhoundIndex = nil
+        routeCompletionMessage = nil
+        bloodhoundProximityNotified = false
+        stopLocationUpdatesIfIdle()
+    }
+
     func toggleBloodhound(id: UUID) {
+        clearRouteBloodhound()
         bloodhoundContactID = nil
         bloodhoundMapItemID = nil
         bloodhoundTargetID = (bloodhoundTargetID == id) ? nil : id
@@ -816,6 +973,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func toggleContactBloodhound(uid: String) {
         guard incomingEntities.contains(where: { $0.id == uid && $0.isUser }) else { return }
+        clearRouteBloodhound()
         bloodhoundTargetID = nil
         bloodhoundMapItemID = nil
         bloodhoundContactID = bloodhoundContactID == uid ? nil : uid
@@ -824,6 +982,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     var bloodhoundTarget: BloodhoundDestination? {
+        if let key = routeBloodhoundKey, let index = routeBloodhoundIndex,
+           let route = watchRoutes.routes.first(where: { WatchRoutes.key($0) == key }),
+           route.points.indices.contains(index) {
+            let point = route.points[index]
+            return BloodhoundDestination(latitude: point.lat, longitude: point.lon,
+                displayTitle: point.name ?? "\(route.name) - \(index + 1)")
+        }
         if let id = bloodhoundMapItemID, let item = incomingMapPoints.first(where: { $0.id == id && $0.hasUsableLocation }) {
             return BloodhoundDestination(latitude: item.latitude, longitude: item.longitude,
                 displayTitle: item.displayTitle)
@@ -877,6 +1042,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         if !item.isAlert {
             try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
         }
+        clearRouteBloodhound()
         bloodhoundTargetID = nil
         bloodhoundContactID = nil
         bloodhoundMapItemID = id
@@ -887,6 +1053,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     /// Bloodhound from the map point menu. Points sent directly by a user reply "Roger" like RGR;
     /// Data Sync items have no sender, so they start silently.
     func toggleMapItemBloodhound(id: String) async throws {
+        clearRouteBloodhound()
         if bloodhoundMapItemID == id {
             bloodhoundMapItemID = nil
             bloodhoundProximityNotified = false
@@ -911,6 +1078,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func markInPosition() async throws {
+        clearRouteBloodhound()
         let item = bloodhoundMapItemID.flatMap { id in incomingMapPoints.first { $0.id == id } }
         if let item, !item.isAlert {
             try await sendMapItemReply(item, text: "In Position at \(mapItemTitle(item))")
@@ -1923,7 +2091,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             return
         }
         startHeadingUpdates()
-        if liveLocationRequested || (connectionState == .connected && transport.pliReportingRoute == .standaloneSitx) {
+        if liveLocationRequested || routeFollow != nil || (connectionState == .connected && transport.pliReportingRoute == .standaloneSitx) {
             manager.startUpdatingLocation()
         } else {
             manager.requestLocation()
@@ -1939,6 +2107,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         }
         lastOfflineAttempt = nil
         forwardOfflineEvents()
+        if let point = routeLocation { advanceRouteFollowing(at: point) }
         checkBloodhoundProximity(at: location)
         publishDittoTrackIfDue(for: location)
         guard connectionState == .connected else { return }

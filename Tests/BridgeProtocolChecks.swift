@@ -3,6 +3,19 @@ import Foundation
 @main
 struct BridgeProtocolChecks {
     static func main() throws {
+        let route = GarminRoute(serverId: "server", uid: "route", name: "Route",
+                                points: [.init(lat: 0, lon: 0), .init(lat: 1, lon: 1)])
+        let routeSnapshot = try BridgeWire.Message.decode(
+            BridgeWire.Message(kind: .routes, routes: [route]).encoded())
+        precondition(routeSnapshot.routes == [route])
+        do {
+            _ = try BridgeWire.Message.decode(BridgeWire.Message(kind: .routes, routes: [route, route]).encoded())
+            fatalError("Duplicate route snapshot accepted")
+        } catch BridgeWire.Failure.invalidCoT {}
+        do {
+            _ = try BridgeWire.Message.decode(BridgeWire.Message(kind: .status, routes: [route]).encoded())
+            fatalError("Routes accepted in the wrong message kind")
+        } catch BridgeWire.Failure.invalidCoT {}
         let groups = try TAKChannelGroups.parse(Data("{\"data\":[{\"name\":\"Operations\",\"bitpos\":7,\"direction\":\"IN\",\"active\":true,\"preserve\":\"value\"},{\"name\":\"Operations\",\"bitpos\":7,\"direction\":\"OUT\",\"active\":true},{\"name\":\"Other\",\"bitpos\":8,\"active\":false}]}".utf8))
         precondition(groups.channels.count == 2)
         let changed = try groups.changing(bitPosition: 7, active: false)

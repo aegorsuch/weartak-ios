@@ -1,6 +1,347 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Show details" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Show details"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Afficher les détails"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Mostrar detalles"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Details anzeigen"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "عرض التفاصيل"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "詳細を表示"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "显示详情"}}
+      }
+    },
+    "Show %@ on map" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Show %@ on map"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Afficher %@ sur la carte"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Mostrar %@ en el mapa"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "%@ auf der Karte anzeigen"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "عرض %@ على الخريطة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "%@ を地図に表示"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "在地图上显示 %@"}}
+      }
+    },
+    "Bloodhound to %@" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Bloodhound to %@"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Bloodhound vers %@"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Bloodhound hacia %@"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Bloodhound zu %@"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "التتبع إلى %@"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "%@ へブラッドハウンド"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "追踪至 %@"}}
+      }
+    },
+    "Start Bloodhound" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Start Bloodhound"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Démarrer Bloodhound"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Iniciar Bloodhound"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Bloodhound starten"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "بدء التتبع"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "ブラッドハウンドを開始"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "开始追踪"}}
+      }
+    },
+    "Open navigation" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Open navigation"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Ouvrir la navigation"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Abrir navegación"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Navigation öffnen"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "فتح الملاحة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "ナビゲーションを開く"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "打开导航"}}
+      }
+    },
+    "No active Bloodhound target" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "No active Bloodhound target"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Aucune cible Bloodhound active"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "No hay objetivo Bloodhound activo"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Kein aktives Bloodhound-Ziel"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "لا يوجد هدف تتبع نشط"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "追跡中のターゲットはありません"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "没有正在追踪的目标"}}
+      }
+    },
+    "Bloodhound" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Bloodhound"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Bloodhound"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Bloodhound"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Bloodhound"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "التتبع"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "ブラッドハウンド"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "追踪"}}
+      }
+    },
+    "Distance unavailable" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Distance unavailable"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Distance indisponible"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Distancia no disponible"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Entfernung nicht verfügbar"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "المسافة غير متاحة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "距離を取得できません"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "无法获取距离"}}
+      }
+    },
+    "Selected target" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Selected target"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Cible sélectionnée"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Objetivo seleccionado"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Ausgewähltes Ziel"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "الهدف المحدد"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "選択したターゲット"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "所选目标"}}
+      }
+    },
+    "Marker" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Marker"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Marqueur"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Marcador"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Markierung"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "علامة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "マーカー"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "标记"}}
+      }
+    },
+    "%lld m" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "%lld m"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "%lld m"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "%lld m"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "%lld m"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "%lld م"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "%lld m"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "%lld 米"}}
+      }
+    },
+    "%@ km" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "%@ km"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "%@ km"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "%@ km"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "%@ km"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "%@ كم"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "%@ km"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "%@ 千米"}}
+      }
+    },
+    "Route · %lld pts" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Route · %lld pts"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Parcours · %lld pts"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Ruta · %lld pts"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Route · %lld Pkt."}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "مسار · %lld نقطة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "ルート · %lld 地点"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "路线 · %lld 点"}}
+      }
+    },
+    "Pt %lld of %lld" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Pt %lld of %lld"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Pt %lld sur %lld"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Pt %lld de %lld"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Pkt. %lld von %lld"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "نقطة %lld من %lld"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "地点 %lld / %lld"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "第 %lld 点，共 %lld 点"}}
+      }
+    },
+    "%@ left" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "%@ left"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "%@ restants"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "%@ restantes"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "%@ verbleibend"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "%@ متبقية"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "残り %@"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "剩余 %@"}}
+      }
+    },
+    "Start nearest" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Start nearest"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Commencer au plus proche"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Empezar en el más cercano"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Am nächsten Punkt starten"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "البدء من أقرب نقطة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "最寄りの地点から開始"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "从最近点开始"}}
+      }
+    },
+    "Start from beginning" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Start from beginning"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Commencer au début"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Empezar desde el principio"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Am Anfang starten"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "البدء من البداية"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "最初から開始"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "从起点开始"}}
+      }
+    },
+    "Stop route" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Stop route"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Arrêter le parcours"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Detener ruta"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Route beenden"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "إيقاف المسار"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "ルートを停止"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "停止路线"}}
+      }
+    },
+    "Point %lld of %lld" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Point %lld of %lld"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Point %lld sur %lld"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Punto %lld de %lld"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Punkt %lld von %lld"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "النقطة %lld من %lld"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "地点 %lld / %lld"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "第 %lld 点，共 %lld 点"}}
+      }
+    },
+    "Remaining: %lld m" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Remaining: %lld m"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Restant : %lld m"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Restante: %lld m"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Verbleibend: %lld m"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "المتبقي: %lld م"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "残り: %lld m"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "剩余：%lld 米"}}
+      }
+    },
+    "Remaining distance unavailable" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Remaining distance unavailable"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Distance restante indisponible"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Distancia restante no disponible"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Verbleibende Entfernung nicht verfügbar"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "المسافة المتبقية غير متاحة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "残りの距離を取得できません"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "无法获取剩余距离"}}
+      }
+    },
+    "Nearest point: %lld m" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Nearest point: %lld m"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Point le plus proche : %lld m"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Punto más cercano: %lld m"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Nächster Punkt: %lld m"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "أقرب نقطة: %lld م"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "最寄りの地点: %lld m"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "最近点：%lld 米"}}
+      }
+    },
+    "Route complete: %@" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Route complete: %@"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Parcours terminé : %@"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Ruta completada: %@"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Route abgeschlossen: %@"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "اكتمل المسار: %@"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "ルート完了: %@"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "路线已完成：%@"}}
+      }
+    },
+    "Start nearest requires a current location. Enable location and try again." : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
+      "localizations" : {
+        "en" : {"stringUnit": {"state": "translated", "value": "Start nearest requires a current location. Enable location and try again."}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Le départ au point le plus proche nécessite une position actuelle. Activez la localisation et réessayez."}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Empezar en el punto más cercano requiere una ubicación actual. Activa la ubicación e inténtalo de nuevo."}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Für den Start am nächsten Punkt ist ein aktueller Standort erforderlich. Standort aktivieren und erneut versuchen."}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "يتطلب البدء من أقرب نقطة موقعًا حاليًا. فعّل الموقع وحاول مجددًا."}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "最寄りの地点から開始するには現在地が必要です。位置情報を有効にして再試行してください。"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "从最近点开始需要当前位置。请启用定位后重试。"}}
+      }
+    },
+    "%lld points" : {
+      "comment" : "Number of points in a received route.",
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld points" } } }
+    },
+    "%lld named points · %lld total" : {
+      "comment" : "Named route waypoints followed by the total route geometry point count.",
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld named points · %lld total" } } }
+    },
+    "This route has no named points. Its full path is still shown on the map." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "This route has no named points. Its full path is still shown on the map." } } }
+    },
+    "Bloodhound to Point" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Bloodhound to Point" } } }
+    },
+    "No routes on this watch. Send a route Data Package from ATAK through your configured TAK server." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No routes on this watch. Send a route Data Package from ATAK through your configured TAK server." } } }
+    },
+    "Point %lld" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Point %lld" } } }
+    },
+    "Refresh Routes" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Refresh Routes" } } }
+    },
+    "Remove from This Watch" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove from This Watch" } } }
+    },
+    "Remove this route from this watch?" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove this route from this watch?" } } }
+    },
+    "Route" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Route" } } }
+    },
+    "Route: %@" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Route: %@" } } }
+    },
+    "Routes" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Routes" } } }
+    },
+    "Routes (%lld)" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Routes (%lld)" } } }
+    },
+    "Select Point" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Select Point" } } }
+    },
+    "Source" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Source" } } }
+    },
+    "The route stays on the TAK server and other devices. Bloodhound to this route will stop. A later resend, Data Sync or refresh may restore it." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The route stays on the TAK server and other devices. Bloodhound to this route will stop. A later resend, Data Sync or refresh may restore it." } } }
+    },
+    "This route is no longer on this watch." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "This route is no longer on this watch." } } }
+    },
     "Compass" : {
       "localizations" : {
         "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "البوصلة" } },
@@ -202,43 +543,15 @@
       }
     },
     "Navigation" : {
+      "comment" : "Local Bloodhound route following and dual-action watch picker.",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "الملاحة" } },
-        "bg" : { "stringUnit" : { "state" : "needs_review", "value" : "Навигация" } },
-        "cs" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigace" } },
-        "da" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigation" } },
-        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigation" } },
-        "el" : { "stringUnit" : { "state" : "needs_review", "value" : "Πλοήγηση" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Navigation" } },
-        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Navegación" } },
-        "et" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigeerimine" } },
-        "fi" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigointi" } },
-        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigation" } },
-        "he" : { "stringUnit" : { "state" : "needs_review", "value" : "ניווט" } },
-        "hr" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigacija" } },
-        "hu" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigáció" } },
-        "id" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigasi" } },
-        "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigazione" } },
-        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "ナビゲーション" } },
-        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "내비게이션" } },
-        "lt" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigacija" } },
-        "lv" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigācija" } },
-        "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigasi" } },
-        "nb" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigasjon" } },
-        "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigatie" } },
-        "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Nawigacja" } },
-        "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "Navegação" } },
-        "ro" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigare" } },
-        "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Навигация" } },
-        "sk" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigácia" } },
-        "sl" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigacija" } },
-        "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigering" } },
-        "th" : { "stringUnit" : { "state" : "needs_review", "value" : "การนำทาง" } },
-        "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "Navigasyon" } },
-        "uk" : { "stringUnit" : { "state" : "needs_review", "value" : "Навігація" } },
-        "vi" : { "stringUnit" : { "state" : "needs_review", "value" : "Điều hướng" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "导航" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "導航" } }
+        "en" : {"stringUnit": {"state": "translated", "value": "Navigation"}},
+        "fr" : {"stringUnit": {"state": "needs_review", "value": "Navigation"}},
+        "es" : {"stringUnit": {"state": "needs_review", "value": "Navegación"}},
+        "de" : {"stringUnit": {"state": "needs_review", "value": "Navigation"}},
+        "ar" : {"stringUnit": {"state": "needs_review", "value": "الملاحة"}},
+        "ja" : {"stringUnit": {"state": "needs_review", "value": "ナビゲーション"}},
+        "zh-Hans" : {"stringUnit": {"state": "needs_review", "value": "导航"}}
       }
     }
   },

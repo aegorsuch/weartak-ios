@@ -4,7 +4,7 @@ import FoundationXML
 #endif
 
 /// Route geometry is independent of the short-lived point/entity cache.
-struct GarminRoute: Codable, Equatable {
+struct GarminRoute: Codable, Equatable, Identifiable {
     static let version = 1
     static let maximumRoutes = 8
     static let maximumPoints = 64
@@ -15,6 +15,12 @@ struct GarminRoute: Codable, Equatable {
         let lat: Double
         let lon: Double
         var name: String?
+
+        var routeListName: String? {
+            guard let name else { return nil }
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
 
         var payload: [String: Any] {
             var value: [String: Any] = ["lat": lat, "lon": lon]
@@ -29,6 +35,12 @@ struct GarminRoute: Codable, Equatable {
     var missionName: String?
     var senderUid: String?
     let points: [Point]
+    var id: String { serverId + "\n" + uid }
+    var namedPoints: [(index: Int, point: Point, name: String)] {
+        points.enumerated().compactMap { index, point in
+            point.routeListName.map { (index: index, point: point, name: $0) }
+        }
+    }
 
     var payload: [String: Any] {
         var value: [String: Any] = [
@@ -69,10 +81,10 @@ struct GarminRoute: Codable, Equatable {
         case invalid, envelopeBudget, capacity, malformedXML
         var errorDescription: String? {
             switch self {
-            case .invalid: return "Garmin route rejected: invalid metadata or geometry (2–64 points required)."
-            case .envelopeBudget: return "Garmin route rejected: its full message exceeds 6,000 bytes."
-            case .capacity: return "Garmin route rejected: the 8-route or 128-point limit was reached."
-            case .malformedXML: return "Garmin routes could not be read from the server response."
+            case .invalid: return "Route rejected: invalid metadata or geometry (2–64 points required)."
+            case .envelopeBudget: return "Route rejected: its full message exceeds 6,000 bytes."
+            case .capacity: return "Route rejected: the 8-route or 128-point limit was reached."
+            case .malformedXML: return "Routes could not be read from the server response."
             }
         }
     }
@@ -221,6 +233,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName: String?, attributes values: [String: String]) {
         depth += 1
+        guard depth <= 32 else { fail(parser, .malformedXML); return }
         if elementName == "event", attributes == nil {
             attributes = values
             eventDepth = depth

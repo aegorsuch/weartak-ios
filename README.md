@@ -146,6 +146,12 @@ Configure these protected GitLab CI/CD variables before using a release tag:
 - `APP_STORE_CONNECT_API_KEY_ID`: App Store Connect API key ID.
 - `APP_STORE_CONNECT_API_ISSUER_ID`: App Store Connect issuer UUID.
 
+GitLab variables store text, so paste the `.p12` and both `.mobileprovision`
+files as single-line base64 (for example `base64 -i file | tr -d '\n'` on macOS
+or `[Convert]::ToBase64String([IO.File]::ReadAllBytes('file'))` in PowerShell).
+The release script decodes base64 values automatically; the `.p8` key is
+already text and is pasted as-is.
+
 Protect version tags so only authorized maintainers can trigger signed
 releases. CI creates a per-run temporary workspace and keychain, validates and
 installs both profiles, and removes the temporary signing material at job exit.
@@ -607,14 +613,132 @@ or deferred in full. SDK handoff is not a watch-receipt acknowledgement: after
 send failure, queue overflow, or reconnect, request a map refresh to recover the
 authoritative route set. iPhone still does not implement synchronized
 Bloodhound coordination; local Garmin route-point tracking is watch-side.
-Apple Watch UI and its existing point-based mission model are unchanged.
+Apple Watch now has a separate persistent route layer and snapshot, outside the
+expiring entity cache. Open **Map → Layers → Routes**, tap a route's start icon,
+or tap its drawn line for details. Named-point navigation remains available in
+route details with original geometry indices; unnamed vertices are not removed.
+
+**Bloodhound** lists routes, saved markers, contacts and incoming points as
+single rows with a type glyph, name and distance subtitle (metres/kilometres).
+Route subtitles include the total geometry point count and nearest-vertex
+range. The row body preserves its detail/point-action behavior. The two separate
+round controls are **crosshair** (grey: open the map centered on the target;
+fit the complete geometry for a route, including date-line crossings) and
+**hound** (green: start local Bloodhound immediately). A route's hound opens an
+explicit chooser with a green **Start nearest** button, **Start from beginning**
+and **Cancel**. Cancelling or previewing the map never changes the active target.
+The active row has an amber background/outline and a red **stop** control with
+a white square. Its route subtitle shows **Pt X of N · distance left**; point,
+marker and contact subtitles retain their distance. The picker stays visible
+while navigating; **Open navigation** opens the existing compass/range UI.
+Buttons have independent 44-point hit areas and accessible action names.
+Picker starts/stops are local only and do not send automatic GeoChat replies;
+explicit **RGR**/**nPos** detail actions retain their existing network behavior.
+
+Select **Start from beginning** (index 0) or **Start nearest** (nearest vertex,
+not nearest line segment). Nearest is disabled with an explanation until there
+is a valid watch fix less than two minutes old; it never falls back to beginning.
+Following visits every remaining vertex in received order, including unnamed
+points, in the existing Bloodhound compass screen. **Point X of N** is 1-based;
+**Remaining** includes distance to the current target plus the remaining route
+legs. Each valid location fix advances through consecutive targets within the
+named `RouteFollower.arrivalRadiusMeters` constant (**20 m**). Reaching the last
+point shows **Route complete** and clears the target. Use **Stop route** to cancel.
+Route following requests continuous location while the watch app is active;
+background GPS/navigation is not guaranteed. Following is local, in-memory state,
+not restored after process termination, and never sends GeoChat or mission edits.
+Selecting any other Bloodhound target, replacing route geometry, or removing the
+route stops following. Ordinary individual route-point Bloodhound is unchanged.
+
+**Remove from This Watch** requires confirmation and removes only the current
+server+UID copy from Apple Watch, without sending a server, mission, Companion
+or Garmin deletion. It is not a permanent dismissal: a later resend, Data Sync
+or snapshot refresh may restore the route, as the confirmation explains.
+
+### Route-only TAK Data Packages (prepared; native acceptance pending)
+
+Companion receives `b-f-t-r` advertisements on an enabled, certificate-configured
+TAK stream. It validates `fileshare.sha256`, `sizeInBytes` (legacy `size` also
+accepted when consistent), and the HTTPS `:8443/Marti/sync/content?hash=…` shape.
+The advertised host may be ATAK's resolved IP: it is **never requested**.
+Companion reconstructs the content URL from the configured source server's
+hostname and port 8443, using that server's existing client certificate,
+CA restrictions and TLS-name validation. Redirects are refused; downloads are
+bounded while streaming and checked against exact size and SHA-256. At most two
+imports run concurrently, with one per source and a 10-second per-source retry
+interval. The package is not sent to the watch; normalized route v1 data uses
+the existing Garmin bridge or a dedicated Apple Watch `routes` snapshot.
+
+Only ZIP32 stored/deflate archives are supported: **4 MiB downloaded, 1 MiB total
+expanded, 64 archive entries, 32 active manifest contents**, with safe unique
+entry paths, matching local/central headers and CRC checks. Encrypted,
+multi-disk, symlink, malformed and over-budget archives fail closed. No entry is
+written to disk. Only manifest-listed `.cot` route events are imported;
+non-route content and package `onReceiveImport`/`onReceiveDelete` instructions
+are never executed, and embedded delete events do not delete existing routes.
+Parsing rejects DTDs/entities and excessive nesting. Imports are atomic;
+failure preserves the previous route set and is shown in Routes/watch status.
+
+The existing **2–64 points per route, 8 routes, 128 total points and 6,000-byte
+route envelope** limits still apply on both watch paths. Larger ATAK routes
+are rejected whole, not silently simplified or shown as a single anchor.
+Standalone watch/Sit(x)/multicast package fetching, arbitrary content import,
+and transfer ACK (`b-f-t-a`) emission are not implemented. Direct `b-m-r` and
+subscribed mission routes reuse the same parser/store.
+
+`scripts/run-portable-garmin-checks.sh` includes package fixtures for stored and
+raw-deflate ZIPs, CRC/hash/size/path failures, manifest instructions, route
+geometry, protocol snapshots, source-scoped local removal/replay behavior,
+`BloodhoundPickerChecks` (map/start/stop action isolation, typed/source-scoped
+identities, route start policy and fitted map bounds), and `RouteFollowerChecks`
+(start modes, dense-point advancement, completion and remaining route distance).
+These changes were prepared on Windows without Swift/Xcode. Run the script on
+macOS and build both native targets before acceptance; the script does not
+claim simulator or physical-device validation.
+
+Hardware acceptance remains: ATAK → TAK server → iPhone → Apple Watch import,
+disconnected refresh/replay, route-line hit selection with overlapping map
+items, named point Bloodhound/compass/haptics, both whole-route start modes,
+20 m dense-point advancement, completion/stop/other-target switching, unavailable
+GPS, all four picker row types, independent crosshair/hound/detail hit targets,
+amber/red active states, route chooser cancel, date-line map fit, VoiceOver/Dynamic
+Type and smallest-screen readability, confirmed local removal and
+later replay, wrong hash/size/TLS/redirect rejection, and verifying
+the server and other devices retain the route. Test a real package within the
+published geometry budget and an oversized package to verify explicit rejection.
 
 Portable route normalization/lifecycle/budget checks (Windows PowerShell):
 
 ```powershell
 swiftc -swift-version 5 -parse-as-library Shared\GarminRoutes.swift Tests\GarminRouteChecks.swift -o .\garmin-route-checks.exe
 .\garmin-route-checks.exe
+swiftc -swift-version 5 -parse-as-library Shared\GarminRoutes.swift Shared\RouteFollower.swift Tests\RouteFollowerChecks.swift -o .\route-follower-checks.exe
+.\route-follower-checks.exe
 ```
+
+Windows-compatible source/catalog/asset preflight (not native execution):
+
+```powershell
+python Tests\run_bloodhound_picker_preflight.py
+```
+
+The portable script also compiles/runs `Tests/BloodhoundPickerChecks.swift` on a
+Swift-equipped host. Windows has no Swift/Xcode toolchain here: native build,
+Swift unit checks, simulator UI and physical-watch actions remain **UNVERIFIED**.
+Translations added for this feature are marked `needs_review` outside English.
+This worktree implements Apple Watch/shared Swift only; WearOS/Garmin picker UI
+and platform-specific icon formats are separate repository changes.
+
+### ATAK picker artwork attribution
+
+`ATAKBloodhound.imageset` and `ATAKCrosshair.imageset` contain resized 68×68 PNG
+versions of `nav_bloodhound.png` and `ic_crosshair.png` from
+[deptofdefense/AndroidTacticalAssaultKit-CIV](https://github.com/deptofdefense/AndroidTacticalAssaultKit-CIV),
+licensed **GPLv3**. Original paths:
+`atak/ATAK/app/src/main/res/drawable-xxxhdpi/nav_bloodhound.png` and
+`atak/ATAK/app/src/main/res/drawable-hdpi/ic_crosshair.png` (main branch).
+Artwork use was user-approved; the user will review licensing/distribution
+compatibility before release. This note is attribution, not legal clearance.
 
 These checks do not validate UIKit/WatchConnectivity/Connect IQ SDK linking or
 physical iPhone/Garmin radio delivery; those still require Xcode and devices.
@@ -1518,7 +1642,7 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/SitxCoT.swift' \
   'WearTAK Watch App/MulticastTAKTransport.swift' \
   'WearTAK Watch App/SitxClient.swift' \
-  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift Shared/TAKMulticast.swift \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift Shared/TAKMulticast.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Shared/SitxShared.swift \
   Shared/PhoneLocationReporting.swift Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
@@ -1577,7 +1701,7 @@ payload preservation, endpoint parsing and multi-server record persistence:
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/CompanionEndpoint.swift \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
   Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
   Shared/DittoPDL.swift \
@@ -1596,7 +1720,7 @@ or contact limit; it does not establish the cause of a device crash:
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Tests/CompanionMapChecks.swift \
   -o /tmp/weartak-map-checks
 /tmp/weartak-map-checks
@@ -1632,7 +1756,7 @@ selection and message-sized item paging (`CompanionMapChecks`):
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift \
   Tests/DataSyncChecks.swift -o /tmp/weartak-datasync-checks
 /tmp/weartak-datasync-checks
@@ -1667,7 +1791,7 @@ state, duplicate suppression, source isolation, quick messages and inbox evictio
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Tests/TAKChatChecks.swift \
   -o /tmp/weartak-chat-checks
 /tmp/weartak-chat-checks
@@ -1679,7 +1803,7 @@ start/stop gating:
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/PhoneLocationReporting.swift \
   Tests/PhoneLocationReportingChecks.swift -o /tmp/weartak-phone-checks
 /tmp/weartak-phone-checks

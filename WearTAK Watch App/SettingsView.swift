@@ -1247,7 +1247,7 @@ private struct PluginsView: View {
                     Toggle(isOn: .constant(false)) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(plugin.title)
-                            Text(String(localized: plugin.subtitle, table: "WatchSettings"))
+                            Text(String(localized: String.LocalizationValue(plugin.subtitle), table: "WatchSettings"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -1262,7 +1262,7 @@ private struct PluginsView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(plugin.title)
-                                Text(String(localized: plugin.subtitle, table: "WatchSettings"))
+                                Text(String(localized: String.LocalizationValue(plugin.subtitle), table: "WatchSettings"))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
