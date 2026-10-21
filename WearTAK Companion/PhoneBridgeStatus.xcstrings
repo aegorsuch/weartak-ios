@@ -72,19 +72,19 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ????????????? ???????"
+            "value": "Няма конфигурирани сървъри"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nijedan poslu?itelj nije konfiguriran"
+            "value": "Nijedan poslužitelj nije konfiguriran"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nejsou nakonfigurov?ny ??dn? servery"
+            "value": "Nejsou nakonfigurovány žádné servery"
           }
         },
         "da": {
@@ -108,25 +108,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Palvelimia ei ole m??ritetty"
+            "value": "Palvelimia ei ole määritetty"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ????? ??????????? ???????????"
+            "value": "Δεν έχουν διαμορφωθεί διακομιστές"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ?????"
+            "value": "לא הוגדרו שרתים"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nincs konfigur?lt szerver"
+            "value": "Nincs konfigurált szerver"
           }
         },
         "id": {
@@ -138,19 +138,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ?? ??"
+            "value": "구성된 서버 없음"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nav konfigur?tu serveru"
+            "value": "Nav konfigurētu serveru"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Serveriai nesukonfig?ruoti"
+            "value": "Serveriai nesukonfigūruoti"
           }
         },
         "nb": {
@@ -162,25 +162,25 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nie skonfigurowano serwer?w"
+            "value": "Nie skonfigurowano serwerów"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nu exist? servere configurate"
+            "value": "Nu există servere configurate"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nie s? nakonfigurovan? ?iadne servery"
+            "value": "Nie sú nakonfigurované žiadne servery"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Stre?niki niso nastavljeni"
+            "value": "Strežniki niso nastavljeni"
           }
         },
         "sv": {
@@ -192,25 +192,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????"
+            "value": "ยังไม่ได้กำหนดค่าเซิร์ฟเวอร์"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Yap?land?r?lm?? sunucu yok"
+            "value": "Yapılandırılmış sunucu yok"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ?? ???????????"
+            "value": "Сервери не налаштовано"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ch?a c?u h?nh m?y ch? n?o"
+            "value": "Chưa cấu hình máy chủ nào"
           }
         },
         "ms": {
@@ -292,19 +292,19 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????"
+            "value": "Изключено"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Onemogu?eno"
+            "value": "Onemogućeno"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zak?z?no"
+            "value": "Zakázáno"
           }
         },
         "da": {
@@ -328,19 +328,19 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pois k?yt?st?"
+            "value": "Pois käytöstä"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????"
+            "value": "Απενεργοποιημένο"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????"
+            "value": "מושבת"
           }
         },
         "hu": {
@@ -358,19 +358,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????"
+            "value": "비활성화됨"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Atsp?jots"
+            "value": "Atspējots"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "I?jungta"
+            "value": "Išjungta"
           }
         },
         "nb": {
@@ -382,7 +382,7 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Wy??czono"
+            "value": "Wyłączono"
           }
         },
         "ro": {
@@ -394,13 +394,13 @@
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zak?zan?"
+            "value": "Zakázané"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Onemogo?eno"
+            "value": "Onemogočeno"
           }
         },
         "sv": {
@@ -412,25 +412,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????"
+            "value": "ปิดใช้งาน"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Devre d???"
+            "value": "Devre dışı"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????"
+            "value": "Вимкнено"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? t?t"
+            "value": "Đã tắt"
           }
         },
         "ms": {
@@ -512,7 +512,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ? ??????????"
+            "value": "Не е стартирано"
           }
         },
         "hr": {
@@ -524,7 +524,7 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nespu?t?no"
+            "value": "Nespuštěno"
           }
         },
         "da": {
@@ -542,7 +542,7 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "K?ivitamata"
+            "value": "Käivitamata"
           }
         },
         "fi": {
@@ -554,19 +554,19 @@
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ????????"
+            "value": "Δεν ξεκίνησε"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????"
+            "value": "לא הופעל"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nincs elind?tva"
+            "value": "Nincs elindítva"
           }
         },
         "id": {
@@ -578,19 +578,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ??"
+            "value": "시작되지 않음"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nav s?kts"
+            "value": "Nav sākts"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Neprad?ta"
+            "value": "Nepradėta"
           }
         },
         "nb": {
@@ -614,7 +614,7 @@
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nespusten?"
+            "value": "Nespustené"
           }
         },
         "sl": {
@@ -632,25 +632,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????????"
+            "value": "ยังไม่เริ่ม"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ba?lat?lmad?"
+            "value": "Başlatılmadı"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ????????"
+            "value": "Не запущено"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ch?a b?t ??u"
+            "value": "Chưa bắt đầu"
           }
         },
         "ms": {
@@ -732,19 +732,19 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ? ????????"
+            "value": "Не е поискано"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nije zatra?eno"
+            "value": "Nije zatraženo"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nevy??d?no"
+            "value": "Nevyžádáno"
           }
         },
         "da": {
@@ -774,19 +774,19 @@
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ????????"
+            "value": "Δεν ζητήθηκε"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????"
+            "value": "לא התבקש"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nincs k?rve"
+            "value": "Nincs kérve"
           }
         },
         "id": {
@@ -798,19 +798,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ??"
+            "value": "요청되지 않음"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nav piepras?ts"
+            "value": "Nav pieprasīts"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nepra?yta"
+            "value": "Neprašyta"
           }
         },
         "nb": {
@@ -822,7 +822,7 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nie za??dano"
+            "value": "Nie zażądano"
           }
         },
         "ro": {
@@ -834,7 +834,7 @@
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nevy?iadan?"
+            "value": "Nevyžiadané"
           }
         },
         "sl": {
@@ -846,31 +846,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Inte beg?rd"
+            "value": "Inte begärd"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????????????"
+            "value": "ยังไม่ได้ร้องขอ"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?stenmedi"
+            "value": "İstenmedi"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ????????"
+            "value": "Не запитано"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ch?a y?u c?u"
+            "value": "Chưa yêu cầu"
           }
         },
         "ms": {
@@ -952,25 +952,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????? ?? ??????? ?? ????? ?? ????? ????????"
+            "value": "Настройките на сървъра не могат да бъдат заредени"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nije mogu?e u?itati postavke poslu?itelja"
+            "value": "Nije moguće učitati postavke poslužitelja"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nelze na??st nastaven? serveru"
+            "value": "Nelze načíst nastavení serveru"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Serverindstillingerne kunne ikke indl?ses"
+            "value": "Serverindstillingerne kunne ikke indlæses"
           }
         },
         "nl": {
@@ -994,19 +994,19 @@
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ????? ?????? ? ??????? ??? ????????? ??????????"
+            "value": "Δεν είναι δυνατή η φόρτωση των ρυθμίσεων διακομιστή"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ???? ????? ?? ?????? ????"
+            "value": "לא ניתן לטעון את הגדרות השרת"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A szerverbe?ll?t?sok nem t?lthet?k be"
+            "value": "A szerverbeállítások nem tölthetők be"
           }
         },
         "id": {
@@ -1018,19 +1018,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ??? ??? ? ??"
+            "value": "서버 설정을 로드할 수 없음"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nevar iel?d?t servera iestat?jumus"
+            "value": "Nevar ielādēt servera iestatījumus"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nepavyko ?kelti serverio nustatym?"
+            "value": "Nepavyko įkelti serverio nustatymų"
           }
         },
         "nb": {
@@ -1042,55 +1042,55 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nie mo?na wczyta? ustawie? serwera"
+            "value": "Nie można wczytać ustawień serwera"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Set?rile serverului nu pot fi ?nc?rcate"
+            "value": "Setările serverului nu pot fi încărcate"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ned? sa na??ta? nastavenie servera"
+            "value": "Nedá sa načítať nastavenie servera"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nastavitev stre?nika ni mogo?e nalo?iti"
+            "value": "Nastavitev strežnika ni mogoče naložiti"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Det g?r inte att l?sa in serverinst?llningar"
+            "value": "Det går inte att läsa in serverinställningar"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????????????????????????????????"
+            "value": "ไม่สามารถโหลดการตั้งค่าเซิร์ฟเวอร์ได้"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sunucu ayarlar? y?klenemiyor"
+            "value": "Sunucu ayarları yüklenemiyor"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ??????? ??????????? ???????????? ???????"
+            "value": "Не вдалося завантажити налаштування сервера"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Kh?ng th? t?i c?i ??t m?y ch?"
+            "value": "Không thể tải cài đặt máy chủ"
           }
         },
         "ms": {
@@ -1172,7 +1172,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ????? ??? ????? ?????"
+            "value": "На пауза във фонов режим"
           }
         },
         "hr": {
@@ -1184,13 +1184,13 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pozastaveno na pozad?"
+            "value": "Pozastaveno na pozadí"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sat p? pause i baggrunden"
+            "value": "Sat på pause i baggrunden"
           }
         },
         "nl": {
@@ -1214,19 +1214,19 @@
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ????? ??? ??????????"
+            "value": "Σε παύση στο παρασκήνιο"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ????"
+            "value": "מושהה ברקע"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sz?neteltetve a h?tt?rben"
+            "value": "Szüneteltetve a háttérben"
           }
         },
         "id": {
@@ -1238,13 +1238,13 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ?? ???"
+            "value": "백그라운드에서 일시 정지됨"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pauz?ts fon?"
+            "value": "Pauzēts fonā"
           }
         },
         "lt": {
@@ -1256,7 +1256,7 @@
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Satt p? pause i bakgrunnen"
+            "value": "Satt på pause i bakgrunnen"
           }
         },
         "pl": {
@@ -1268,19 +1268,19 @@
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?n pauz? ?n fundal"
+            "value": "În pauză în fundal"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pozastaven? na pozad?"
+            "value": "Pozastavené na pozadí"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Za?asno ustavljeno v ozadju"
+            "value": "Začasno ustavljeno v ozadju"
           }
         },
         "sv": {
@@ -1292,25 +1292,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????"
+            "value": "หยุดชั่วคราวในเบื้องหลัง"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Arka planda duraklat?ld?"
+            "value": "Arka planda duraklatıldı"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????? ? ???????? ??????"
+            "value": "Призупинено у фоновому режимі"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "T?m d?ng trong n?n"
+            "value": "Tạm dừng trong nền"
           }
         },
         "ms": {
@@ -1392,7 +1392,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????????? ??????????"
+            "value": "Конфигурирайте сертификат"
           }
         },
         "hr": {
@@ -1404,7 +1404,7 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nakonfigurujte certifik?t"
+            "value": "Nakonfigurujte certifikát"
           }
         },
         "da": {
@@ -1428,25 +1428,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "M??rit? varmenne"
+            "value": "Määritä varmenne"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ??????????????"
+            "value": "Διαμόρφωση πιστοποιητικού"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????"
+            "value": "הגדרת אישור"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tan?s?tv?ny konfigur?l?sa"
+            "value": "Tanúsítvány konfigurálása"
           }
         },
         "id": {
@@ -1458,19 +1458,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ??"
+            "value": "인증서 구성"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konfigur?jiet sertifik?tu"
+            "value": "Konfigurējiet sertifikātu"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konfig?ruokite sertifikat?"
+            "value": "Konfigūruokite sertifikatą"
           }
         },
         "nb": {
@@ -1488,13 +1488,13 @@
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Configura?i certificatul"
+            "value": "Configurați certificatul"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nakonfigurujte certifik?t"
+            "value": "Nakonfigurujte certifikát"
           }
         },
         "sl": {
@@ -1512,25 +1512,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????"
+            "value": "กำหนดค่าใบรับรอง"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sertifikay? yap?land?r?n"
+            "value": "Sertifikayı yapılandırın"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ??????????"
+            "value": "Налаштуйте сертифікат"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??nh c?u h?nh ch?ng ch?"
+            "value": "Định cấu hình chứng chỉ"
           }
         },
         "ms": {
@@ -1612,25 +1612,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?? GPS ??????? ?? ????????"
+            "value": "Изчакване на GPS позиция на телефона"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ekanje GPS polo?aja telefona"
+            "value": "Čekanje GPS položaja telefona"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ek?n? na GPS polohu telefonu"
+            "value": "Čekání na GPS polohu telefonu"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Venter p? telefonens GPS-position"
+            "value": "Venter på telefonens GPS-position"
           }
         },
         "nl": {
@@ -1654,19 +1654,19 @@
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ??? ?????? GPS ??? ?????????"
+            "value": "Αναμονή για στίγμα GPS του τηλεφώνου"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????? GPS ?? ??????"
+            "value": "ממתין לקליטת GPS של הטלפון"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V?rakoz?s a telefon GPS-helyzet?re"
+            "value": "Várakozás a telefon GPS-helyzetére"
           }
         },
         "id": {
@@ -1678,13 +1678,13 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? GPS ?? ?? ?"
+            "value": "휴대폰 GPS 위치 대기 중"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Gaida t?lru?a GPS atra?an?s vietu"
+            "value": "Gaida tālruņa GPS atrašanās vietu"
           }
         },
         "lt": {
@@ -1696,43 +1696,43 @@
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Venter p? telefonens GPS-posisjon"
+            "value": "Venter på telefonens GPS-posisjon"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Oczekiwanie na lokalizacj? GPS telefonu"
+            "value": "Oczekiwanie na lokalizację GPS telefonu"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Se a?teapt? pozi?ia GPS a telefonului"
+            "value": "Se așteaptă poziția GPS a telefonului"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ak? sa na GPS polohu telef?nu"
+            "value": "Čaká sa na GPS polohu telefónu"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?akanje na GPS-lokacijo telefona"
+            "value": "Čakanje na GPS-lokacijo telefona"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V?ntar p? telefonens GPS-position"
+            "value": "Väntar på telefonens GPS-position"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????????? GPS ???????????"
+            "value": "กำลังรอตำแหน่ง GPS ของโทรศัพท์"
           }
         },
         "tr": {
@@ -1744,13 +1744,13 @@
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? GPS-???????????????? ????????"
+            "value": "Очікування GPS-місцезнаходження телефона"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ang ??i v? tr? GPS c?a ?i?n tho?i"
+            "value": "Đang đợi vị trí GPS của điện thoại"
           }
         },
         "ms": {
@@ -1832,19 +1832,19 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?? ?????????? ?? ??????????????"
+            "value": "Изискване на разрешение за местоположение"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tra?enje dopu?tenja za lokaciju"
+            "value": "Traženje dopuštenja za lokaciju"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??dost o opr?vn?n? k poloze"
+            "value": "Žádost o oprávnění k poloze"
           }
         },
         "da": {
@@ -1868,25 +1868,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pyydet??n sijaintilupaa"
+            "value": "Pyydetään sijaintilupaa"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ?????? ??????????"
+            "value": "Αίτημα άδειας τοποθεσίας"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ????? ?????"
+            "value": "מבקש הרשאת מיקום"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Helyenged?ly k?r?se"
+            "value": "Helyengedély kérése"
           }
         },
         "id": {
@@ -1898,19 +1898,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?? ?? ?"
+            "value": "위치 권한 요청 중"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pieprasa atra?an?s vietas at?auju"
+            "value": "Pieprasa atrašanās vietas atļauju"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pra?oma vietos leidimo"
+            "value": "Prašoma vietos leidimo"
           }
         },
         "nb": {
@@ -1922,19 +1922,19 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pro?ba o pozwolenie na lokalizacj?"
+            "value": "Prośba o pozwolenie na lokalizację"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Se solicit? permisiunea pentru localizare"
+            "value": "Se solicită permisiunea pentru localizare"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?iada sa povolenie polohy"
+            "value": "Žiada sa povolenie polohy"
           }
         },
         "sl": {
@@ -1946,13 +1946,13 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Beg?r platsbeh?righet"
+            "value": "Begär platsbehörighet"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????????????????????????????"
+            "value": "กำลังขอสิทธิ์เข้าถึงตำแหน่งที่ตั้ง"
           }
         },
         "tr": {
@@ -1964,13 +1964,13 @@
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ??????? ?? ??????????"
+            "value": "Запит дозволу на геолокацію"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ang y?u c?u quy?n truy c?p v? tr?"
+            "value": "Đang yêu cầu quyền truy cập vị trí"
           }
         },
         "ms": {
@@ -2052,7 +2052,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????"
+            "value": "Спряно"
           }
         },
         "hr": {
@@ -2088,25 +2088,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pys?ytetty"
+            "value": "Pysäytetty"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????"
+            "value": "Διακόπηκε"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????"
+            "value": "נעצר"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Le?ll?tva"
+            "value": "Leállítva"
           }
         },
         "id": {
@@ -2118,13 +2118,13 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???"
+            "value": "중지됨"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aptur?ts"
+            "value": "Apturēts"
           }
         },
         "lt": {
@@ -2154,7 +2154,7 @@
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zastaven?"
+            "value": "Zastavené"
           }
         },
         "sl": {
@@ -2172,7 +2172,7 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????"
+            "value": "หยุดแล้ว"
           }
         },
         "tr": {
@@ -2184,13 +2184,13 @@
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????"
+            "value": "Зупинено"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? d?ng"
+            "value": "Đã dừng"
           }
         },
         "ms": {
@@ -2272,25 +2272,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?? ?????? ??? ?????? TAK"
+            "value": "Изчакване на връзка със сървър TAK"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ekanje veze s TAK poslu?iteljem"
+            "value": "Čekanje veze s TAK poslužiteljem"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ek?n? na p?ipojen? k serveru TAK"
+            "value": "Čekání na připojení k serveru TAK"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Venter p? forbindelse til TAK-server"
+            "value": "Venter på forbindelse til TAK-server"
           }
         },
         "nl": {
@@ -2302,31 +2302,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ootan TAK-serveriga ?hendamist"
+            "value": "Ootan TAK-serveriga ühendamist"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Odotetaan TAK-palvelinyhteytt?"
+            "value": "Odotetaan TAK-palvelinyhteyttä"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ???????? ?? ?????????? TAK"
+            "value": "Αναμονή σύνδεσης με διακομιστή TAK"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????? ???? TAK"
+            "value": "ממתין לחיבור לשרת TAK"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V?rakoz?s a TAK-szerverkapcsolatra"
+            "value": "Várakozás a TAK-szerverkapcsolatra"
           }
         },
         "id": {
@@ -2338,7 +2338,7 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "TAK ?? ?? ?? ?"
+            "value": "TAK 서버 연결 대기 중"
           }
         },
         "lv": {
@@ -2350,67 +2350,67 @@
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Laukiama ry?io su TAK serveriu"
+            "value": "Laukiama ryšio su TAK serveriu"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Venter p? tilkobling til TAK-server"
+            "value": "Venter på tilkobling til TAK-server"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Oczekiwanie na po??czenie z serwerem TAK"
+            "value": "Oczekiwanie na połączenie z serwerem TAK"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Se a?teapt? conexiunea la serverul TAK"
+            "value": "Se așteaptă conexiunea la serverul TAK"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ak? sa na pripojenie k serveru TAK"
+            "value": "Čaká sa na pripojenie k serveru TAK"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?akanje na povezavo s stre?nikom TAK"
+            "value": "Čakanje na povezavo s strežnikom TAK"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V?ntar p? anslutning till TAK-server"
+            "value": "Väntar på anslutning till TAK-server"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????????? TAK"
+            "value": "กำลังรอการเชื่อมต่อกับเซิร์ฟเวอร์ TAK"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "TAK sunucusu ba?lant?s? bekleniyor"
+            "value": "TAK sunucusu bağlantısı bekleniyor"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ??????????? ?? ??????? TAK"
+            "value": "Очікування підключення до сервера TAK"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ang ??i k?t n?i m?y ch? TAK"
+            "value": "Đang đợi kết nối máy chủ TAK"
           }
         },
         "ms": {
@@ -2492,25 +2492,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ??????? ????????? ?????? TAK; Companion ?? ????? ?????? ???????????."
+            "value": "Няма свързан активиран сървър TAK; Companion ще опита отново автоматично."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nije povezan nijedan omogu?eni TAK poslu?itelj; Companion ?e automatski poku?ati ponovno."
+            "value": "Nije povezan nijedan omogućeni TAK poslužitelj; Companion će automatski pokušati ponovno."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nen? p?ipojen ??dn? povolen? server TAK; Companion to automaticky zkus? znovu."
+            "value": "Není připojen žádný povolený server TAK; Companion to automaticky zkusí znovu."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ingen aktiveret TAK-server er forbundet; Companion pr?ver automatisk igen."
+            "value": "Ingen aktiveret TAK-server er forbundet; Companion prøver automatisk igen."
           }
         },
         "nl": {
@@ -2522,31 +2522,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?kski lubatud TAK-server pole ?hendatud; Companion proovib automaatselt uuesti."
+            "value": "Ükski lubatud TAK-server pole ühendatud; Companion proovib automaatselt uuesti."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Yht??n k?yt?ss? olevaa TAK-palvelinta ei ole yhdistetty; Companion yritt?? automaattisesti uudelleen."
+            "value": "Yhtään käytössä olevaa TAK-palvelinta ei ole yhdistetty; Companion yrittää automaattisesti uudelleen."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ????? ???????????? ??????? ??????????????? ??????????? TAK? ?? Companion ?? ????????? ???? ????????."
+            "value": "Δεν είναι συνδεδεμένος κανένας ενεργοποιημένος διακομιστής TAK· το Companion θα δοκιμάσει ξανά αυτόματα."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ??? TAK ????? ??????; Companion ???? ??? ????? ???????."
+            "value": "אין שרת TAK מופעל שמחובר; Companion ינסה שוב באופן אוטומטי."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nincs csatlakoztatva enged?lyezett TAK-szerver; a Companion automatikusan ?jrapr?b?lkozik."
+            "value": "Nincs csatlakoztatva engedélyezett TAK-szerver; a Companion automatikusan újrapróbálkozik."
           }
         },
         "id": {
@@ -2558,79 +2558,79 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? TAK ??? ???? ?????. Companion? ???? ?? ?????."
+            "value": "활성화된 TAK 서버가 연결되지 않았습니다. Companion이 자동으로 다시 시도합니다."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nav savienots neviens iesp?jots TAK serveris; Companion autom?tiski m??in?s v?lreiz."
+            "value": "Nav savienots neviens iespējots TAK serveris; Companion automātiski mēģinās vēlreiz."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Neprijungtas n? vienas ?jungtas TAK serveris; Companion bandys dar kart? automati?kai."
+            "value": "Neprijungtas nė vienas įjungtas TAK serveris; Companion bandys dar kartą automatiškai."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ingen aktivert TAK-server er tilkoblet; Companion pr?ver automatisk p? nytt."
+            "value": "Ingen aktivert TAK-server er tilkoblet; Companion prøver automatisk på nytt."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Brak po??czenia z w??czonym serwerem TAK; Companion ponowi pr?b? automatycznie."
+            "value": "Brak połączenia z włączonym serwerem TAK; Companion ponowi próbę automatycznie."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nu este conectat niciun server TAK activ; Companion va re?ncerca automat."
+            "value": "Nu este conectat niciun server TAK activ; Companion va reîncerca automat."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nie je pripojen? ?iadny povolen? server TAK; Companion to automaticky sk?si znova."
+            "value": "Nie je pripojený žiadny povolený server TAK; Companion to automaticky skúsi znova."
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Povezan ni noben omogo?en stre?nik TAK; Companion bo samodejno poskusil znova."
+            "value": "Povezan ni noben omogočen strežnik TAK; Companion bo samodejno poskusil znova."
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ingen aktiverad TAK-server ?r ansluten; Companion f?rs?ker automatiskt igen."
+            "value": "Ingen aktiverad TAK-server är ansluten; Companion försöker automatiskt igen."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????????????? TAK ?????????????????????????? Companion ?????????????????????????"
+            "value": "ไม่มีเซิร์ฟเวอร์ TAK ที่เปิดใช้งานเชื่อมต่ออยู่ Companion จะลองอีกครั้งโดยอัตโนมัติ"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Etkin bir TAK sunucusuna ba?lan?lmad?; Companion otomatik olarak yeniden deneyecek."
+            "value": "Etkin bir TAK sunucusuna bağlanılmadı; Companion otomatik olarak yeniden deneyecek."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????????? ?????? TAK ?? ??????????; Companion ??????????? ????????? ??????."
+            "value": "Жоден увімкнений сервер TAK не підключено; Companion автоматично повторить спробу."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ch?a k?t n?i m?y ch? TAK n?o ???c b?t; Companion s? t? ??ng th? l?i."
+            "value": "Chưa kết nối máy chủ TAK nào được bật; Companion sẽ tự động thử lại."
           }
         },
         "ms": {
@@ -2712,25 +2712,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????? ?????? TAK ??? ??????????."
+            "value": "Активирайте сървър TAK със сертификат."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Omogu?ite TAK poslu?itelj s certifikatom."
+            "value": "Omogućite TAK poslužitelj s certifikatom."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Povolte server TAK s certifik?tem."
+            "value": "Povolte server TAK s certifikátem."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aktiv?r en TAK-server med et certifikat."
+            "value": "Aktivér en TAK-server med et certifikat."
           }
         },
         "nl": {
@@ -2748,25 +2748,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ota varmenteellinen TAK-palvelin k?ytt??n."
+            "value": "Ota varmenteellinen TAK-palvelin käyttöön."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????? ???? ?????????? TAK ?? ?????????????."
+            "value": "Ενεργοποιήστε έναν διακομιστή TAK με πιστοποιητικό."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ??? TAK ?? ?????."
+            "value": "הפעל שרת TAK עם אישור."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Enged?lyezzen egy tan?s?tv?nnyal rendelkez? TAK-szervert."
+            "value": "Engedélyezzen egy tanúsítvánnyal rendelkező TAK-szervert."
           }
         },
         "id": {
@@ -2778,19 +2778,19 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ?? TAK ??? ??????."
+            "value": "인증서가 있는 TAK 서버를 활성화하세요."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Iesp?jojiet TAK serveri ar sertifik?tu."
+            "value": "Iespējojiet TAK serveri ar sertifikātu."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?junkite TAK server? su sertifikatu."
+            "value": "Įjunkite TAK serverį su sertifikatu."
           }
         },
         "nb": {
@@ -2802,25 +2802,25 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "W??cz serwer TAK z certyfikatem."
+            "value": "Włącz serwer TAK z certyfikatem."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Activa?i un server TAK cu certificat."
+            "value": "Activați un server TAK cu certificat."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Povo?te server TAK s certifik?tom."
+            "value": "Povoľte server TAK s certifikátom."
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Omogo?ite stre?nik TAK s potrdilom."
+            "value": "Omogočite strežnik TAK s potrdilom."
           }
         },
         "sv": {
@@ -2832,25 +2832,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????? TAK ?????????????"
+            "value": "เปิดใช้งานเซิร์ฟเวอร์ TAK ที่มีใบรับรอง"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sertifikal? bir TAK sunucusunu etkinle?tirin."
+            "value": "Sertifikalı bir TAK sunucusunu etkinleştirin."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?????? TAK ?? ????????????."
+            "value": "Увімкніть сервер TAK із сертифікатом."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "B?t m?y ch? TAK c? ch?ng ch?."
+            "value": "Bật máy chủ TAK có chứng chỉ."
           }
         },
         "ms": {
@@ -2932,25 +2932,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ?? ?????????????? ?? ????????? ?? ???? ???????."
+            "value": "Услугите за местоположение са изключени на този телефон."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Usluge lokacije isklju?ene su na ovom telefonu."
+            "value": "Usluge lokacije isključene su na ovom telefonu."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Polohov? slu?by jsou v tomto telefonu vypnut?."
+            "value": "Polohové služby jsou v tomto telefonu vypnuté."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Lokalitetstjenester er sl?et fra p? denne telefon."
+            "value": "Lokalitetstjenester er slået fra på denne telefon."
           }
         },
         "nl": {
@@ -2962,31 +2962,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Selle telefoni asukohateenused on v?lja l?litatud."
+            "value": "Selle telefoni asukohateenused on välja lülitatud."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sijaintipalvelut eiv?t ole k?yt?ss? t?ss? puhelimessa."
+            "value": "Sijaintipalvelut eivät ole käytössä tässä puhelimessa."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ????????? ?????????? ????? ????????????????? ?? ???? ?? ????????."
+            "value": "Οι υπηρεσίες τοποθεσίας είναι απενεργοποιημένες σε αυτό το τηλέφωνο."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ?????? ?????? ?????? ???."
+            "value": "שירותי המיקום כבויים בטלפון הזה."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A Helymeghat?roz?s ki van kapcsolva ezen a telefonon."
+            "value": "A Helymeghatározás ki van kapcsolva ezen a telefonon."
           }
         },
         "id": {
@@ -2998,31 +2998,31 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "? ????? ?? ???? ?? ????."
+            "value": "이 휴대폰에서 위치 서비스가 꺼져 있습니다."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?aj? t?lrun? ir izsl?gti atra?an?s vietas pakalpojumi."
+            "value": "Šajā tālrunī ir izslēgti atrašanās vietas pakalpojumi."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?iame telefone i?jungtos vietos nustatymo paslaugos."
+            "value": "Šiame telefone išjungtos vietos nustatymo paslaugos."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Stedstjenester er sl?tt av p? denne telefonen."
+            "value": "Stedstjenester er slått av på denne telefonen."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Us?ugi lokalizacji s? wy??czone w tym telefonie."
+            "value": "Usługi lokalizacji są wyłączone w tym telefonie."
           }
         },
         "ro": {
@@ -3034,7 +3034,7 @@
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Lokaliza?n? slu?by s? v tomto telef?ne vypnut?."
+            "value": "Lokalizačné služby sú v tomto telefóne vypnuté."
           }
         },
         "sl": {
@@ -3046,31 +3046,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Platstj?nster ?r avst?ngda p? den h?r telefonen."
+            "value": "Platstjänster är avstängda på den här telefonen."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????????????????????????????????????"
+            "value": "บริการหาตำแหน่งปิดอยู่ในโทรศัพท์เครื่องนี้"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Bu telefonda Konum Servisleri kapal?."
+            "value": "Bu telefonda Konum Servisleri kapalı."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ????? ???????? ???????? ?????? ??????????."
+            "value": "На цьому телефоні вимкнено служби геолокації."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "D?ch v? ??nh v? ?ang t?t tr?n ?i?n tho?i n?y."
+            "value": "Dịch vụ định vị đang tắt trên điện thoại này."
           }
         },
         "ms": {
@@ -3152,7 +3152,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ?? ???????????????? ? ???????. ????????? ?? ? ????????? > WearTAK Companion > ??????????????."
+            "value": "Достъпът до местоположението е отказан. Разрешете го в Настройки > WearTAK Companion > Местоположение."
           }
         },
         "hr": {
@@ -3164,7 +3164,7 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "P??stup k poloze byl zam?tnut. Povolte jej v Nastaven? > WearTAK Companion > Poloha."
+            "value": "Přístup k poloze byl zamítnut. Povolte jej v Nastavení > WearTAK Companion > Poloha."
           }
         },
         "da": {
@@ -3182,31 +3182,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Asukohale juurdep??s keelati. Luba see men??s Seaded > WearTAK Companion > Asukoht."
+            "value": "Asukohale juurdepääs keelati. Luba see menüüs Seaded > WearTAK Companion > Asukoht."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sijainnin k?ytt? estettiin. Salli se kohdassa Asetukset > WearTAK Companion > Sijainti."
+            "value": "Sijainnin käyttö estettiin. Salli se kohdassa Asetukset > WearTAK Companion > Sijainti."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ??????????? ? ???????? ???? ?????????. ????????? ??? ??? ??? ????????? > WearTAK Companion > ?????????."
+            "value": "Δεν επιτρέπεται η πρόσβαση στην τοποθεσία. Επιτρέψτε την από τις Ρυθμίσεις > WearTAK Companion > Τοποθεσία."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????? ?????. ?? ????? ???? ??????? > WearTAK Companion > ?????."
+            "value": "הגישה למיקום נדחתה. יש לאפשר אותה בהגדרות > WearTAK Companion > מיקום."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A helyhozz?f?r?s megtagadva. Enged?lyezze itt: Be?ll?t?sok > WearTAK Companion > Helyzet."
+            "value": "A helyhozzáférés megtagadva. Engedélyezze itt: Beállítások > WearTAK Companion > Helyzet."
           }
         },
         "id": {
@@ -3218,43 +3218,43 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ??? ???????. ?? > WearTAK Companion > ???? ?????."
+            "value": "위치 접근이 거부되었습니다. 설정 > WearTAK Companion > 위치에서 허용하세요."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Atra?an?s vietas piek?uve ir liegta. At?aujiet to sada?? Iestat?jumi > WearTAK Companion > Atra?an?s vieta."
+            "value": "Atrašanās vietas piekļuve ir liegta. Atļaujiet to sadaļā Iestatījumi > WearTAK Companion > Atrašanās vieta."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Prieiga prie vietos u?drausta. Leiskite j? skiltyje Nustatymai > WearTAK Companion > Vieta."
+            "value": "Prieiga prie vietos uždrausta. Leiskite ją skiltyje Nustatymai > WearTAK Companion > Vieta."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tilgang til posisjon ble avsl?tt. Tillat den under Innstillinger > WearTAK Companion > Posisjon."
+            "value": "Tilgang til posisjon ble avslått. Tillat den under Innstillinger > WearTAK Companion > Posisjon."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Odm?wiono dost?pu do lokalizacji. Zezw?l na niego w Ustawienia > WearTAK Companion > Lokalizacja."
+            "value": "Odmówiono dostępu do lokalizacji. Zezwól na niego w Ustawienia > WearTAK Companion > Lokalizacja."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Accesul la localizare a fost refuzat. Permite?i-l din Configur?ri > WearTAK Companion > Localizare."
+            "value": "Accesul la localizare a fost refuzat. Permiteți-l din Configurări > WearTAK Companion > Localizare."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pr?stup k polohe bol zamietnut?. Povo?te ho v Nastavenia > WearTAK Companion > Poloha."
+            "value": "Prístup k polohe bol zamietnutý. Povoľte ho v Nastavenia > WearTAK Companion > Poloha."
           }
         },
         "sl": {
@@ -3266,31 +3266,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?tkomst till plats nekades. Till?t den under Inst?llningar > WearTAK Companion > Plats."
+            "value": "Åtkomst till plats nekades. Tillåt den under Inställningar > WearTAK Companion > Plats."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????????? ???????????? ?????????? > WearTAK Companion > ??????????????"
+            "value": "การเข้าถึงตำแหน่งที่ตั้งถูกปฏิเสธ อนุญาตได้ที่ การตั้งค่า > WearTAK Companion > ตำแหน่งที่ตั้ง"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konum eri?imi reddedildi. Ayarlar > WearTAK Companion > Konum b?l?m?nden izin verin."
+            "value": "Konum erişimi reddedildi. Ayarlar > WearTAK Companion > Konum bölümünden izin verin."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ?? ?????????? ??????????. ????????? ???? ? ???? ????????? > WearTAK Companion > ??????????."
+            "value": "Доступ до геолокації заборонено. Дозвольте його в меню Параметри > WearTAK Companion > Геолокація."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Quy?n truy c?p v? tr? b? t? ch?i. H?y cho ph?p trong C?i ??t > WearTAK Companion > V? tr?."
+            "value": "Quyền truy cập vị trí bị từ chối. Hãy cho phép trong Cài đặt > WearTAK Companion > Vị trí."
           }
         },
         "ms": {
@@ -3372,25 +3372,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ?? ???????????????? ? ????????? ?? ???? ???????."
+            "value": "Достъпът до местоположението е ограничен на този телефон."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pristup lokaciji ograni?en je na ovom telefonu."
+            "value": "Pristup lokaciji ograničen je na ovom telefonu."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "P??stup k poloze je v tomto telefonu omezen."
+            "value": "Přístup k poloze je v tomto telefonu omezen."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Adgang til lokalitet er begr?nset p? denne telefon."
+            "value": "Adgang til lokalitet er begrænset på denne telefon."
           }
         },
         "nl": {
@@ -3402,31 +3402,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Selle telefoni asukohajuurdep??s on piiratud."
+            "value": "Selle telefoni asukohajuurdepääs on piiratud."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sijainnin k?ytt?? on rajoitettu t?ss? puhelimessa."
+            "value": "Sijainnin käyttöä on rajoitettu tässä puhelimessa."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "? ???????? ???? ????????? ????? ???????????? ?? ???? ?? ????????."
+            "value": "Η πρόσβαση στην τοποθεσία είναι περιορισμένη σε αυτό το τηλέφωνο."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????? ?????? ?????? ???."
+            "value": "הגישה למיקום מוגבלת בטלפון הזה."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A helyhozz?f?r?s korl?tozott ezen a telefonon."
+            "value": "A helyhozzáférés korlátozott ezen a telefonon."
           }
         },
         "id": {
@@ -3438,43 +3438,43 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "? ???? ?? ??? ???? ????."
+            "value": "이 휴대폰의 위치 접근이 제한되어 있습니다."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?aj? t?lrun? piek?uve atra?an?s vietai ir ierobe?ota."
+            "value": "Šajā tālrunī piekļuve atrašanās vietai ir ierobežota."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?iame telefone prieiga prie vietos apribota."
+            "value": "Šiame telefone prieiga prie vietos apribota."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tilgang til posisjon er begrenset p? denne telefonen."
+            "value": "Tilgang til posisjon er begrenset på denne telefonen."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Dost?p do lokalizacji jest ograniczony w tym telefonie."
+            "value": "Dostęp do lokalizacji jest ograniczony w tym telefonie."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Accesul la localizare este restric?ionat pe acest telefon."
+            "value": "Accesul la localizare este restricționat pe acest telefon."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pr?stup k polohe je v tomto telef?ne obmedzen?."
+            "value": "Prístup k polohe je v tomto telefóne obmedzený."
           }
         },
         "sl": {
@@ -3486,31 +3486,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?tkomst till plats ?r begr?nsad p? den h?r telefonen."
+            "value": "Åtkomst till plats är begränsad på den här telefonen."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????????????????????????????"
+            "value": "การเข้าถึงตำแหน่งที่ตั้งถูกจำกัดในโทรศัพท์เครื่องนี้"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Bu telefonda konum eri?imi k?s?tl?."
+            "value": "Bu telefonda konum erişimi kısıtlı."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ?? ?????????? ?? ????? ???????? ????????."
+            "value": "Доступ до геолокації на цьому телефоні обмежено."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Quy?n truy c?p v? tr? b? h?n ch? tr?n ?i?n tho?i n?y."
+            "value": "Quyền truy cập vị trí bị hạn chế trên điện thoại này."
           }
         },
         "ms": {
@@ -3592,7 +3592,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? Companion, ?? ?? ????????? ??????? ?? ????????????????."
+            "value": "Отворете Companion, за да разрешите достъпа до местоположението."
           }
         },
         "hr": {
@@ -3604,13 +3604,13 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Otev?ete Companion a povolte p??stup k poloze."
+            "value": "Otevřete Companion a povolte přístup k poloze."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?bn Companion for at tillade adgang til lokalitet."
+            "value": "Åbn Companion for at tillade adgang til lokalitet."
           }
         },
         "nl": {
@@ -3622,31 +3622,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Asukohajuurdep??su lubamiseks ava Companion."
+            "value": "Asukohajuurdepääsu lubamiseks ava Companion."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Salli sijainnin k?ytt? avaamalla Companion."
+            "value": "Salli sijainnin käyttö avaamalla Companion."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ?? Companion ??? ?? ?????????? ??? ???????? ???? ?????????."
+            "value": "Ανοίξτε το Companion για να επιτρέψετε την πρόσβαση στην τοποθεσία."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ????? ?? Companion ??? ????? ???? ??????."
+            "value": "יש לפתוח את Companion כדי לאפשר גישה למיקום."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A helyhozz?f?r?s enged?lyez?s?hez nyissa meg a Companiont."
+            "value": "A helyhozzáférés engedélyezéséhez nyissa meg a Companiont."
           }
         },
         "id": {
@@ -3658,43 +3658,43 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ??? ????? Companion? ???."
+            "value": "위치 접근을 허용하려면 Companion을 여세요."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Atveriet Companion, lai at?autu piek?uvi atra?an?s vietai."
+            "value": "Atveriet Companion, lai atļautu piekļuvi atrašanās vietai."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Atidarykite Companion, kad leistum?te prieig? prie vietos."
+            "value": "Atidarykite Companion, kad leistumėte prieigą prie vietos."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?pne Companion for ? tillate posisjonstilgang."
+            "value": "Åpne Companion for å tillate posisjonstilgang."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Otw?rz Companion, aby zezwoli? na dost?p do lokalizacji."
+            "value": "Otwórz Companion, aby zezwolić na dostęp do lokalizacji."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Deschide?i Companion pentru a permite accesul la localizare."
+            "value": "Deschideți Companion pentru a permite accesul la localizare."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Otvorte Companion a povo?te pr?stup k polohe."
+            "value": "Otvorte Companion a povoľte prístup k polohe."
           }
         },
         "sl": {
@@ -3706,31 +3706,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ppna Companion f?r att till?ta plats?tkomst."
+            "value": "Öppna Companion för att tillåta platsåtkomst."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? Companion ???????????????????????????????????"
+            "value": "เปิด Companion เพื่ออนุญาตการเข้าถึงตำแหน่งที่ตั้ง"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konum eri?imine izin vermek i?in Companion'? a??n."
+            "value": "Konum erişimine izin vermek için Companion'ı açın."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? Companion, ??? ????????? ?????? ?? ??????????."
+            "value": "Відкрийте Companion, щоб дозволити доступ до геолокації."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "M? Companion ?? cho ph?p truy c?p v? tr?."
+            "value": "Mở Companion để cho phép truy cập vị trí."
           }
         },
         "ms": {
@@ -3812,25 +3812,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ??????? ?????????????? ?? WearTAK Companion ? ?????????."
+            "value": "Включете точното местоположение за WearTAK Companion в Настройки."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Uklju?ite preciznu lokaciju za WearTAK Companion u Postavkama."
+            "value": "Uključite preciznu lokaciju za WearTAK Companion u Postavkama."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V Nastaven? zapn?te pro WearTAK Companion p?esnou polohu."
+            "value": "V Nastavení zapněte pro WearTAK Companion přesnou polohu."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sl? pr?cis lokalitet til for WearTAK Companion i Indstillinger."
+            "value": "Slå præcis lokalitet til for WearTAK Companion i Indstillinger."
           }
         },
         "nl": {
@@ -3842,31 +3842,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "L?lita WearTAK Companioni jaoks seadetes sisse t?pne asukoht."
+            "value": "Lülita WearTAK Companioni jaoks seadetes sisse täpne asukoht."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ota tarkka sijainti k?ytt??n WearTAK Companionille asetuksissa."
+            "value": "Ota tarkka sijainti käyttöön WearTAK Companionille asetuksissa."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????? ??? ?????? ????????? ??? ?? WearTAK Companion ???? ?????????."
+            "value": "Ενεργοποιήστε την ακριβή τοποθεσία για το WearTAK Companion στις Ρυθμίσεις."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ????? ????? ???? WearTAK Companion ???????."
+            "value": "יש להפעיל מיקום מדויק עבור WearTAK Companion בהגדרות."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A Be?ll?t?sokban kapcsolja be a Pontos helyzetet a WearTAK Companion sz?m?ra."
+            "value": "A Beállításokban kapcsolja be a Pontos helyzetet a WearTAK Companion számára."
           }
         },
         "id": {
@@ -3878,79 +3878,79 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? WearTAK Companion? ??? ??? ???."
+            "value": "설정에서 WearTAK Companion의 정확한 위치를 켜세요."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Iestat?jumos iesl?dziet WearTAK Companion prec?zo atra?an?s vietu."
+            "value": "Iestatījumos ieslēdziet WearTAK Companion precīzo atrašanās vietu."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nustatymuose ?junkite tiksli? WearTAK Companion viet?."
+            "value": "Nustatymuose įjunkite tikslią WearTAK Companion vietą."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sl? p? n?yaktig posisjon for WearTAK Companion i Innstillinger."
+            "value": "Slå på nøyaktig posisjon for WearTAK Companion i Innstillinger."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "W??cz Dok?adn? lokalizacj? dla WearTAK Companion w Ustawieniach."
+            "value": "Włącz Dokładną lokalizację dla WearTAK Companion w Ustawieniach."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Activa?i Localizarea precis? pentru WearTAK Companion din Configur?ri."
+            "value": "Activați Localizarea precisă pentru WearTAK Companion din Configurări."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V Nastaveniach zapnite pre WearTAK Companion presn? polohu."
+            "value": "V Nastaveniach zapnite pre WearTAK Companion presnú polohu."
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V nastavitvah vklopite natan?no lokacijo za WearTAK Companion."
+            "value": "V nastavitvah vklopite natančno lokacijo za WearTAK Companion."
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aktivera exakt plats f?r WearTAK Companion i Inst?llningar."
+            "value": "Aktivera exakt plats för WearTAK Companion i Inställningar."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????????? WearTAK Companion ????????????"
+            "value": "เปิดตำแหน่งที่ตั้งที่แม่นยำสำหรับ WearTAK Companion ในการตั้งค่า"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ayarlar'da WearTAK Companion i?in Kesin Konum'u a??n."
+            "value": "Ayarlar'da WearTAK Companion için Kesin Konum'u açın."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ????? ?????????? ??? WearTAK Companion ? ??????????."
+            "value": "Увімкніть точну геолокацію для WearTAK Companion у Параметрах."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "B?t V? tr? ch?nh x?c cho WearTAK Companion trong C?i ??t."
+            "value": "Bật Vị trí chính xác cho WearTAK Companion trong Cài đặt."
           }
         },
         "ms": {
@@ -4032,7 +4032,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?? GPS ????? ?? ????????"
+            "value": "Изпращане на GPS данни на телефона"
           }
         },
         "hr": {
@@ -4044,7 +4044,7 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Odes?l?n? GPS polohy telefonu"
+            "value": "Odesílání GPS polohy telefonu"
           }
         },
         "da": {
@@ -4068,25 +4068,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Puhelimen GPS-sijainnin l?hett?minen"
+            "value": "Puhelimen GPS-sijainnin lähettäminen"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? GPS ?????????"
+            "value": "Αποστολή GPS τηλεφώνου"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ????? GPS ?? ??????"
+            "value": "מדווח מיקום GPS של הטלפון"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefon GPS-helyzet?nek jelent?se"
+            "value": "Telefon GPS-helyzetének jelentése"
           }
         },
         "id": {
@@ -4098,13 +4098,13 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? GPS ?? ?"
+            "value": "휴대폰 GPS 보고 중"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "T?lru?a GPS atra?an?s vietas zi?o?ana"
+            "value": "Tālruņa GPS atrašanās vietas ziņošana"
           }
         },
         "lt": {
@@ -4122,25 +4122,25 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Wysy?anie lokalizacji GPS telefonu"
+            "value": "Wysyłanie lokalizacji GPS telefonu"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Se raporteaz? pozi?ia GPS a telefonului"
+            "value": "Se raportează poziția GPS a telefonului"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Odosiela sa GPS poloha telef?nu"
+            "value": "Odosiela sa GPS poloha telefónu"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Po?iljanje GPS-lokacije telefona"
+            "value": "Pošiljanje GPS-lokacije telefona"
           }
         },
         "sv": {
@@ -4152,7 +4152,7 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????? GPS ???????????"
+            "value": "กำลังรายงาน GPS ของโทรศัพท์"
           }
         },
         "tr": {
@@ -4164,13 +4164,13 @@
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????? GPS-???????????????? ????????"
+            "value": "Передавання GPS-місцезнаходження телефона"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ang b?o c?o GPS ?i?n tho?i"
+            "value": "Đang báo cáo GPS điện thoại"
           }
         },
         "ms": {
@@ -4252,7 +4252,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?????????; ???????? ?????????"
+            "value": "Неуспешно изпращане; повторно свързване"
           }
         },
         "hr": {
@@ -4264,7 +4264,7 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Odesl?n? se nezda?ilo; op?tovn? p?ipojov?n?"
+            "value": "Odeslání se nezdařilo; opětovné připojování"
           }
         },
         "da": {
@@ -4282,31 +4282,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Edastamine nurjus; taas?hendamine"
+            "value": "Edastamine nurjus; taasühendamine"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "L?hetys ep?onnistui; yhdistet??n uudelleen"
+            "value": "Lähetys epäonnistui; yhdistetään uudelleen"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "? ???????? ???????? ????????????"
+            "value": "Η αποστολή απέτυχε· επανασύνδεση"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ????; ????? ????"
+            "value": "הדיווח נכשל; מתחבר מחדש"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A jelent?s nem siker?lt; ?jracsatlakoz?s"
+            "value": "A jelentés nem sikerült; újracsatlakozás"
           }
         },
         "id": {
@@ -4318,79 +4318,79 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ??; ?? ?? ?"
+            "value": "보고 실패; 다시 연결 중"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zi?o?ana neizdev?s; tiek atjaunots savienojums"
+            "value": "Ziņošana neizdevās; tiek atjaunots savienojums"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Prane?ti nepavyko; jungiamasi i? naujo"
+            "value": "Pranešti nepavyko; jungiamasi iš naujo"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Rapportering mislyktes; kobler til p? nytt"
+            "value": "Rapportering mislyktes; kobler til på nytt"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Wysy?anie nie powiod?o si?; ponowne ??czenie"
+            "value": "Wysyłanie nie powiodło się; ponowne łączenie"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Raportarea a e?uat; reconectare"
+            "value": "Raportarea a eșuat; reconectare"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Odoslanie zlyhalo; op?tovn? prip?janie"
+            "value": "Odoslanie zlyhalo; opätovné pripájanie"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Po?iljanje ni uspelo; ponovno povezovanje"
+            "value": "Pošiljanje ni uspelo; ponovno povezovanje"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Rapporteringen misslyckades; ?teransluter"
+            "value": "Rapporteringen misslyckades; återansluter"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????????? ??????????????????"
+            "value": "รายงานไม่สำเร็จ กำลังเชื่อมต่อใหม่"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Bildirim ba?ar?s?z; yeniden ba?lan?l?yor"
+            "value": "Bildirim başarısız; yeniden bağlanılıyor"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ??????? ????????; ???????? ???????????"
+            "value": "Не вдалося передати; повторне підключення"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "B?o c?o th?t b?i; ?ang k?t n?i l?i"
+            "value": "Báo cáo thất bại; đang kết nối lại"
           }
         },
         "ms": {
@@ -4472,25 +4472,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?? ??????????? ?? ?????????"
+            "value": "Изчакване на опресняване на часовника"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ekanje osvje?avanja sata"
+            "value": "Čekanje osvježavanja sata"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ek?n? na aktualizaci hodinek"
+            "value": "Čekání na aktualizaci hodinek"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Venter p? opdatering fra uret"
+            "value": "Venter på opdatering fra uret"
           }
         },
         "nl": {
@@ -4502,31 +4502,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ootan kella v?rskendust"
+            "value": "Ootan kella värskendust"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Odotetaan kellon p?ivityst?"
+            "value": "Odotetaan kellon päivitystä"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ????????? ????????"
+            "value": "Αναμονή ανανέωσης ρολογιού"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????? ?????"
+            "value": "ממתין לרענון השעון"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V?rakoz?s az ?ra friss?t?s?re"
+            "value": "Várakozás az óra frissítésére"
           }
         },
         "id": {
@@ -4538,61 +4538,61 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Watch ?? ?? ?? ?"
+            "value": "Watch 새로 고침 대기 중"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Gaida pulkste?a atsvaidzin??anu"
+            "value": "Gaida pulksteņa atsvaidzināšanu"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Laukiama laikrod?io atnaujinimo"
+            "value": "Laukiama laikrodžio atnaujinimo"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Venter p? oppdatering fra klokken"
+            "value": "Venter på oppdatering fra klokken"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Oczekiwanie na od?wie?enie zegarka"
+            "value": "Oczekiwanie na odświeżenie zegarka"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Se a?teapt? re?mprosp?tarea ceasului"
+            "value": "Se așteaptă reîmprospătarea ceasului"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ak? sa na obnovenie hodiniek"
+            "value": "Čaká sa na obnovenie hodiniek"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?akanje na osve?itev ure"
+            "value": "Čakanje na osvežitev ure"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V?ntar p? uppdatering fr?n klockan"
+            "value": "Väntar på uppdatering från klockan"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????????????????"
+            "value": "กำลังรอการรีเฟรชนาฬิกา"
           }
         },
         "tr": {
@@ -4604,13 +4604,13 @@
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ????????? ?????????"
+            "value": "Очікування оновлення годинника"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ang ??i ??ng h? l?m m?i"
+            "value": "Đang đợi đồng hồ làm mới"
           }
         },
         "ms": {
@@ -4692,7 +4692,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????"
+            "value": "Свързано"
           }
         },
         "hr": {
@@ -4704,7 +4704,7 @@
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "P?ipojeno"
+            "value": "Připojeno"
           }
         },
         "da": {
@@ -4722,7 +4722,7 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?hendatud"
+            "value": "Ühendatud"
           }
         },
         "fi": {
@@ -4734,13 +4734,13 @@
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????"
+            "value": "Συνδέθηκε"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????"
+            "value": "מחובר"
           }
         },
         "hu": {
@@ -4758,7 +4758,7 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???"
+            "value": "연결됨"
           }
         },
         "lv": {
@@ -4782,7 +4782,7 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Po??czono"
+            "value": "Połączono"
           }
         },
         "ro": {
@@ -4794,7 +4794,7 @@
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pripojen?"
+            "value": "Pripojené"
           }
         },
         "sl": {
@@ -4812,25 +4812,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????????"
+            "value": "เชื่อมต่อแล้ว"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ba?land?"
+            "value": "Bağlandı"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????"
+            "value": "Підключено"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? k?t n?i"
+            "value": "Đã kết nối"
           }
         },
         "ms": {
@@ -4912,19 +4912,19 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ???????? ???????"
+            "value": "Няма свързани сървъри"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nema povezanih poslu?itelja"
+            "value": "Nema povezanih poslužitelja"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nejsou p?ipojeny ??dn? servery"
+            "value": "Nejsou připojeny žádné servery"
           }
         },
         "da": {
@@ -4942,25 +4942,25 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?hendatud servereid pole"
+            "value": "Ühendatud servereid pole"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Yhdistettyj? palvelimia ei ole"
+            "value": "Yhdistettyjä palvelimia ei ole"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ???????? ???????????? ???????????"
+            "value": "Δεν υπάρχουν συνδεδεμένοι διακομιστές"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ????? ???????"
+            "value": "אין שרתים מחוברים"
           }
         },
         "hu": {
@@ -4978,7 +4978,7 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ?? ??"
+            "value": "연결된 서버 없음"
           }
         },
         "lv": {
@@ -4990,7 +4990,7 @@
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "N?ra prijungt? serveri?"
+            "value": "Nėra prijungtų serverių"
           }
         },
         "nb": {
@@ -5002,7 +5002,7 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Brak po??czonych serwer?w"
+            "value": "Brak połączonych serwerów"
           }
         },
         "ro": {
@@ -5014,13 +5014,13 @@
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nie s? pripojen? ?iadne servery"
+            "value": "Nie sú pripojené žiadne servery"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ni povezanih stre?nikov"
+            "value": "Ni povezanih strežnikov"
           }
         },
         "sv": {
@@ -5032,25 +5032,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????"
+            "value": "ไม่มีเซิร์ฟเวอร์ที่เชื่อมต่อ"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ba?l? sunucu yok"
+            "value": "Bağlı sunucu yok"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ??????????? ????????"
+            "value": "Немає підключених серверів"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Kh?ng c? m?y ch? n?o ???c k?t n?i"
+            "value": "Không có máy chủ nào được kết nối"
           }
         },
         "ms": {
@@ -5132,7 +5132,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????????? ?? ????????"
+            "value": "Конфигурирайте на телефона"
           }
         },
         "hr": {
@@ -5150,7 +5150,7 @@
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konfigurer p? telefonen"
+            "value": "Konfigurer på telefonen"
           }
         },
         "nl": {
@@ -5168,25 +5168,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "M??rit? puhelimessa"
+            "value": "Määritä puhelimessa"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ??? ????????"
+            "value": "Διαμόρφωση στο τηλέφωνο"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ??????"
+            "value": "הגדרה בטלפון"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Be?ll?t?s a telefonon"
+            "value": "Beállítás a telefonon"
           }
         },
         "id": {
@@ -5198,25 +5198,25 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ??"
+            "value": "휴대폰에서 구성"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konfigur?jiet t?lrun?"
+            "value": "Konfigurējiet tālrunī"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konfig?ruokite telefone"
+            "value": "Konfigūruokite telefone"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konfigurer p? telefonen"
+            "value": "Konfigurer på telefonen"
           }
         },
         "pl": {
@@ -5228,13 +5228,13 @@
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Configura?i pe telefon"
+            "value": "Configurați pe telefon"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nakonfigurujte v telef?ne"
+            "value": "Nakonfigurujte v telefóne"
           }
         },
         "sl": {
@@ -5246,31 +5246,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konfigurera p? telefonen"
+            "value": "Konfigurera på telefonen"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????????????"
+            "value": "กำหนดค่าบนโทรศัพท์"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefonda yap?land?r?n"
+            "value": "Telefonda yapılandırın"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ?? ????????"
+            "value": "Налаштуйте на телефоні"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??nh c?u h?nh tr?n ?i?n tho?i"
+            "value": "Định cấu hình trên điện thoại"
           }
         },
         "ms": {
@@ -5352,25 +5352,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????? ?? ???????????????? ?? ???????? ? ?????????"
+            "value": "Изпращането на местоположението на телефона е изключено"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Dijeljenje lokacije telefona isklju?eno je"
+            "value": "Dijeljenje lokacije telefona isključeno je"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sd?len? polohy telefonu je vypnut?"
+            "value": "Sdílení polohy telefonu je vypnuté"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Deling af telefonens lokalitet er sl?et fra"
+            "value": "Deling af telefonens lokalitet er slået fra"
           }
         },
         "nl": {
@@ -5382,31 +5382,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefoni asukoha edastamine on v?lja l?litatud"
+            "value": "Telefoni asukoha edastamine on välja lülitatud"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Puhelimen sijainnin jakaminen ei ole k?yt?ss?"
+            "value": "Puhelimen sijainnin jakaminen ei ole käytössä"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "? ??????? ?????????? ????????? ????? ????????????????"
+            "value": "Η αναφορά τοποθεσίας τηλεφώνου είναι απενεργοποιημένη"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????? ?? ?????? ????"
+            "value": "דיווח המיקום של הטלפון כבוי"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A telefon helyzet?nek jelent?se ki van kapcsolva"
+            "value": "A telefon helyzetének jelentése ki van kapcsolva"
           }
         },
         "id": {
@@ -5418,79 +5418,79 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ?? ??? ?? ??"
+            "value": "휴대폰 위치 보고가 꺼져 있음"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "T?lru?a atra?an?s vietas zi?o?ana ir izsl?gta"
+            "value": "Tālruņa atrašanās vietas ziņošana ir izslēgta"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefono vietos siuntimas i?jungtas"
+            "value": "Telefono vietos siuntimas išjungtas"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Deling av telefonposisjon er sl?tt av"
+            "value": "Deling av telefonposisjon er slått av"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Udost?pnianie lokalizacji telefonu jest wy??czone"
+            "value": "Udostępnianie lokalizacji telefonu jest wyłączone"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Raportarea loca?iei telefonului este dezactivat?"
+            "value": "Raportarea locației telefonului este dezactivată"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zdie?anie polohy telef?nu je vypnut?"
+            "value": "Zdieľanie polohy telefónu je vypnuté"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Po?iljanje lokacije telefona je izklopljeno"
+            "value": "Pošiljanje lokacije telefona je izklopljeno"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Delning av telefonens plats ?r av"
+            "value": "Delning av telefonens plats är av"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????????????????????????????"
+            "value": "การรายงานตำแหน่งของโทรศัพท์ปิดอยู่"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefon konumu bildirimi kapal?"
+            "value": "Telefon konumu bildirimi kapalı"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????? ?????????? ???????? ????????"
+            "value": "Передавання геолокації телефона вимкнено"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "T?nh n?ng b?o c?o v? tr? ?i?n tho?i ?ang t?t"
+            "value": "Tính năng báo cáo vị trí điện thoại đang tắt"
           }
         },
         "ms": {
@@ -5572,151 +5572,151 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ? %@"
+            "value": "Изключено – %@"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Isklju?eno ? %@"
+            "value": "Isključeno – %@"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Vypnuto ? %@"
+            "value": "Vypnuto – %@"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Fra ? %@"
+            "value": "Fra – %@"
           }
         },
         "nl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Uit ? %@"
+            "value": "Uit – %@"
           }
         },
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "V?ljas ? %@"
+            "value": "Väljas – %@"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pois ? %@"
+            "value": "Pois – %@"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ? %@"
+            "value": "Ανενεργό – %@"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ? %@"
+            "value": "כבוי – %@"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ki ? %@"
+            "value": "Ki – %@"
           }
         },
         "id": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nonaktif ? %@"
+            "value": "Nonaktif – %@"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "? - %@"
+            "value": "끔 - %@"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Izsl?gts ? %@"
+            "value": "Izslēgts – %@"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "I?jungta ? %@"
+            "value": "Išjungta – %@"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Av ? %@"
+            "value": "Av – %@"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Wy?. ? %@"
+            "value": "Wył. – %@"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Dezactivat ? %@"
+            "value": "Dezactivat – %@"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Vypnut? ? %@"
+            "value": "Vypnuté – %@"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Izklopljeno ? %@"
+            "value": "Izklopljeno – %@"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Av ? %@"
+            "value": "Av – %@"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ? %@"
+            "value": "ปิด – %@"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Kapal? - %@"
+            "value": "Kapalı - %@"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ? %@"
+            "value": "Вимкнено – %@"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "T?t ? %@"
+            "value": "Tắt – %@"
           }
         },
         "ms": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Mati ? %@"
+            "value": "Mati – %@"
           }
         }
       }
@@ -5792,25 +5792,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ???????? ?? ??????????????, ?? ?? ?????? ?????????? ??????? ? TAK, ?????? ????????? ? ????????."
+            "value": "Включете услугите за местоположение, за да остане часовникът свързан с TAK, докато телефонът е заключен."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Uklju?ite usluge lokacije kako bi sat ostao povezan s TAK-om dok je telefon zaklju?an."
+            "value": "Uključite usluge lokacije kako bi sat ostao povezan s TAK-om dok je telefon zaključan."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zapn?te polohov? slu?by, aby hodinky z?staly p?ipojen? k TAK, i kdy? je telefon zam?en?."
+            "value": "Zapněte polohové služby, aby hodinky zůstaly připojené k TAK, i když je telefon zamčený."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sl? lokalitetstjenester til, s? uret forbliver forbundet til TAK, n?r telefonen er l?st."
+            "value": "Slå lokalitetstjenester til, så uret forbliver forbundet til TAK, når telefonen er låst."
           }
         },
         "nl": {
@@ -5822,31 +5822,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "L?lita asukohateenused sisse, et kell p?siks TAK-iga ?henduses, kui telefon on lukus."
+            "value": "Lülita asukohateenused sisse, et kell püsiks TAK-iga ühenduses, kui telefon on lukus."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ota sijaintipalvelut k?ytt??n, jotta kello pysyy yhteydess? TAK-palveluun puhelimen ollessa lukittuna."
+            "value": "Ota sijaintipalvelut käyttöön, jotta kello pysyy yhteydessä TAK-palveluun puhelimen ollessa lukittuna."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????? ??? ????????? ?????????? ??? ?? ????????? ?? ????? ??????????? ??? TAK ???? ?? ???????? ????? ??????????."
+            "value": "Ενεργοποιήστε τις υπηρεσίες τοποθεσίας για να παραμένει το ρολόι συνδεδεμένο στο TAK όταν το τηλέφωνο είναι κλειδωμένο."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ?????? ????? ??? ?????? ????? ????? ?-TAK ???????? ????."
+            "value": "יש להפעיל שירותי מיקום כדי שהשעון יישאר מחובר ל-TAK כשהטלפון נעול."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Kapcsolja be a Helymeghat?roz?st, hogy az ?ra a telefon z?rol?sakor is csatlakozva maradjon a TAK-hoz."
+            "value": "Kapcsolja be a Helymeghatározást, hogy az óra a telefon zárolásakor is csatlakozva maradjon a TAK-hoz."
           }
         },
         "id": {
@@ -5858,43 +5858,43 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ?? ?? ?? Watch? TAK? ??? ??? ????? ?? ???? ???."
+            "value": "휴대폰이 잠겨 있는 동안 Watch가 TAK에 연결된 상태를 유지하도록 위치 서비스를 켜세요."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Iesl?dziet atra?an?s vietas pakalpojumus, lai pulkstenis paliktu savienots ar TAK, kad t?lrunis ir blo??ts."
+            "value": "Ieslēdziet atrašanās vietas pakalpojumus, lai pulkstenis paliktu savienots ar TAK, kad tālrunis ir bloķēts."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?junkite vietos nustatymo paslaugas, kad u?rakintas telefonas nenutraukt? laikrod?io ry?io su TAK."
+            "value": "Įjunkite vietos nustatymo paslaugas, kad užrakintas telefonas nenutrauktų laikrodžio ryšio su TAK."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sl? p? stedstjenester slik at klokken forblir tilkoblet TAK n?r telefonen er l?st."
+            "value": "Slå på stedstjenester slik at klokken forblir tilkoblet TAK når telefonen er låst."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "W??cz us?ugi lokalizacji, aby zegarek pozosta? po??czony z TAK, gdy telefon jest zablokowany."
+            "value": "Włącz usługi lokalizacji, aby zegarek pozostał połączony z TAK, gdy telefon jest zablokowany."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Activa?i Serviciile de localizare pentru ca ceasul s? r?m?n? conectat la TAK c?nd telefonul este blocat."
+            "value": "Activați Serviciile de localizare pentru ca ceasul să rămână conectat la TAK când telefonul este blocat."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zapnite lokaliza?n? slu?by, aby hodinky zostali pripojen? k TAK, ke? je telef?n zamknut?."
+            "value": "Zapnite lokalizačné služby, aby hodinky zostali pripojené k TAK, keď je telefón zamknutý."
           }
         },
         "sl": {
@@ -5906,31 +5906,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aktivera platstj?nster s? att klockan f?rblir ansluten till TAK n?r telefonen ?r l?st."
+            "value": "Aktivera platstjänster så att klockan förblir ansluten till TAK när telefonen är låst."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????????????????????? TAK ??????????????????????????"
+            "value": "เปิดบริการหาตำแหน่งเพื่อให้นาฬิกาเชื่อมต่อกับ TAK ไว้ขณะที่โทรศัพท์ล็อกอยู่"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefon kilitliyken saatin TAK ba?lant?s?n? s?rd?rmesi i?in Konum Servisleri'ni a??n."
+            "value": "Telefon kilitliyken saatin TAK bağlantısını sürdürmesi için Konum Servisleri'ni açın."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?????? ??????????, ??? ???????? ????????? ??????????? ?? TAK, ???? ??????? ???????????."
+            "value": "Увімкніть служби геолокації, щоб годинник залишався підключеним до TAK, коли телефон заблоковано."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "B?t D?ch v? ??nh v? ?? ??ng h? duy tr? k?t n?i TAK khi ?i?n tho?i b? kh?a."
+            "value": "Bật Dịch vụ định vị để đồng hồ duy trì kết nối TAK khi điện thoại bị khóa."
           }
         },
         "ms": {
@@ -6012,25 +6012,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ??????? ??????????????, ?? ?? ?????? ?????????? ??????? ? TAK, ?????? ????????? ? ????????."
+            "value": "Включете точното местоположение, за да остане часовникът свързан с TAK, докато телефонът е заключен."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Uklju?ite preciznu lokaciju kako bi sat ostao povezan s TAK-om dok je telefon zaklju?an."
+            "value": "Uključite preciznu lokaciju kako bi sat ostao povezan s TAK-om dok je telefon zaključan."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zapn?te p?esnou polohu, aby hodinky z?staly p?ipojen? k TAK, i kdy? je telefon zam?en?."
+            "value": "Zapněte přesnou polohu, aby hodinky zůstaly připojené k TAK, i když je telefon zamčený."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sl? pr?cis lokalitet til, s? uret forbliver forbundet til TAK, n?r telefonen er l?st."
+            "value": "Slå præcis lokalitet til, så uret forbliver forbundet til TAK, når telefonen er låst."
           }
         },
         "nl": {
@@ -6042,31 +6042,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "L?lita t?pne asukoht sisse, et kell p?siks TAK-iga ?henduses, kui telefon on lukus."
+            "value": "Lülita täpne asukoht sisse, et kell püsiks TAK-iga ühenduses, kui telefon on lukus."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ota tarkka sijainti k?ytt??n, jotta kello pysyy yhteydess? TAK-palveluun puhelimen ollessa lukittuna."
+            "value": "Ota tarkka sijainti käyttöön, jotta kello pysyy yhteydessä TAK-palveluun puhelimen ollessa lukittuna."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????? ??? ?????? ????????? ??? ?? ????????? ?? ????? ??????????? ??? TAK ???? ?? ???????? ????? ??????????."
+            "value": "Ενεργοποιήστε την ακριβή τοποθεσία για να παραμένει το ρολόι συνδεδεμένο στο TAK όταν το τηλέφωνο είναι κλειδωμένο."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ????? ????? ??? ?????? ????? ????? ?-TAK ???????? ????."
+            "value": "יש להפעיל מיקום מדויק כדי שהשעון יישאר מחובר ל-TAK כשהטלפון נעול."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Kapcsolja be a Pontos helyzetet, hogy az ?ra a telefon z?rol?sakor is csatlakozva maradjon a TAK-hoz."
+            "value": "Kapcsolja be a Pontos helyzetet, hogy az óra a telefon zárolásakor is csatlakozva maradjon a TAK-hoz."
           }
         },
         "id": {
@@ -6078,79 +6078,79 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ?? ?? ?? Watch? TAK? ??? ??? ????? ??? ??? ???."
+            "value": "휴대폰이 잠겨 있는 동안 Watch가 TAK에 연결된 상태를 유지하도록 정확한 위치를 켜세요."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Iesl?dziet prec?zo atra?an?s vietu, lai pulkstenis paliktu savienots ar TAK, kad t?lrunis ir blo??ts."
+            "value": "Ieslēdziet precīzo atrašanās vietu, lai pulkstenis paliktu savienots ar TAK, kad tālrunis ir bloķēts."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?junkite tiksli? viet?, kad u?rakintas telefonas nenutraukt? laikrod?io ry?io su TAK."
+            "value": "Įjunkite tikslią vietą, kad užrakintas telefonas nenutrauktų laikrodžio ryšio su TAK."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sl? p? n?yaktig posisjon slik at klokken forblir tilkoblet TAK n?r telefonen er l?st."
+            "value": "Slå på nøyaktig posisjon slik at klokken forblir tilkoblet TAK når telefonen er låst."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "W??cz Dok?adn? lokalizacj?, aby zegarek pozosta? po??czony z TAK, gdy telefon jest zablokowany."
+            "value": "Włącz Dokładną lokalizację, aby zegarek pozostał połączony z TAK, gdy telefon jest zablokowany."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Activa?i Localizarea precis? pentru ca ceasul s? r?m?n? conectat la TAK c?nd telefonul este blocat."
+            "value": "Activați Localizarea precisă pentru ca ceasul să rămână conectat la TAK când telefonul este blocat."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Zapnite presn? polohu, aby hodinky zostali pripojen? k TAK, ke? je telef?n zamknut?."
+            "value": "Zapnite presnú polohu, aby hodinky zostali pripojené k TAK, keď je telefón zamknutý."
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Vklopite natan?no lokacijo, da ura ostane povezana s TAK, ko je telefon zaklenjen."
+            "value": "Vklopite natančno lokacijo, da ura ostane povezana s TAK, ko je telefon zaklenjen."
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aktivera exakt plats s? att klockan f?rblir ansluten till TAK n?r telefonen ?r l?st."
+            "value": "Aktivera exakt plats så att klockan förblir ansluten till TAK när telefonen är låst."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????????????????????????????????? TAK ??????????????????????????"
+            "value": "เปิดตำแหน่งที่ตั้งที่แม่นยำเพื่อให้นาฬิกาเชื่อมต่อกับ TAK ไว้ขณะที่โทรศัพท์ล็อกอยู่"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefon kilitliyken saatin TAK ba?lant?s?n? s?rd?rmesi i?in Kesin Konum'u a??n."
+            "value": "Telefon kilitliyken saatin TAK bağlantısını sürdürmesi için Kesin Konum'u açın."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ????? ??????????, ??? ???????? ????????? ??????????? ?? TAK, ???? ??????? ???????????."
+            "value": "Увімкніть точну геолокацію, щоб годинник залишався підключеним до TAK, коли телефон заблоковано."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "B?t V? tr? ch?nh x?c ?? ??ng h? duy tr? k?t n?i TAK khi ?i?n tho?i b? kh?a."
+            "value": "Bật Vị trí chính xác để đồng hồ duy trì kết nối TAK khi điện thoại bị khóa."
           }
         },
         "ms": {
@@ -6232,25 +6232,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ?? ???????????????? ? ????????? ? ?????????? ?? ?????? ?????? ? TAK, ?????? ????????? ? ????????."
+            "value": "Достъпът до местоположението е ограничен и часовникът ще загуби връзка с TAK, докато телефонът е заключен."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pristup lokaciji je ograni?en pa ?e sat izgubiti vezu s TAK-om kada je telefon zaklju?an."
+            "value": "Pristup lokaciji je ograničen pa će sat izgubiti vezu s TAK-om kada je telefon zaključan."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "P??stup k poloze je omezen?, tak?e hodinky p?i zam?en? telefonu ztrat? p?ipojen? k TAK."
+            "value": "Přístup k poloze je omezený, takže hodinky při zamčení telefonu ztratí připojení k TAK."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Adgang til lokalitet er begr?nset, s? uret mister TAK, n?r telefonen er l?st."
+            "value": "Adgang til lokalitet er begrænset, så uret mister TAK, når telefonen er låst."
           }
         },
         "nl": {
@@ -6262,31 +6262,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Asukohajuurdep??s on piiratud, seega kaotab kell telefoni lukustamisel TAK-?henduse."
+            "value": "Asukohajuurdepääs on piiratud, seega kaotab kell telefoni lukustamisel TAK-ühenduse."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sijainnin k?ytt?? on rajoitettu, joten kello menett?? TAK-yhteyden puhelimen ollessa lukittuna."
+            "value": "Sijainnin käyttöä on rajoitettu, joten kello menettää TAK-yhteyden puhelimen ollessa lukittuna."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "? ???????? ???? ????????? ????? ????????????, ????? ?? ????? ?? ????? ?? ??????? TAK ???? ?? ???????? ?????????."
+            "value": "Η πρόσβαση στην τοποθεσία είναι περιορισμένη, οπότε το ρολόι θα χάσει τη σύνδεση TAK όταν το τηλέφωνο κλειδωθεί."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????? ?????? ??????, ???? ????? ???? ?? ????? TAK ???????? ????."
+            "value": "הגישה למיקום מוגבלת, ולכן השעון יאבד את חיבור TAK כשהטלפון נעול."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "A helyhozz?f?r?s korl?tozott, ez?rt az ?ra elvesz?ti a TAK-kapcsolatot, amikor a telefon z?rolva van."
+            "value": "A helyhozzáférés korlátozott, ezért az óra elveszíti a TAK-kapcsolatot, amikor a telefon zárolva van."
           }
         },
         "id": {
@@ -6298,43 +6298,43 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ??? ???? ?? ???? ??? Watch? TAK ??? ????."
+            "value": "위치 접근이 제한되어 있어 휴대폰이 잠기면 Watch의 TAK 연결이 끊깁니다."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Piek?uve atra?an?s vietai ir ierobe?ota, t?p?c, blo??jot t?lruni, pulkstenis zaud?s TAK savienojumu."
+            "value": "Piekļuve atrašanās vietai ir ierobežota, tāpēc, bloķējot tālruni, pulkstenis zaudēs TAK savienojumu."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Prieiga prie vietos apribota, tod?l u?rakinus telefon? laikrodis praras TAK ry??."
+            "value": "Prieiga prie vietos apribota, todėl užrakinus telefoną laikrodis praras TAK ryšį."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Posisjonstilgang er begrenset, s? klokken mister TAK n?r telefonen er l?st."
+            "value": "Posisjonstilgang er begrenset, så klokken mister TAK når telefonen er låst."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Dost?p do lokalizacji jest ograniczony, wi?c po zablokowaniu telefonu zegarek utraci po??czenie z TAK."
+            "value": "Dostęp do lokalizacji jest ograniczony, więc po zablokowaniu telefonu zegarek utraci połączenie z TAK."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Accesul la localizare este restric?ionat, a?a c? ceasul va pierde conexiunea TAK c?nd telefonul este blocat."
+            "value": "Accesul la localizare este restricționat, așa că ceasul va pierde conexiunea TAK când telefonul este blocat."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Pr?stup k polohe je obmedzen?, tak?e hodinky pri zamknut? telef?nu stratia spojenie s TAK."
+            "value": "Prístup k polohe je obmedzený, takže hodinky pri zamknutí telefónu stratia spojenie s TAK."
           }
         },
         "sl": {
@@ -6346,31 +6346,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?tkomst till plats ?r begr?nsad, s? klockan f?rlorar TAK n?r telefonen ?r l?st."
+            "value": "Åtkomst till plats är begränsad, så klockan förlorar TAK när telefonen är låst."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????????????????????????????? ?????????????????????????? TAK ?????????????????"
+            "value": "การเข้าถึงตำแหน่งที่ตั้งถูกจำกัด นาฬิกาจึงจะขาดการเชื่อมต่อ TAK เมื่อโทรศัพท์ล็อก"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konum eri?imi k?s?tl? oldu?undan telefon kilitlendi?inde saat TAK ba?lant?s?n? kaybeder."
+            "value": "Konum erişimi kısıtlı olduğundan telefon kilitlendiğinde saat TAK bağlantısını kaybeder."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ?? ?????????? ????????, ???? ???????? ???????? ??????? ?? TAK, ???? ??????? ???????????."
+            "value": "Доступ до геолокації обмежено, тому годинник втратить зв’язок із TAK, коли телефон заблоковано."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Quy?n truy c?p v? tr? b? h?n ch? n?n ??ng h? s? m?t k?t n?i TAK khi ?i?n tho?i b? kh?a."
+            "value": "Quyền truy cập vị trí bị hạn chế nên đồng hồ sẽ mất kết nối TAK khi điện thoại bị khóa."
           }
         },
         "ms": {
@@ -6452,25 +6452,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ???????????????? ?? ???????? (? ???????? ????? ??????????????), ?? ?? ?????? ?????????? ??????? ? TAK, ?????? ????????? ? ???????? ??? ? ????? ??."
+            "value": "Задайте местоположението на „Винаги“ (с включено точно местоположение), за да остане часовникът свързан с TAK, докато телефонът е заключен или в джоба ви."
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Postavite lokaciju na ?Uvijek? (uz uklju?enu preciznu lokaciju) kako bi sat ostao povezan s TAK-om dok je telefon zaklju?an ili u d?epu."
+            "value": "Postavite lokaciju na „Uvijek“ (uz uključenu preciznu lokaciju) kako bi sat ostao povezan s TAK-om dok je telefon zaključan ili u džepu."
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nastavte polohu na ?V?dy? (se zapnutou p?esnou polohou), aby hodinky z?staly p?ipojen? k TAK, i kdy? je telefon zam?en? nebo v kapse."
+            "value": "Nastavte polohu na „Vždy“ (se zapnutou přesnou polohou), aby hodinky zůstaly připojené k TAK, i když je telefon zamčený nebo v kapse."
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Indstil lokalitet til ?Altid? (med pr?cis lokalitet sl?et til), s? uret forbliver forbundet til TAK, n?r telefonen er l?st eller i lommen."
+            "value": "Indstil lokalitet til »Altid« (med præcis lokalitet slået til), så uret forbliver forbundet til TAK, når telefonen er låst eller i lommen."
           }
         },
         "nl": {
@@ -6482,121 +6482,121 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "M??ra asukohaks ?Alati? (t?pne asukoht sisse l?litatud), et kell p?siks TAK-iga ?henduses, kui telefon on lukus v?i taskus."
+            "value": "Määra asukohaks „Alati“ (täpne asukoht sisse lülitatud), et kell püsiks TAK-iga ühenduses, kui telefon on lukus või taskus."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Aseta sijainniksi ?Aina? (tarkka sijainti k?yt?ss?), jotta kello pysyy yhteydess? TAK-palveluun puhelimen ollessa lukittuna tai taskussa."
+            "value": "Aseta sijainniksi ”Aina” (tarkka sijainti käytössä), jotta kello pysyy yhteydessä TAK-palveluun puhelimen ollessa lukittuna tai taskussa."
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ??? ????????? ?? ??????? (?? ?????? ??? ?????? ?????????), ???? ?? ????? ?? ????????? ??????????? ??? TAK ???? ?? ???????? ????? ?????????? ? ???? ?????."
+            "value": "Ορίστε την τοποθεσία σε «Πάντα» (με ενεργή την ακριβή τοποθεσία), ώστε το ρολόι να παραμένει συνδεδεμένο στο TAK όταν το τηλέφωνο είναι κλειδωμένο ή στην τσέπη."
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ?? ?????? ??????? (?? ????? ????? ?????) ??? ?????? ????? ????? ?-TAK ???????? ???? ?? ????."
+            "value": "יש להגדיר את המיקום ל״תמיד״ (עם מיקום מדויק מופעל) כדי שהשעון יישאר מחובר ל-TAK כשהטלפון נעול או בכיס."
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ll?tsa a helyhozz?f?r?st ?Mindig? ?rt?kre (bekapcsolt Pontos helyzettel), hogy az ?ra z?rolt vagy zsebben l?v? telefon mellett is csatlakozzon a TAK-hoz."
+            "value": "Állítsa a helyhozzáférést „Mindig” értékre (bekapcsolt Pontos helyzettel), hogy az óra zárolt vagy zsebben lévő telefon mellett is csatlakozzon a TAK-hoz."
           }
         },
         "id": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Atur lokasi ke ?Selalu? (dengan Lokasi Akurat aktif) agar Watch tetap tersambung ke TAK saat ponsel terkunci atau berada di saku."
+            "value": "Atur lokasi ke “Selalu” (dengan Lokasi Akurat aktif) agar Watch tetap tersambung ke TAK saat ponsel terkunci atau berada di saku."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???? ?? ??? ???? ?? ?? Watch? TAK? ??? ??? ????? ??? ?????? ???? ??? ??? ???."
+            "value": "휴대폰이 잠겨 있거나 주머니에 있는 동안 Watch가 TAK에 연결된 상태를 유지하도록 위치를 ‘항상’으로 설정하고 정확한 위치를 켜세요."
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Iestatiet atra?an?s vietu uz ?Vienm?r? (iesl?dzot prec?zo atra?an?s vietu), lai pulkstenis paliktu savienots ar TAK, kad t?lrunis ir blo??ts vai kabat?."
+            "value": "Iestatiet atrašanās vietu uz „Vienmēr” (ieslēdzot precīzo atrašanās vietu), lai pulkstenis paliktu savienots ar TAK, kad tālrunis ir bloķēts vai kabatā."
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nustatykite viet? ? ?Visada? (?jung? tiksli? viet?), kad laikrodis likt? prijungtas prie TAK, kai telefonas u?rakintas arba ki?en?je."
+            "value": "Nustatykite vietą į „Visada“ (įjungę tikslią vietą), kad laikrodis liktų prijungtas prie TAK, kai telefonas užrakintas arba kišenėje."
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Sett posisjon til ?Alltid? (med n?yaktig posisjon p?) slik at klokken forblir tilkoblet TAK n?r telefonen er l?st eller i lommen."
+            "value": "Sett posisjon til «Alltid» (med nøyaktig posisjon på) slik at klokken forblir tilkoblet TAK når telefonen er låst eller i lommen."
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Ustaw lokalizacj? na ?Zawsze? (z w??czon? Dok?adn? lokalizacj?), aby zegarek pozosta? po??czony z TAK, gdy telefon jest zablokowany lub w kieszeni."
+            "value": "Ustaw lokalizację na „Zawsze” (z włączoną Dokładną lokalizacją), aby zegarek pozostał połączony z TAK, gdy telefon jest zablokowany lub w kieszeni."
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Seta?i localizarea la ??ntotdeauna? (cu Localizarea precis? activat?), pentru ca ceasul s? r?m?n? conectat la TAK c?nd telefonul este blocat sau ?n buzunar."
+            "value": "Setați localizarea la „Întotdeauna” (cu Localizarea precisă activată), pentru ca ceasul să rămână conectat la TAK când telefonul este blocat sau în buzunar."
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Nastavte polohu na ?V?dy? (so zapnutou presnou polohou), aby hodinky zostali pripojen? k TAK, ke? je telef?n zamknut? alebo vo vrecku."
+            "value": "Nastavte polohu na „Vždy“ (so zapnutou presnou polohou), aby hodinky zostali pripojené k TAK, keď je telefón zamknutý alebo vo vrecku."
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Lokacijo nastavite na ?Vedno? (z vklopljeno natan?no lokacijo), da ura ostane povezana s TAK, ko je telefon zaklenjen ali v ?epu."
+            "value": "Lokacijo nastavite na »Vedno« (z vklopljeno natančno lokacijo), da ura ostane povezana s TAK, ko je telefon zaklenjen ali v žepu."
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "St?ll in plats?tkomst p? ?Alltid? (med exakt plats aktiverad) s? att klockan f?rblir ansluten till TAK n?r telefonen ?r l?st eller i fickan."
+            "value": "Ställ in platsåtkomst på ”Alltid” (med exakt plats aktiverad) så att klockan förblir ansluten till TAK när telefonen är låst eller i fickan."
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????? ?????????? (??????????????????????????????) ?????????????????????????? TAK ??????????????????????????????????"
+            "value": "ตั้งค่าตำแหน่งที่ตั้งเป็น “ตลอดเวลา” (และเปิดตำแหน่งที่ตั้งที่แม่นยำ) เพื่อให้นาฬิกาเชื่อมต่อกับ TAK เมื่อโทรศัพท์ล็อกหรืออยู่ในกระเป๋า"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Telefon kilitliyken veya cebinizdeyken saatin TAK ba?lant?s?n? korumas? i?in konumu ?Her Zaman? olarak ayarlay?n (Kesin Konum a??k olmal?)."
+            "value": "Telefon kilitliyken veya cebinizdeyken saatin TAK bağlantısını koruması için konumu “Her Zaman” olarak ayarlayın (Kesin Konum açık olmalı)."
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ??? ?????????? ???????? ???????? (?????????? ????? ??????????), ??? ???????? ????????? ??????????? ?? TAK, ???? ??????? ??????????? ??? ? ??????."
+            "value": "Установіть для геолокації значення «Завжди» (увімкнувши точну геолокацію), щоб годинник залишався підключеним до TAK, коли телефон заблоковано або в кишені."
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??t quy?n v? tr? th?nh ?Lu?n lu?n? (b?t V? tr? ch?nh x?c) ?? ??ng h? v?n k?t n?i TAK khi ?i?n tho?i b? kh?a ho?c ? trong t?i."
+            "value": "Đặt quyền vị trí thành “Luôn luôn” (bật Vị trí chính xác) để đồng hồ vẫn kết nối TAK khi điện thoại bị khóa hoặc ở trong túi."
           }
         },
         "ms": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tetapkan lokasi kepada ?Sentiasa? (dengan Lokasi Tepat dihidupkan) supaya Watch kekal bersambung ke TAK apabila telefon dikunci atau di dalam poket."
+            "value": "Tetapkan lokasi kepada “Sentiasa” (dengan Lokasi Tepat dihidupkan) supaya Watch kekal bersambung ke TAK apabila telefon dikunci atau di dalam poket."
           }
         }
       }
@@ -6672,25 +6672,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ???????? ?? ??????????????"
+            "value": "включете услугите за местоположение"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "uklju?ite usluge lokacije"
+            "value": "uključite usluge lokacije"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "zapn?te polohov? slu?by"
+            "value": "zapněte polohové služby"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "sl? lokalitetstjenester til"
+            "value": "slå lokalitetstjenester til"
           }
         },
         "nl": {
@@ -6702,31 +6702,31 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "l?lita asukohateenused sisse"
+            "value": "lülita asukohateenused sisse"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "ota sijaintipalvelut k?ytt??n"
+            "value": "ota sijaintipalvelut käyttöön"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????? ??? ????????? ??????????"
+            "value": "ενεργοποιήστε τις υπηρεσίες τοποθεσίας"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ?????? ?????"
+            "value": "יש להפעיל שירותי מיקום"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "kapcsolja be a Helymeghat?roz?st"
+            "value": "kapcsolja be a Helymeghatározást"
           }
         },
         "id": {
@@ -6738,43 +6738,43 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ???? ???"
+            "value": "위치 서비스를 켜세요"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "iesl?dziet atra?an?s vietas pakalpojumus"
+            "value": "ieslēdziet atrašanās vietas pakalpojumus"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?junkite vietos nustatymo paslaugas"
+            "value": "įjunkite vietos nustatymo paslaugas"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "sl? p? stedstjenester"
+            "value": "slå på stedstjenester"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "w??cz us?ugi lokalizacji"
+            "value": "włącz usługi lokalizacji"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "activa?i Serviciile de localizare"
+            "value": "activați Serviciile de localizare"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "zapnite lokaliza?n? slu?by"
+            "value": "zapnite lokalizačné služby"
           }
         },
         "sl": {
@@ -6786,31 +6786,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "aktivera platstj?nster"
+            "value": "aktivera platstjänster"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????????????????"
+            "value": "เปิดบริการหาตำแหน่ง"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Konum Servisleri'ni a??n"
+            "value": "Konum Servisleri'ni açın"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ?????? ??????????"
+            "value": "увімкніть служби геолокації"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "b?t D?ch v? ??nh v?"
+            "value": "bật Dịch vụ định vị"
           }
         },
         "ms": {
@@ -6892,25 +6892,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????? ??????? ??????????????"
+            "value": "включете точното местоположение"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "uklju?ite preciznu lokaciju"
+            "value": "uključite preciznu lokaciju"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "zapn?te p?esnou polohu"
+            "value": "zapněte přesnou polohu"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "sl? pr?cis lokalitet til"
+            "value": "slå præcis lokalitet til"
           }
         },
         "nl": {
@@ -6922,25 +6922,25 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "l?lita t?pne asukoht sisse"
+            "value": "lülita täpne asukoht sisse"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "ota tarkka sijainti k?ytt??n"
+            "value": "ota tarkka sijainti käyttöön"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????? ??? ?????? ?????????"
+            "value": "ενεργοποιήστε την ακριβή τοποθεσία"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ????? ?????"
+            "value": "יש להפעיל מיקום מדויק"
           }
         },
         "hu": {
@@ -6958,49 +6958,49 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ??? ???"
+            "value": "정확한 위치를 켜세요"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "iesl?dziet prec?zo atra?an?s vietu"
+            "value": "ieslēdziet precīzo atrašanās vietu"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?junkite tiksli? viet?"
+            "value": "įjunkite tikslią vietą"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "sl? p? n?yaktig posisjon"
+            "value": "slå på nøyaktig posisjon"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "w??cz Dok?adn? lokalizacj?"
+            "value": "włącz Dokładną lokalizację"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "activa?i Localizarea precis?"
+            "value": "activați Localizarea precisă"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "zapnite presn? polohu"
+            "value": "zapnite presnú polohu"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "vklopite natan?no lokacijo"
+            "value": "vklopite natančno lokacijo"
           }
         },
         "sv": {
@@ -7012,25 +7012,25 @@
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????????????????????????"
+            "value": "เปิดตำแหน่งที่ตั้งที่แม่นยำ"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Kesin Konum'u a??n"
+            "value": "Kesin Konum'u açın"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????? ????? ??????????"
+            "value": "увімкніть точну геолокацію"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "b?t V? tr? ch?nh x?c"
+            "value": "bật Vị trí chính xác"
           }
         },
         "ms": {
@@ -7112,25 +7112,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ??????????????"
+            "value": "ограничено местоположение"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "ograni?ena lokacija"
+            "value": "ograničena lokacija"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "poloha je omezen?"
+            "value": "poloha je omezená"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "begr?nset lokalitet"
+            "value": "begrænset lokalitet"
           }
         },
         "nl": {
@@ -7148,25 +7148,25 @@
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "sijainnin k?ytt? rajoitettu"
+            "value": "sijainnin käyttö rajoitettu"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "???????????? ?????????"
+            "value": "περιορισμένη τοποθεσία"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ?????"
+            "value": "המיקום מוגבל"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "korl?tozott helyhozz?f?r?s"
+            "value": "korlátozott helyhozzáférés"
           }
         },
         "id": {
@@ -7178,13 +7178,13 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?? ???"
+            "value": "위치 접근 제한됨"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "atra?an?s vieta ir ierobe?ota"
+            "value": "atrašanās vieta ir ierobežota"
           }
         },
         "lt": {
@@ -7202,19 +7202,19 @@
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "ograniczony dost?p do lokalizacji"
+            "value": "ograniczony dostęp do lokalizacji"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "localizare restric?ionat?"
+            "value": "localizare restricționată"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "obmedzen? poloha"
+            "value": "obmedzená poloha"
           }
         },
         "sl": {
@@ -7226,31 +7226,31 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "plats?tkomst begr?nsad"
+            "value": "platsåtkomst begränsad"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????????????????????"
+            "value": "ตำแหน่งที่ตั้งถูกจำกัด"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "konum k?s?tl?"
+            "value": "konum kısıtlı"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ????????"
+            "value": "геолокацію обмежено"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "v? tr? b? h?n ch?"
+            "value": "vị trí bị hạn chế"
           }
         },
         "ms": {
@@ -7332,25 +7332,25 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??????? ???????????????? ?? ????????"
+            "value": "задайте местоположението на „Винаги“"
           }
         },
         "hr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "postavite lokaciju na ?Uvijek?"
+            "value": "postavite lokaciju na „Uvijek“"
           }
         },
         "cs": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "nastavte polohu na ?V?dy?"
+            "value": "nastavte polohu na „Vždy“"
           }
         },
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "indstil lokalitet til ?Altid?"
+            "value": "indstil lokalitet til »Altid«"
           }
         },
         "nl": {
@@ -7362,121 +7362,121 @@
         "et": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "m??ra asukohaks ?Alati?"
+            "value": "määra asukohaks „Alati“"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "aseta sijainniksi ?Aina?"
+            "value": "aseta sijainniksi ”Aina”"
           }
         },
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????? ??? ????????? ?? ???????"
+            "value": "ορίστε την τοποθεσία σε «Πάντα»"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? ?????? ????? ???????"
+            "value": "יש להגדיר מיקום ל״תמיד״"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?ll?tsa a helyhozz?f?r?st ?Mindig? ?rt?kre"
+            "value": "állítsa a helyhozzáférést „Mindig” értékre"
           }
         },
         "id": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "atur lokasi ke ?Selalu?"
+            "value": "atur lokasi ke “Selalu”"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? ?????? ?????"
+            "value": "위치를 ‘항상’으로 설정하세요"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "iestatiet atra?an?s vietu uz ?Vienm?r?"
+            "value": "iestatiet atrašanās vietu uz „Vienmēr”"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "nustatykite viet? ? ?Visada?"
+            "value": "nustatykite vietą į „Visada“"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "sett posisjon til ?Alltid?"
+            "value": "sett posisjon til «Alltid»"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "ustaw lokalizacj? na ?Zawsze?"
+            "value": "ustaw lokalizację na „Zawsze”"
           }
         },
         "ro": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "seta?i localizarea la ??ntotdeauna?"
+            "value": "setați localizarea la „Întotdeauna”"
           }
         },
         "sk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "nastavte polohu na ?V?dy?"
+            "value": "nastavte polohu na „Vždy“"
           }
         },
         "sl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "nastavite lokacijo na ?Vedno?"
+            "value": "nastavite lokacijo na »Vedno«"
           }
         },
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "st?ll in plats?tkomst p? ?Alltid?"
+            "value": "ställ in platsåtkomst på ”Alltid”"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "????????????????????????? ??????????"
+            "value": "ตั้งค่าตำแหน่งที่ตั้งเป็น “ตลอดเวลา”"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "konumu ?Her Zaman? olarak ayarlay?n"
+            "value": "konumu “Her Zaman” olarak ayarlayın"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?????????? ?????????? ?? ????????"
+            "value": "установіть геолокацію на «Завжди»"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??t quy?n v? tr? th?nh ?Lu?n lu?n?"
+            "value": "đặt quyền vị trí thành “Luôn luôn”"
           }
         },
         "ms": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "tetapkan lokasi kepada ?Sentiasa?"
+            "value": "tetapkan lokasi kepada “Sentiasa”"
           }
         }
       }
@@ -7552,7 +7552,7 @@
         "bg": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? iPhone: %@"
+            "value": "На iPhone: %@"
           }
         },
         "hr": {
@@ -7570,7 +7570,7 @@
         "da": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "P? iPhone: %@"
+            "value": "På iPhone: %@"
           }
         },
         "nl": {
@@ -7594,13 +7594,13 @@
         "el": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "??? iPhone: %@"
+            "value": "Στο iPhone: %@"
           }
         },
         "he": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?-iPhone: %@"
+            "value": "ב-iPhone: %@"
           }
         },
         "hu": {
@@ -7618,25 +7618,25 @@
         "ko": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "iPhone??: %@"
+            "value": "iPhone에서: %@"
           }
         },
         "lv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "iPhone t?lrun?: %@"
+            "value": "iPhone tālrunī: %@"
           }
         },
         "lt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?iPhone?: %@"
+            "value": "„iPhone“: %@"
           }
         },
         "nb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "P? iPhone: %@"
+            "value": "På iPhone: %@"
           }
         },
         "pl": {
@@ -7666,13 +7666,13 @@
         "sv": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "P? iPhone: %@"
+            "value": "På iPhone: %@"
           }
         },
         "th": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? iPhone: %@"
+            "value": "บน iPhone: %@"
           }
         },
         "tr": {
@@ -7684,13 +7684,13 @@
         "uk": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "?? iPhone: %@"
+            "value": "На iPhone: %@"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Tr?n iPhone: %@"
+            "value": "Trên iPhone: %@"
           }
         },
         "ms": {
