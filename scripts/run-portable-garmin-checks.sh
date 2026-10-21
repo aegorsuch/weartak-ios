@@ -7,6 +7,10 @@ trap 'rm -rf "$build_dir"' EXIT
 
 cd "$repo_root"
 
+swiftc -swift-version 5 -parse-as-library Tests/StringCatalogEncodingChecks.swift \
+  -o "$build_dir/string-catalog-encoding-checks"
+"$build_dir/string-catalog-encoding-checks" "$repo_root"
+
 swiftc -swift-version 5 -parse-as-library \
   Shared/GarminRelayProtocol.swift \
   Shared/PhoneLocationReporting.swift \

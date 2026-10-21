@@ -1606,6 +1606,16 @@ xcrun swiftc -parse-as-library Tests/LocalizationResourceChecks.swift -o /tmp/we
 /tmp/weartak-localization-checks "/path/to/WearTAK.app" "$(git rev-parse --short=7 HEAD)"
 ```
 
+`scripts/run-portable-garmin-checks.sh` (run by CI) also compiles
+`Tests/StringCatalogEncodingChecks.swift`, which fails if any localized value in any
+`*.xcstrings` contains more `?` characters than its English source, the signature of a
+catalog saved through a lossy (non-UTF-8) encoding:
+
+```sh
+swiftc -parse-as-library Tests/StringCatalogEncodingChecks.swift -o /tmp/weartak-xcstrings-checks
+/tmp/weartak-xcstrings-checks .
+```
+
 The Foundation-only outbox checks can also run with Swift on Windows:
 
 ```powershell
