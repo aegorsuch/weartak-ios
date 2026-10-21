@@ -259,7 +259,7 @@
 				"$(SRCROOT)/.git/index",
 				"$(SRCROOT)/.git/packed-refs",
 				"$(SRCROOT)/.git/refs/heads",
-				"$(SRCROOT)/.git/refs/heads/develop",
+				"$(SRCROOT)/.git/refs/heads/main",
 				"$(SRCROOT)/.git/objects",
 			);
 			name = "Embed Git commit";

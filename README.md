@@ -119,7 +119,7 @@ Simulator demo alerts are excluded from release builds.
 
 GitHub Actions runs the portable Garmin relay, route, and delivery-ledger checks
 and builds the Companion with its embedded Watch app for the iOS Simulator on
-pushes to `main`/`develop` and pull requests. The simulator `.app` is retained
+pushes to `main` and pull requests. The simulator `.app` is retained
 as a short-lived CI artifact; it is not a device-installable release.
 
 GitLab CI runs the same checks and simulator build on a macOS runner tagged
@@ -171,7 +171,7 @@ profile must support the app's HealthKit and Keychain capabilities.
   and check out the desired release tag. For the latest development code:
 
   ```sh
-  git clone --branch develop https://github.com/aegorsuch/weartak-ios.git
+  git clone --branch main https://github.com/aegorsuch/weartak-ios.git
   cd weartak-ios
   open WearTAK.xcodeproj
   ```
