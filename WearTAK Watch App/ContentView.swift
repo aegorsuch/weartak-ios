@@ -908,6 +908,7 @@ private struct TacticalMapView: View {
         span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
     )
     @State private var hasCentered = false
+    @State private var selfRefreshStartedAt: Date?
     @State private var pointDraft: MapPointDraft?
     @State private var contactSelection: MapContactSelection?
     @State private var incomingSelection: MapContactSelection?
@@ -992,7 +993,11 @@ private struct TacticalMapView: View {
             }
             .onAppear(perform: centerOnce)
             .onChange(of: model.lastLocation?.timestamp) { _, _ in
-                centerOnce()
+                if let requestedAt = selfRefreshStartedAt,
+                   let timestamp = model.lastLocation?.timestamp, timestamp >= requestedAt {
+                    centerOnLocation()
+                    selfRefreshStartedAt = nil
+                } else { centerOnce() }
             }
 
             if settings.mapButtonsVisible {
@@ -1005,6 +1010,8 @@ private struct TacticalMapView: View {
                     Spacer(minLength: 8)
 
                     Button {
+                        selfRefreshStartedAt = Date()
+                        model.requestLocation()
                         centerOnLocation()
                     } label: {
                         mapControl("scope", label: String(localized: "Snap to self", table: "WatchMain"))
@@ -1071,6 +1078,8 @@ private struct TacticalMapView: View {
         }
         .onAppear {
             model.refreshDrawnMissionItems()
+            if initialFocus.isEmpty { selfRefreshStartedAt = Date() }
+            model.requestLocation()
             #if DEBUG
             showChannelsMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-channels")
             showLayersMenu = ProcessInfo.processInfo.arguments.contains("--preview-map-filters") ||

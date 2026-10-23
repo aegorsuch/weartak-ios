@@ -98,6 +98,10 @@ final class SitxClient: ObservableObject, TAKTransport {
                     longitude: location.coordinate.longitude, horizontalAccuracy: location.horizontalAccuracy,
                     altitude: location.altitude, verticalAccuracy: location.verticalAccuracy,
                     speed: location.speed, course: location.course, timestamp: location.timestamp))
+                if let fix = alertLocations.lastKnown() {
+                    do { defaults.set(try JSONEncoder().encode(fix), forKey: AlertLocationHistory.storageKey) }
+                    catch { status = "Last-known GPS could not be saved: \(error.localizedDescription)" }
+                }
             }
         }
     }
@@ -483,15 +487,20 @@ final class SitxClient: ObservableObject, TAKTransport {
     /// The watch's self-PLI event, shared by TAK delivery and Companion's Ditto peer.
     func pliXML(coordinate: CLLocationCoordinate2D, reportingInterval: TimeInterval, now: Date = Date()) -> String {
         let os = ProcessInfo.processInfo.operatingSystemVersion
-        let detail = SitxCoT.pliDetail(
+        var detail = SitxCoT.pliDetail(
             uid: Self.deviceID(), callSign: settings.callSign, team: settings.teamColor.rawValue, role: settings.role,
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
             osVersion: "watchOS \(os.majorVersion).\(os.minorVersion)") +
             biometrics.fresh(reportingInterval: reportingInterval, now: now)
                 .pliDetail(uid: Self.deviceID(), now: now, reportingInterval: reportingInterval)
         let lifetime = WatchBiometrics.staleLifetime(reportingInterval: reportingInterval)
+        let fix = alertLocations.lastKnown(at: now).flatMap {
+            $0.latitude == coordinate.latitude && $0.longitude == coordinate.longitude ? $0 : nil
+        }
+        if let fix { detail += AlertLocationHistory.detail(fix, now: now) }
         return SitxCoT.event(uid: Self.deviceID(), type: SitxCoT.pliType, coordinate: coordinate,
-                             detail: detail, lifetime: lifetime, now: now)
+                             detail: detail, lifetime: lifetime, now: now,
+                             circularError: fix.map { AlertLocationHistory.circularError($0, now: now) } ?? 9_999_999)
     }
 
     func sendMarker(_ marker: WatchMarker) async throws {
@@ -528,7 +537,7 @@ final class SitxClient: ObservableObject, TAKTransport {
 
     func emergencyXML(state: EmergencyState, type: String) -> String {
         let now = Date()
-        let fix = alertLocations.usable(at: now)
+        let fix = alertLocations.lastKnown(at: now)
         let uid = Self.deviceID() + "-alert-" + type
         let cancel = state == .cancel
         let emergency = cancel ? "<emergency cancel=\"true\">\(SitxCoT.escape(settings.callSign))</emergency>"
@@ -539,7 +548,8 @@ final class SitxClient: ObservableObject, TAKTransport {
         return SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o",
                             coordinate: CLLocationCoordinate2D(latitude: fix?.latitude ?? 0, longitude: fix?.longitude ?? 0),
                             detail: detail + (fix.map { AlertLocationHistory.detail($0, now: now) } ?? ""),
-                            lifetime: 86_400, now: now, circularError: fix?.horizontalAccuracy ?? 9_999_999)
+                            lifetime: 86_400, now: now,
+                            circularError: fix.map { AlertLocationHistory.circularError($0, now: now) } ?? 9_999_999)
     }
 
     /// The durable session outbox owns retries; do not also retain events in the transient Sit(x) queue.

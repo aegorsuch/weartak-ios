@@ -35,6 +35,7 @@ jobs:
             -scheme "WearTAK Companion" \
             -destination "generic/platform=iOS Simulator" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            EXCLUDED_ARCHS=x86_64 \
             CODE_SIGNING_ALLOWED=NO \
             build
 

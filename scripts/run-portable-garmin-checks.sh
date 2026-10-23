@@ -26,6 +26,7 @@ swiftc -swift-version 5 -parse-as-library Tests/StringCatalogEncodingChecks.swif
 
 swiftc -swift-version 5 -parse-as-library \
   Shared/GarminRelayProtocol.swift \
+  Shared/CoTFieldSafety.swift \
   Shared/PhoneLocationReporting.swift \
   Shared/UserMetrics.swift \
   Shared/BridgeWire.swift \
