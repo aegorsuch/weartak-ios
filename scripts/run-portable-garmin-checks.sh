@@ -8,6 +8,8 @@ trap 'rm -rf "$build_dir"' EXIT
 cd "$repo_root"
 
 swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift \
   Shared/PhoneLocationReporting.swift Shared/CoTFieldSafety.swift Tests/CoTFieldSafetyChecks.swift \
   -o "$build_dir/cot-field-safety-checks"
 "$build_dir/cot-field-safety-checks"

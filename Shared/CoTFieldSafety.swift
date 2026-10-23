@@ -65,30 +65,6 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
             isAlert = values["type"] == "b-a-o" || values["type"]?.hasPrefix("b-a-o-") == true
         }
 
-        struct CoTRelayReceiptLedger: Codable {
-            static let maximumRecords = 512
-            static let retention: TimeInterval = 86_400
-            struct Receipt: Codable {
-                let id: UUID
-                let createdAt: Date
-                var outputs: Set<UUID>
-            }
-            private(set) var receipts: [Receipt] = []
-
-            func outputs(for id: UUID, now: Date = Date()) -> Set<UUID> {
-                receipts.first { $0.id == id && now.timeIntervalSince($0.createdAt) <= Self.retention }?.outputs ?? []
-            }
-
-            mutating func accept(_ id: UUID, output: UUID, now: Date = Date()) {
-                receipts.removeAll { now.timeIntervalSince($0.createdAt) > Self.retention }
-                if let index = receipts.firstIndex(where: { $0.id == id }) {
-                    receipts[index].outputs.insert(output)
-                } else {
-                    receipts.append(Receipt(id: id, createdAt: now, outputs: [output]))
-                }
-                if receipts.count > Self.maximumRecords { receipts.removeFirst(receipts.count - Self.maximumRecords) }
-            }
-        }
         if depth == 3, name == "link", values["relation"] == "p-p" { parentUID = values["uid"] }
         if depth == 2, name == "point" {
             let lat = values["lat"].flatMap(Double.init), lon = values["lon"].flatMap(Double.init)
@@ -118,5 +94,30 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {
         output += "</\(name)>"
         depth -= 1
+    }
+}
+
+struct CoTRelayReceiptLedger: Codable {
+    static let maximumRecords = 512
+    static let retention: TimeInterval = 86_400
+    struct Receipt: Codable {
+        let id: UUID
+        let createdAt: Date
+        var outputs: Set<UUID>
+    }
+    private(set) var receipts: [Receipt] = []
+
+    func outputs(for id: UUID, now: Date = Date()) -> Set<UUID> {
+        receipts.first { $0.id == id && now.timeIntervalSince($0.createdAt) <= Self.retention }?.outputs ?? []
+    }
+
+    mutating func accept(_ id: UUID, output: UUID, now: Date = Date()) {
+        receipts.removeAll { now.timeIntervalSince($0.createdAt) > Self.retention }
+        if let index = receipts.firstIndex(where: { $0.id == id }) {
+            receipts[index].outputs.insert(output)
+        } else {
+            receipts.append(Receipt(id: id, createdAt: now, outputs: [output]))
+        }
+        if receipts.count > Self.maximumRecords { receipts.removeFirst(receipts.count - Self.maximumRecords) }
     }
 }

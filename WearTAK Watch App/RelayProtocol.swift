@@ -81,22 +81,23 @@ struct EntityRelayPayload: Codable {
         return merged
     }
 
-    struct CoTMapDeletionHistory {
-        private var times: [String: Date] = [:]
+}
 
-        mutating func receive(uid: String, at sentAt: Date, now: Date) {
-            times = times.filter { now.timeIntervalSince($0.value) <= 300 }
-            guard sentAt <= now.addingTimeInterval(30) else { return }
-            times[uid] = max(times[uid] ?? .distantPast, sentAt)
-            if times.count > 200, let oldest = times.min(by: { $0.value < $1.value }) {
-                times.removeValue(forKey: oldest.key)
-            }
-        }
+struct CoTMapDeletionHistory {
+    private var times: [String: Date] = [:]
 
-        func allows(uid: String, at sentAt: Date, now: Date) -> Bool {
-            guard let deletedAt = times[uid], now.timeIntervalSince(deletedAt) <= 300 else { return true }
-            return sentAt > deletedAt
+    mutating func receive(uid: String, at sentAt: Date, now: Date) {
+        times = times.filter { now.timeIntervalSince($0.value) <= 300 }
+        guard sentAt <= now.addingTimeInterval(30) else { return }
+        times[uid] = max(times[uid] ?? .distantPast, sentAt)
+        if times.count > 200, let oldest = times.min(by: { $0.value < $1.value }) {
+            times.removeValue(forKey: oldest.key)
         }
+    }
+
+    func allows(uid: String, at sentAt: Date, now: Date) -> Bool {
+        guard let deletedAt = times[uid], now.timeIntervalSince(deletedAt) <= 300 else { return true }
+        return sentAt > deletedAt
     }
 }
 
