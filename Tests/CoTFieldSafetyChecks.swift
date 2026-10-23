@@ -38,6 +38,19 @@ struct CoTFieldSafetyChecks {
         let oldFallback = AlertLocationHistory.fillingMissingAlertLocation(xml, ownUID: "watch", fix: good,
             now: now.addingTimeInterval(101))
         precondition(oldFallback.contains("lat=\"38.0\"") && oldFallback.contains("ce=\"9999999.0\""))
+        var olderPhone = good
+        olderPhone.timestamp = good.timestamp.addingTimeInterval(-600)
+        olderPhone.latitude = 20
+        precondition(AlertLocationHistory.fillingMissingAlertLocation(oldFallback, ownUID: "watch", fix: olderPhone,
+            now: now.addingTimeInterval(101)) == oldFallback, "Older phone history must not displace newer watch history")
+        var newerPhone = good
+        newerPhone.latitude = 39
+        let replaced = AlertLocationHistory.fillingMissingAlertLocation(oldFallback, ownUID: "watch", fix: newerPhone,
+            now: now.addingTimeInterval(101))
+        precondition(replaced == oldFallback, "Equal measurement time must preserve the existing watch fix")
+        newerPhone.timestamp = now
+        precondition(AlertLocationHistory.fillingMissingAlertLocation(oldFallback, ownUID: "watch", fix: newerPhone,
+            now: now.addingTimeInterval(101)).contains("lat=\"39.0\""))
         precondition(history.lastKnown(at: now.addingTimeInterval(86_400)) == good)
         let restoredFix = try JSONDecoder().decode(PhoneLocationFix.self, from: JSONEncoder().encode(good))
         precondition(restoredFix == good)
