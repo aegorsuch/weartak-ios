@@ -164,7 +164,7 @@ struct WatchBiometrics: Codable, Equatable {
     }
 }
 
-struct PhoneLocationFix: Equatable {
+struct PhoneLocationFix: Codable, Equatable {
     var latitude: Double
     var longitude: Double
     var horizontalAccuracy: Double
@@ -338,8 +338,9 @@ enum PhonePLI {
             detail += biometrics.fresh(reportingInterval: interval, now: now)
                 .pliDetail(uid: identity.uid, now: now, reportingInterval: interval)
         }
+        let ce = PhoneReportingPolicy.maximumFixAge >= now.timeIntervalSince(fix.timestamp) ? number(fix.horizontalAccuracy) : "9999999"
         return "<event version=\"2.0\" uid=\"\(escape(identity.uid))\" type=\"\(type)\" time=\"\(time)\" start=\"\(start)\" stale=\"\(stale)\" how=\"m-g\">" +
-            "<point lat=\"\(number(fix.latitude, digits: 7))\" lon=\"\(number(fix.longitude, digits: 7))\" hae=\"\(hae)\" ce=\"\(number(fix.horizontalAccuracy))\" le=\"\(le)\"/>" +
+            "<point lat=\"\(number(fix.latitude, digits: 7))\" lon=\"\(number(fix.longitude, digits: 7))\" hae=\"\(hae)\" ce=\"\(ce)\" le=\"\(le)\"/>" +
             "<detail>\(detail)</detail></event>"
     }
 

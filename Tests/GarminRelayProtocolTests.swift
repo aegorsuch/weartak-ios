@@ -66,6 +66,49 @@ struct GarminRelayProtocolTests {
             _ = try GarminRelayProtocol.outgoingCoT(invalidMarker, identity: identity, fix: nil, now: now)
             fatalError("Boolean coordinates must be rejected.")
         } catch GarminRelayProtocol.Failure.invalid {}
+        let fix = PhoneLocationFix(latitude: 38, longitude: -77, horizontalAccuracy: 9, altitude: 0,
+            verticalAccuracy: -1, speed: 0, course: 0, timestamp: now)
+        let emergency = try envelope("emergency", ["messageId": "alert-1", "uid": "garmin-sos", "state": "ALERT"])
+        do {
+            _ = try GarminRelayProtocol.outgoingCoT(emergency, identity: identity, fix: nil, now: now)
+            fatalError("No-fix emergency must not invent coordinates.")
+        } catch GarminRelayProtocol.Failure.noLocation {}
+        let alertXML = try GarminRelayProtocol.outgoingCoT(emergency, identity: identity, fix: fix, now: now)
+        precondition(alertXML.contains("lat=\"38.0\"") && alertXML.contains("ce=\"9.0\""))
+        let oldAlert = try GarminRelayProtocol.outgoingCoT(emergency, identity: identity, fix: fix,
+                                                         now: now.addingTimeInterval(600))
+        precondition(oldAlert.contains("lat=\"38.0\"") && oldAlert.contains("ce=\"9999999.0\""))
+        precondition(oldAlert.contains("Last-known GPS fix:"))
+        let phoneMarker = try envelope("marker", ["messageId": "self-marker", "uid": "garmin-marker-self",
+            "type": "a-f-G-T", "locationSource": "phone", "lat": 50.0, "lon": 20.0])
+        let markerXML = try GarminRelayProtocol.outgoingCoT(phoneMarker, identity: identity, fix: fix, now: now)
+        precondition(markerXML.contains("lat=\"38.0\"") && !markerXML.contains("lat=\"50.0\""))
+        for action in ["map", "navigation", "identity", "self_marker", "pli"] {
+            let request = try GarminRelayProtocol.request(envelope("location_request", [
+                "action": action, "requestId": UUID().uuidString, "messageId": UUID().uuidString,
+                "relaySession": "current", "createdAt": now.timeIntervalSince1970 * 1000
+            ]), identity: identity, fix: nil, channelServers: [])
+            precondition(request.kind == .hello && request.locationRefresh == true)
+        }
+        do {
+            _ = try GarminRelayProtocol.request(envelope("location_request", ["action": "invalid", "requestId": "x"]),
+                identity: identity, fix: nil, channelServers: [])
+            fatalError("Unknown GPS action accepted.")
+        } catch GarminRelayProtocol.Failure.invalid {}
+        for type in ["a-n-A-C-F", "a-n-A-C-H", "a-f-Z", "b-m-p-s-m", "u-d-c-c"] {
+            let xml = "<event uid=\"generic\" type=\"\(type)\" time=\"2026-10-23T00:00:00Z\" stale=\"2026-10-23T00:05:00Z\"><point lat=\"38\" lon=\"-77\" ce=\"10\"/><detail><contact callsign=\"Generic\"/><takv device=\"ADS-B\"/><link uid=\"sender\" relation=\"p-p\"/><shape><ellipse major=\"500\" minor=\"500\"/></shape></detail></event>"
+            let incoming = try GarminRelayProtocol.incoming(xml, ownUID: "watch")!
+            precondition(incoming.payload["isUser"] as? Bool == false && incoming.payload["isPoint"] as? Bool == true)
+            precondition(incoming.payload["radius"] as? Double == 500)
+            precondition((incoming.payload["link"] as? [String: String])?["uid"] == "sender")
+            precondition((incoming.payload["shape"] as? [String: [String: Double]])?["ellipse"]?["minor"] == 500)
+            precondition(incoming.payload["stale"] as? String == "2026-10-23T00:05:00Z")
+        }
+        let deletion = try GarminRelayProtocol.incoming(
+            "<event uid=\"deletion\" type=\"t-x-d-d\"><detail><link uid=\"target\" relation=\"p-p\"/></detail></event>", ownUID: "watch")!
+        precondition(deletion.payload["lat"] == nil && (deletion.payload["link"] as? [String: String])?["uid"] == "target")
+        let unlinkedDelete = try GarminRelayProtocol.incoming("<event uid=\"target\" type=\"t-x-d-d\"><detail/></event>", ownUID: "watch")!
+        precondition(unlinkedDelete.payload["uid"] as? String == "target")
         let metrics = UserMetrics(birthYear: 1990, source: "Test", measuredAt: now)
         let restoredMetrics = try JSONDecoder().decode(UserMetrics.self, from: JSONEncoder().encode(metrics))
         precondition(restoredMetrics == metrics)

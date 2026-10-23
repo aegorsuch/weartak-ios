@@ -8,6 +8,9 @@ final class PhoneLocationReporter: NSObject, CLLocationManagerDelegate {
     private static let alwaysRequestedKey = "WearTAK.companion.alwaysLocationRequested"
     private let manager = CLLocationManager()
     private let defaults: UserDefaults
+    private var refreshPolicy = SelfLocationRefreshPolicy()
+    private var refreshTask: Task<Void, Never>?
+    private var emergencyActive = false
     private(set) var isRunning = false
     private(set) var servicesEnabled = true
     var onFix: ((PhoneLocationFix) -> Void)?
@@ -51,6 +54,35 @@ final class PhoneLocationReporter: NSObject, CLLocationManagerDelegate {
 
     func requestWhenInUse() { manager.requestWhenInUseAuthorization() }
 
+    @discardableResult
+    func requestFreshLocation() -> Bool {
+        guard servicesEnabled, authorization == .whenInUse || authorization == .always,
+              refreshPolicy.request() else { return false }
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.startUpdatingLocation()
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(SelfLocationRefreshPolicy.acquisitionWindow)) }
+            catch { return }
+            guard let self else { return }
+            self.refreshTask = nil
+            if !self.emergencyActive {
+                self.manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+                if !self.isRunning { self.manager.stopUpdatingLocation() }
+            }
+        }
+        return true
+    }
+
+    func setEmergencyActive(_ active: Bool) {
+        emergencyActive = active
+        if active { requestFreshLocation() }
+        else if refreshTask == nil {
+            manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+            if !isRunning { manager.stopUpdatingLocation() }
+        }
+    }
+
     func start(appActive: Bool) {
         guard !isRunning else { return }
         manager.allowsBackgroundLocationUpdates = true
@@ -67,7 +99,7 @@ final class PhoneLocationReporter: NSObject, CLLocationManagerDelegate {
 
     func stop() {
         guard isRunning else { return }
-        manager.stopUpdatingLocation()
+        if refreshTask == nil && !emergencyActive { manager.stopUpdatingLocation() }
         manager.allowsBackgroundLocationUpdates = false
         isRunning = false
     }
@@ -96,7 +128,7 @@ final class PhoneLocationReporter: NSObject, CLLocationManagerDelegate {
         let vertical = location.verticalAccuracy, speed = location.speed
         let course = location.course, timestamp = location.timestamp
         Task { @MainActor [weak self] in
-            guard let self, self.isRunning else { return }
+            guard let self, self.isRunning || self.refreshTask != nil || self.emergencyActive else { return }
             self.onFix?(PhoneLocationFix(latitude: coordinate.latitude, longitude: coordinate.longitude,
                 horizontalAccuracy: horizontal, altitude: altitude, verticalAccuracy: vertical,
                 speed: speed, course: course, timestamp: timestamp))

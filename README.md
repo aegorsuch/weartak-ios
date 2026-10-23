@@ -567,6 +567,22 @@ minutes and refuses new records rather than evicting live ones. The reply queue
 is bounded to 64 messages; unavailable, failed, or overflowing replies are
 reported in Garmin status and queued watch events recover by replay.
 
+Concurrent retries of the same durable event join one in-flight write and each
+receive their own session-correlated acknowledgement. `location_request` is a
+best-effort control hint with `action` (`map`, `navigation`, `identity`,
+`self_marker`, or `pli`), `requestId`, `messageId`, `createdAt`, and `relaySession`
+inside `payload`. It requests high-accuracy phone GPS without blocking the
+action. Self-position marker payloads use `locationSource: "phone"`; explicit
+map-tap coordinates remain intentional. Companion returns resolved marker
+positions as `entity` messages under the original `garmin-marker-*` UID, first
+with the best available fix and again with fresh GPS; ACK fields are unchanged.
+
+Garmin entity relay also preserves generic `a-*`, spot `b-m-p-s-m`, anchored
+shapes, and coordinate-free `t-x-d-d` deletes, including `link.uid/relation`,
+`time`, `stale`, and numeric `shape.ellipse.major/minor` (meters). Equal axes
+above zero and at most 100 km additionally expose `radius`. Generic points do
+not become chat contacts merely because they contain a `takv` element.
+
 There remains an unavoidable crash window between the server socket accepting
 a write and Companion persisting that acceptance. A replay after a crash in
 that window can duplicate the write; this is not an exactly-once protocol.
@@ -1560,15 +1576,25 @@ and cancellation events share an alert UID; cancellations use `b-a-o-can` and
 UID, and `__forcedelete`. Incoming nonexpired CoT users and points appear on
 the map, excluding the watch's own PLI and locally saved points.
 
-Outbound alerts select the newest valid watch fix no older than 120 seconds
-(at most five seconds of future clock skew), retaining it across empty/invalid
-updates. Coordinates carry the measured horizontal accuracy as `ce`, with the
-measurement timestamp and accuracy explicitly marked last-known in remarks.
-If watch GPS is unavailable, Companion can fill an alert's missing position
-from its last valid phone fix under the same age bound and verified watch
-identity. With neither fix available the alert still sends, using `0,0` and
-unknown accuracy rather than indefinitely waiting for GPS. The alert payload
-is frozen at its first ready transport attempt and retained unchanged on retry.
+Alerts and other self-position actions immediately request active high-accuracy
+GPS, throttled to one acquisition per five seconds. Actions never wait for GPS:
+they use the best available fix immediately, then update when a new fix arrives.
+This covers own-position marker drop/move, identity PLI, map open/recenter,
+and navigation/Bloodhound. Intentional map-tap coordinates are not moved.
+Active emergencies keep location updates running; cancellations stop emergency
+refreshes. A fresh map fix recenters once, not continuously after later pans.
+
+The newest intrinsically valid watch/phone fix is retained across invalid
+updates and normal restarts. Alerts retain even an old fix instead of replacing
+it with `0,0`; measurements older than 120 seconds use unknown `ce=9999999`,
+with the original measurement timestamp and accuracy in remarks. Companion can
+fill a verified watch alert's missing position from phone history. No-ever-fix
+emergencies also send immediate All Chat Rooms text identifying the sender and
+GPS acquisition. Apple Watch may send unknown positional coordinates only in
+that case; Garmin positional activations wait for the first real phone fix
+while the safety text is relayed immediately. Cancellation needs no coordinates.
+Each durable event freezes its XML for retry; fresh positions are distinct
+updates to the same alert UID, not retry mutations.
 
 Failed Sit(x) alert/point events are retained in a bounded in-memory queue and
 retried after reconnect. Cancellation supersedes a queued activation. Queued
@@ -1579,10 +1605,10 @@ pending drops), marker edits/deletions, manual/automatic/environmental alerts
 and cancellations, and outgoing GeoChat/point replies. PLI is not backlogged.
 Routine queue-storage and transport-acceptance updates do not show pop-ups on
 the watch home screen. Errors and expiry warnings remain visible. The marker
-confirmation screen explains deferred storage. A drop without a fresh valid fix
-keeps its title/type/remark and original UID, then uses the next fresh watch
-location. It does not claim that the eventual coordinates were the drop
-location.
+confirmation screen explains deferred storage. A drop with no known fix keeps
+its title/type/remark and original UID, then uses the next valid watch location.
+Self-position drops with a cached fix appear immediately and move to the new
+fix when it arrives. Neither case claims a delayed fix was measured at drop time.
 
 The outbox survives app restarts, holds at most 200 operations/1 MB, and expires
 unsent operations after 24 hours with a visible warning. New edits/deletions

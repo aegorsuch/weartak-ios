@@ -208,7 +208,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private struct OfflineOperation: Codable {
-        enum Kind: String, Codable { case marker, delete, alert, chat }
+        enum Kind: String, Codable { case marker, delete, alert, chat, broadcast }
         let kind: Kind
         let scope: String
         var marker: WatchMarker?
@@ -356,6 +356,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var lastPLISentAt: Date?
     private var sourceGenerations: [UUID: Int] = [:]
     private var mapDeletions = CoTMapDeletionHistory()
+    private var locationRefresh = SelfLocationRefreshPolicy()
+    private var locationRefreshTask: Task<Void, Never>?
+    private var ownPositionMarkers: [UUID: Date] = [:]
+    private var lastAlertPositionAt: Date?
+    private var identityFixRequestedAt: Date?
+    private var locationUnavailableAlerts = Set<String>()
     private let networkPathMonitor = NWPathMonitor()
     @Published private(set) var networkConnectivity: DashboardNetworkConnectivity = .offline
     @Published private(set) var watchLocationEnabled = false
@@ -374,6 +380,19 @@ final class WatchSessionModel: NSObject, ObservableObject {
         self.transport = transport ?? client
         self.settings = settings
         super.init()
+        if let data = UserDefaults.standard.data(forKey: AlertLocationHistory.storageKey) {
+            do {
+                let fix = try JSONDecoder().decode(PhoneLocationFix.self, from: data)
+                var history = AlertLocationHistory()
+                history.receive(fix)
+                if let valid = history.lastKnown() {
+                    lastLocation = CLLocation(coordinate: CLLocationCoordinate2D(latitude: valid.latitude, longitude: valid.longitude),
+                        altitude: valid.altitude, horizontalAccuracy: valid.horizontalAccuracy,
+                        verticalAccuracy: valid.verticalAccuracy, timestamp: valid.timestamp)
+                    sitxClient.currentLocation = lastLocation
+                }
+            } catch { reportOfflineError(error) }
+        }
         if let data = UserDefaults.standard.data(forKey: Self.routesStorageKey) {
             do {
                 guard data.count <= 100_000 else { throw GarminRoute.Failure.capacity }
@@ -398,8 +417,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.lastPLISentAt = nil
-                    guard self.isAppActive, self.connectionState == .connected else { return }
+                    guard self.isAppActive else { return }
                     self.requestLocation()
+                    self.identityFixRequestedAt = Date()
+                    guard self.connectionState == .connected else { return }
+                    if let location = self.lastLocation { self.sendPLIIfDue(for: location, allowLastKnown: true) }
                 }
             }
         selectedMarkerKind = MarkerKind(rawValue: UserDefaults.standard.string(forKey: "WearTAK.lastMarkerKind") ?? "") ?? .unknown
@@ -643,7 +665,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         sitxClient.setAppActive(active)
         if active {
             sitxClient.resumeAuthorization()
-            if liveLocationRequested || routeFollow != nil { startLiveLocation() }
+            if liveLocationRequested || routeFollow != nil || hasActiveEmergency { startLiveLocation() }
         } else { locationManager.stopUpdatingLocation() }
     }
 
@@ -661,6 +683,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private func stopLocationUpdatesIfIdle() {
+        if locationRefreshTask != nil { return }
+        if hasActiveEmergency, isAppActive { return }
         if (liveLocationRequested || routeFollow != nil), isAppActive { return }
         if connectionState == .connected, transport.pliReportingRoute == .standaloneSitx { return }
         locationManager.stopUpdatingLocation()
@@ -668,13 +692,23 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func requestLocation() {
         updateLocationAvailability()
+        guard isAppActive, locationRefresh.request() else { return }
+        companionClient.requestLocationRefresh()
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
-            locationManager.requestLocation()
+            locationManager.desiredAccuracy = kCLLocationAccuracyBest
+            locationManager.startUpdatingLocation()
+            locationRefreshTask?.cancel()
+            locationRefreshTask = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(SelfLocationRefreshPolicy.acquisitionWindow)) }
+                catch { return }
+                self?.locationRefreshTask = nil
+                self?.stopLocationUpdatesIfIdle()
+            }
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
         case .denied, .restricted:
-            lastLocation = nil
+            break
         @unknown default:
             break
         }
@@ -735,7 +769,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func dropMarker() -> Bool {
-        return storeMarker(at: usableMarkerCoordinate, kind: selectedMarkerKind, title: defaultPointTitle(), remark: "")
+        return storeMarker(at: lastLocation?.coordinate, kind: selectedMarkerKind, title: defaultPointTitle(), remark: "")
     }
 
     func defaultPointTitle(at date: Date = Date()) -> String {
@@ -751,7 +785,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @discardableResult
     func addMarker(at coordinate: CLLocationCoordinate2D, kind: MarkerKind, title: String, remark: String) -> Bool {
         guard CLLocationCoordinate2DIsValid(coordinate) else { return false }
-        return storeMarker(at: coordinate, kind: kind, title: title, remark: remark)
+        return storeMarker(at: coordinate, kind: kind, title: title, remark: remark, atOwnPosition: false)
     }
 
     var usableMarkerCoordinate: CLLocationCoordinate2D? {
@@ -761,7 +795,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     @discardableResult
-    func storeMarker(at coordinate: CLLocationCoordinate2D?, kind: MarkerKind, title: String, remark: String) -> Bool {
+    func storeMarker(at coordinate: CLLocationCoordinate2D?, kind: MarkerKind, title: String, remark: String,
+                     atOwnPosition: Bool = true) -> Bool {
+        if atOwnPosition { requestLocation() }
         if let coordinate, !CLLocationCoordinate2DIsValid(coordinate) {
             offlineNotice = String(localized: "Invalid marker coordinates.", table: "WatchStatus")
             offlineError = offlineNotice
@@ -769,6 +805,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
         selectedMarkerKind = kind
         let id = UUID()
+        if atOwnPosition { ownPositionMarkers[id] = Date() }
         guard let coordinate else {
             let operation = OfflineOperation(kind: .marker, scope: offlineScope, markerID: id,
                                              markerKind: kind, title: title, remark: remark)
@@ -807,7 +844,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
         saveMarkers()
     }
 
-    func moveMarker(id: UUID, to coordinate: CLLocationCoordinate2D) {
+    func moveMarker(id: UUID, to coordinate: CLLocationCoordinate2D, refreshLocation: Bool = true) {
+        if refreshLocation {
+            requestLocation()
+            ownPositionMarkers[id] = Date()
+        }
         guard CLLocationCoordinate2DIsValid(coordinate),
               let index = markers.firstIndex(where: { $0.id == id }) else { return }
         var marker = markers[index]
@@ -821,6 +862,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func deleteMarker(id: UUID) {
+        ownPositionMarkers.removeValue(forKey: id)
         guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
         guard storeOffline(OfflineOperation(kind: .delete, scope: offlineScope,
                                             xml: sitxClient.deleteMarkerXML(uid: id.uuidString)),
@@ -978,6 +1020,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         bloodhoundMapItemID = nil
         bloodhoundTargetID = (bloodhoundTargetID == id) ? nil : id
         bloodhoundProximityNotified = false
+        if bloodhoundTargetID != nil { requestLocation() }
     }
 
     func toggleContactBloodhound(uid: String) {
@@ -2017,7 +2060,26 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
     }
 
-    private func storeAlert(state: EmergencyState, type: String) -> Bool {
+    private var hasActiveEmergency: Bool {
+        activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
+    }
+
+    private func storeAlert(state: EmergencyState, type: String, refreshLocation: Bool = true) -> Bool {
+        if state == .alert, refreshLocation { requestLocation() }
+        if state == .cancel { locationUnavailableAlerts.remove(type) }
+        if state == .alert, lastLocation == nil, !locationUnavailableAlerts.contains(type) {
+            do {
+                let uid = SitxClient.deviceID()
+                let callsign = SitxCoT.pliCallSign(settings.callSign, uid: uid)
+                let xml = try TAKChatMessage.outgoing(senderUID: uid, senderCallSign: callsign,
+                    recipientUID: TAKChatMessage.allChatRoomsUID, recipientCallSign: TAKChatMessage.allChatRoomsUID,
+                    text: "EMERGENCY from \(callsign): location unavailable, acquiring GPS", isGroup: true)
+                if storeOffline(OfflineOperation(kind: .broadcast, scope: offlineScope, xml: xml),
+                                key: "no-location-\(type)", notice: "Emergency text queued; acquiring GPS.") {
+                    locationUnavailableAlerts.insert(type)
+                }
+            } catch { reportOfflineError(error) }
+        }
         let notice = state == .cancel
             ? String(localized: "Cancel alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
             : String(localized: "Alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
@@ -2122,9 +2184,30 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
+        guard let location = locations.last(where: {
+            CLLocationCoordinate2DIsValid($0.coordinate) && $0.horizontalAccuracy >= 0 &&
+                $0.timestamp <= Date().addingTimeInterval(5) &&
+                !($0.coordinate.latitude == 0 && $0.coordinate.longitude == 0)
+        }), lastLocation.map({ location.timestamp > $0.timestamp }) ?? true else { return }
         lastLocation = location
         sitxClient.currentLocation = location
+        if let requestedAt = identityFixRequestedAt, location.timestamp >= requestedAt {
+            identityFixRequestedAt = nil
+            lastPLISentAt = nil
+        }
+        for (id, requestedAt) in ownPositionMarkers {
+            if location.timestamp >= requestedAt {
+                ownPositionMarkers.removeValue(forKey: id)
+                moveMarker(id: id, to: location.coordinate, refreshLocation: false)
+            }
+        }
+        if hasActiveEmergency,
+           lastAlertPositionAt.map({ location.timestamp.timeIntervalSince($0) >= 5 }) ?? true {
+            lastAlertPositionAt = location.timestamp
+            if let type = activeAlertType { storeAlert(state: .alert, type: type.rawValue, refreshLocation: false) }
+            if let type = activeAutomaticAlert { storeAlert(state: .alert, type: type.rawValue, refreshLocation: false) }
+            for type in activeEnvironmentalAlerts { storeAlert(state: .alert, type: type.rawValue, refreshLocation: false) }
+        }
         if drawnMissionAnchor.map({ location.distance(from: $0) > Self.drawnMissionRefreshDistance }) ?? true {
             refreshDrawnMissionItems()
         }
@@ -2173,9 +2256,9 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         return settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)
     }
 
-    private func sendPLIIfDue(for location: CLLocation) {
+    private func sendPLIIfDue(for location: CLLocation, allowLastKnown: Bool = false) {
           guard isAppActive, !isSendingPLI, location.horizontalAccuracy >= 0,
-              abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
+              allowLastKnown || abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
         #if DEBUG && targetEnvironment(simulator)
         stepSimulatedBiometrics()
         #endif
@@ -2264,7 +2347,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        lastLocation = nil
+        chatLogger.notice("GPS refresh failed; retaining last-known fix: \(error.localizedDescription, privacy: .public)")
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

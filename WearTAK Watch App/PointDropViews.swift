@@ -169,7 +169,7 @@ struct PointDropConfirmationView: View {
                 isDropping = true
                 let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard model.storeMarker(
-                    at: draft.coordinate,
+                    at: model.lastLocation?.coordinate ?? draft.coordinate,
                     kind: draft.kind,
                     title: trimmedTitle.isEmpty ? model.defaultPointTitle() : trimmedTitle,
                     remark: remark.trimmingCharacters(in: .whitespacesAndNewlines)

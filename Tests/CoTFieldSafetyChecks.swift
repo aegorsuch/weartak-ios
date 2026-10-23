@@ -35,8 +35,28 @@ struct CoTFieldSafetyChecks {
         precondition(filled.contains("Last-known GPS fix:") && filled.contains("A&amp;B"))
         precondition(AlertLocationHistory.fillingMissingAlertLocation(xml, ownUID: "other", fix: good, now: now) == xml)
         precondition(AlertLocationHistory.fillingMissingAlertLocation(xml, ownUID: "watch", fix: nil, now: now) == xml)
-        precondition(AlertLocationHistory.fillingMissingAlertLocation(xml, ownUID: "watch", fix: good,
-            now: now.addingTimeInterval(101)) == xml)
+        let oldFallback = AlertLocationHistory.fillingMissingAlertLocation(xml, ownUID: "watch", fix: good,
+            now: now.addingTimeInterval(101))
+        precondition(oldFallback.contains("lat=\"38.0\"") && oldFallback.contains("ce=\"9999999.0\""))
+        precondition(history.lastKnown(at: now.addingTimeInterval(86_400)) == good)
+        let restoredFix = try JSONDecoder().decode(PhoneLocationFix.self, from: JSONEncoder().encode(good))
+        precondition(restoredFix == good)
+        var refreshed = good
+        refreshed.latitude = 39
+        refreshed.timestamp = now
+        let update = AlertLocationHistory.refreshingAlert(filled, ownUID: "watch", fix: refreshed, now: now)!
+        precondition(update.contains("lat=\"39.0\"") && update.contains("uid=\"watch-alert-911\""))
+        precondition(update.contains("time=\"") && update.contains("stale=\""))
+        precondition(AlertLocationHistory.refreshingAlert(filled, ownUID: "other", fix: refreshed, now: now) == nil)
+        let cancelXML = xml.replacingOccurrences(of: "type=\"b-a-o\"", with: "type=\"b-a-o-can\"")
+        precondition(AlertLocationHistory.refreshingAlert(cancelXML, ownUID: "watch", fix: refreshed, now: now) == nil)
+        let noPoint = xml.replacingOccurrences(of: "<point lat=\"0\" lon=\"0\" ce=\"9999999\"/>", with: "")
+        precondition(AlertLocationHistory.fillingMissingAlertLocation(noPoint, ownUID: "watch", fix: good, now: now)
+            .contains("lat=\"38.0\""))
+        var throttle = SelfLocationRefreshPolicy()
+        precondition(throttle.request(at: now))
+        for _ in 0..<18 { precondition(!throttle.request(at: now.addingTimeInterval(4.99))) }
+        precondition(throttle.request(at: now.addingTimeInterval(5)))
         let valid = xml.replacingOccurrences(of: "lat=\"0\" lon=\"0\" ce=\"9999999\"", with: "lat=\"40\" lon=\"-70\" ce=\"8\"")
         precondition(AlertLocationHistory.fillingMissingAlertLocation(valid, ownUID: "watch", fix: good, now: now) == valid)
         precondition(AlertLocationHistory.fillingMissingAlertLocation(xml.replacingOccurrences(of: "b-a-o", with: "a-f-G"),
@@ -61,6 +81,6 @@ struct CoTFieldSafetyChecks {
         precondition(ledger.outputs(for: request, now: now.addingTimeInterval(86_401)).isEmpty)
         for _ in 0..<600 { ledger.accept(UUID(), output: output, now: now) }
         precondition(ledger.receipts.count == CoTRelayReceiptLedger.maximumRecords)
-        print("PASS: bounded last-valid alert fixes, honest measured accuracy, phone PLI fallback, relay retry receipts and bounds")
+        print("PASS: retained last-known fixes, honest CE, fresh emergency updates, cancellation safety, GPS throttling and relay receipts")
     }
 }

@@ -422,6 +422,18 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         try await send(xml, id: UUID())
     }
 
+    func requestLocationRefresh() {
+        guard active, usesCompanion, isPhoneReachable else { return }
+        Task {
+            do {
+                let reply = try await request(BridgeWire.Message(kind: .hello, locationRefresh: true))
+                apply(reply)
+            } catch {
+                status = "Phone GPS refresh failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
     func send(_ xml: String, id: UUID) async throws {
         guard isReady else { throw TAKTransportError.notConfigured }
         let reply = try await request(BridgeWire.Message(kind: .cot, id: id, xml: xml))

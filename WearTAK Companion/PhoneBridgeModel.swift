@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import CryptoKit
 import HealthKit
 import OSLog
 import WatchConnectivity
@@ -97,6 +98,19 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var phoneReportsByServer: [UUID: Date] = [:]
     private var latestPhoneFix: PhoneLocationFix?
     private var alertLocations = AlertLocationHistory()
+    private struct ActivePhoneEmergency {
+        let xml: String
+        let ownUID: String
+        var lastFixAt: Date?
+    }
+    private var activePhoneEmergencies: [String: ActivePhoneEmergency] = [:]
+    private var refreshingPhoneEmergencies = false
+    private var pendingGarminEmergencies: [String: GarminEnvelope] = [:]
+    private var garminEmergencyRetries = Set<String>()
+    private var garminEventTasks: [UUID: Task<BridgeWire.Message, Error>] = [:]
+    private var selfPositionRequestedAt: Date?
+    private var pendingGarminMarkers: [String: (envelope: GarminEnvelope, requestedAt: Date)] = [:]
+    private var garminMarkerUpdates = Set<String>()
     private var phoneInterval = PhoneReportingPolicy.minimumInterval
     private var phoneSendInFlight = false
     private var phoneDittoTrackInFlight = false
@@ -152,6 +166,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             pdlStore: SecurePDLStore(service: "com.aegorsuch.weartak.ditto"))
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
+        if let data = defaults.data(forKey: AlertLocationHistory.storageKey) {
+            do { alertLocations.receive(try JSONDecoder().decode(PhoneLocationFix.self, from: data)) }
+            catch { reportingLogger.error("Last-known GPS could not be restored: \(error.localizedDescription, privacy: .public)") }
+        }
         if let data = defaults.data(forKey: Self.relayReceiptsKey) {
             do {
                 relayReceipts = try JSONDecoder().decode(CoTRelayReceiptLedger.self, from: data)
@@ -938,15 +956,39 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
     }
 
-    private func reportPhoneFix(_ fix: PhoneLocationFix) {
+    private func requestSelfPosition() {
+        if reporter.requestFreshLocation() { selfPositionRequestedAt = Date() }
+        lastPhoneReportAt = nil
+        if let fix = alertLocations.lastKnown() { reportPhoneFix(fix, allowLastKnown: true) }
+    }
+
+    private func reportPhoneFix(_ fix: PhoneLocationFix, allowLastKnown: Bool = false) {
+        let previous = alertLocations.lastKnown()
+        alertLocations.receive(fix)
+        if let valid = alertLocations.lastKnown(), valid != previous {
+            do { defaults.set(try JSONEncoder().encode(valid), forKey: AlertLocationHistory.storageKey) }
+            catch { reportingLogger.error("Last-known GPS could not be saved: \(error.localizedDescription, privacy: .public)") }
+        }
+        refreshPhoneEmergencies(using: fix)
+        retryPendingGarminEmergencies()
+        refreshGarminMarkers(using: fix)
         guard reporter.isRunning, case .success(let identity) = watchIdentity else { return }
         latestPhoneFix = fix
-        alertLocations.receive(fix)
-        do { try PhoneReportingPolicy.validate(fix) }
+        do {
+            if allowLastKnown {
+                guard AlertLocationHistory.isUsable(fix, now: fix.timestamp) else {
+                    throw PhoneReportingPolicy.FixFailure.invalidCoordinate
+                }
+            } else { try PhoneReportingPolicy.validate(fix) }
+        }
         catch {
             phoneReporting.detail = error.localizedDescription
             reportingLogger.error("Phone GPS fix rejected: \(error.localizedDescription, privacy: .public)")
             return
+        }
+        if let requested = selfPositionRequestedAt, fix.timestamp >= requested, !phoneSendInFlight {
+            lastPhoneReportAt = nil
+            selfPositionRequestedAt = nil
         }
         let interval = PhoneReportingPolicy.interval(for: identity, speed: fix.speed)
         phoneInterval = interval
@@ -1042,61 +1084,52 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                     heartRate: heartRate, measuredAt: Date(),
                     batdokCotEnabled: envelope.payload["includeBatdok"] as? Bool ?? false)
                 setWatchIdentity(.success(identity))
-                if let fix = latestPhoneFix { reportPhoneFix(fix) }
+                requestSelfPosition()
                 return
             }
-            let request: BridgeWire.Message
             let isEvent = ["marker", "marker_delete", "emergency", "chat"].contains(envelope.type)
             if isEvent {
-                if let garminLedgerError { throw CompanionFailure.message(garminLedgerError) }
-                guard let deviceID = garminDeviceID.flatMap(UUID.init(uuidString:)),
-                    garminWrites.count < 16
-                else {
-                    throw CompanionFailure.message("Garmin relay is busy or the watch is unavailable. Retry later.")
+                if envelope.type == "emergency", let uid = envelope.payload["uid"] as? String {
+                    reporter.requestFreshLocation()
+                    if envelope.payload["state"] as? String == "CANCEL" {
+                        pendingGarminEmergencies.removeValue(forKey: uid)
+                    }
                 }
-                var payload = envelope.payload
-                payload.removeValue(forKey: "relaySession")
-                let fingerprint = try JSONSerialization.data(
-                    withJSONObject: GarminEnvelope(envelope.type, payload).object, options: [.sortedKeys])
-                var updated = garminLedger
-                let record = try updated.reserve(
-                    deviceID: deviceID,
-                    messageID: envelope.string("messageId", maximum: 128), fingerprint: fingerprint
-                ) {
-                    guard let identity = garminIdentity else { throw GarminRelayProtocol.Failure.noIdentity }
-                    return try GarminRelayProtocol.outgoingCoT(
-                        envelope, identity: identity,
-                        fix: latestPhoneFix, now: Date())
+                if envelope.type == "marker", envelope.payload["locationSource"] as? String == "phone" {
+                    requestSelfPosition()
+                    let uid = try envelope.string("uid", maximum: 128)
+                    if pendingGarminMarkers[uid] == nil, pendingGarminMarkers.count < 64 {
+                        pendingGarminMarkers[uid] = (envelope, Date())
+                    }
                 }
-                try updated.save(to: GarminDeliveryLedger.storageURL())
-                garminLedger = updated
-                if record.accepted {
-                    try sendGarminReply(
-                        BridgeWire.Message(
-                            kind: .acknowledgement, id: record.requestID,
-                            ready: true), request: envelope)
-                    return
+                if envelope.type == "marker_delete", let uid = envelope.payload["uid"] as? String {
+                    pendingGarminMarkers.removeValue(forKey: uid)
                 }
-                guard garminWrites.insert(record.requestID).inserted else {
-                    throw CompanionFailure.message("This Garmin event is already being relayed. Retry later.")
+                let reply: BridgeWire.Message
+                do { reply = try await relayGarminEvent(envelope) }
+                catch GarminRelayProtocol.Failure.noLocation {
+                    if envelope.type == "emergency", envelope.payload["state"] as? String == "ALERT",
+                       let uid = envelope.payload["uid"] as? String {
+                        guard pendingGarminEmergencies.count < 32 || pendingGarminEmergencies[uid] != nil else {
+                            throw CompanionFailure.message("Too many pending emergency locations. Retry later.")
+                        }
+                        pendingGarminEmergencies[uid] = envelope
+                        reporter.setEmergencyActive(true)
+                        try await sendGarminLocationUnavailable(envelope)
+                    }
+                    throw GarminRelayProtocol.Failure.noLocation
                 }
-                request = BridgeWire.Message(kind: .cot, id: record.requestID, xml: record.xml)
-            } else {
-                request = try GarminRelayProtocol.request(
-                    envelope, identity: garminIdentity,
-                    fix: latestPhoneFix, channelServers: garminChannelServers)
+                guard generation == garminGeneration, watchRoute == .garmin,
+                      garmin?.connectionToken == connectionToken else { return }
+                if envelope.type == "marker", envelope.payload["locationSource"] as? String == "phone",
+                   let fix = alertLocations.lastKnown() { try sendGarminMarkerLocation(envelope, fix: fix) }
+                try sendGarminReply(reply, request: envelope)
+                return
             }
-            defer { if isEvent { garminWrites.remove(request.id) } }
+            if envelope.type == "location_request" || envelope.type == "pli" { requestSelfPosition() }
+            let request = try GarminRelayProtocol.request(
+                envelope, identity: garminIdentity, fix: alertLocations.lastKnown(), channelServers: garminChannelServers)
             let reply = try await processWatchMessage(request)
-            if isEvent {
-                guard reply.kind == .acknowledgement, reply.ready == true else {
-                    throw CompanionFailure.message("No connected server accepted this Garmin event. Retry later.")
-                }
-                var updated = garminLedger
-                try updated.accept(request.id)
-                try updated.save(to: GarminDeliveryLedger.storageURL())
-                garminLedger = updated
-            }
             guard generation == garminGeneration, watchRoute == .garmin,
                 garmin?.connectionToken == connectionToken
             else { return }
@@ -1115,6 +1148,142 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 ]
                 if let session = received.payload["relaySession"] as? String { payload["relaySession"] = session }
                 enqueueGarmin(GarminEnvelope("relay_result", payload))
+            }
+        }
+    }
+
+    private func relayGarminEvent(_ envelope: GarminEnvelope, fallbackXML: String? = nil) async throws -> BridgeWire.Message {
+        if let garminLedgerError { throw CompanionFailure.message(garminLedgerError) }
+        guard let deviceID = garminDeviceID.flatMap(UUID.init(uuidString:)),
+              let identity = garminIdentity else { throw GarminRelayProtocol.Failure.noIdentity }
+        var payload = envelope.payload
+        payload.removeValue(forKey: "relaySession")
+        let fingerprint = try JSONSerialization.data(
+            withJSONObject: GarminEnvelope(envelope.type, payload).object, options: [.sortedKeys])
+        var updated = garminLedger
+        let record = try updated.reserve(deviceID: deviceID,
+            messageID: envelope.string("messageId", maximum: 128), fingerprint: fingerprint) {
+            if let fallbackXML { return fallbackXML }
+            return try GarminRelayProtocol.outgoingCoT(envelope, identity: identity,
+                                                       fix: alertLocations.lastKnown(), now: Date())
+        }
+        try updated.save(to: GarminDeliveryLedger.storageURL())
+        garminLedger = updated
+        if record.accepted {
+            return BridgeWire.Message(kind: .acknowledgement, id: record.requestID, ready: true)
+        }
+        if let task = garminEventTasks[record.requestID] { return try await task.value }
+        guard garminWrites.count < 16 else {
+            throw CompanionFailure.message("Garmin relay is busy. Retry later.")
+        }
+        garminWrites.insert(record.requestID)
+        let task = Task {
+            defer {
+                self.garminWrites.remove(record.requestID)
+                self.garminEventTasks.removeValue(forKey: record.requestID)
+            }
+            let reply = try await self.processWatchMessage(
+                BridgeWire.Message(kind: .cot, id: record.requestID, xml: record.xml))
+            guard reply.kind == .acknowledgement, reply.ready == true else {
+                throw CompanionFailure.message("No connected server accepted this Garmin event. Retry later.")
+            }
+            var accepted = self.garminLedger
+            try accepted.accept(record.requestID)
+            try accepted.save(to: GarminDeliveryLedger.storageURL())
+            self.garminLedger = accepted
+            return reply
+        }
+        garminEventTasks[record.requestID] = task
+        return try await task.value
+    }
+
+    private func sendGarminLocationUnavailable(_ envelope: GarminEnvelope) async throws {
+        guard let identity = garminIdentity else { throw GarminRelayProtocol.Failure.noIdentity }
+        let messageID = try envelope.string("messageId", maximum: 128)
+        let fallbackID = "no-gps:" + SHA256.hash(data: Data(messageID.utf8)).map { String(format: "%02x", $0) }.joined()
+        let xml = try TAKChatMessage.outgoing(senderUID: identity.uid, senderCallSign: identity.resolvedCallSign,
+            recipientUID: TAKChatMessage.allChatRoomsUID, recipientCallSign: TAKChatMessage.allChatRoomsUID,
+            text: "EMERGENCY from \(identity.resolvedCallSign): location unavailable, acquiring GPS",
+            messageID: fallbackID, isGroup: true)
+        _ = try await relayGarminEvent(GarminEnvelope("chat", ["messageId": fallbackID]), fallbackXML: xml)
+    }
+
+    private func retryPendingGarminEmergencies() {
+        guard watchRoute == .garmin, garminReady, alertLocations.usable() != nil else { return }
+        for (uid, envelope) in pendingGarminEmergencies where !garminEmergencyRetries.contains(uid) {
+            garminEmergencyRetries.insert(uid)
+            Task {
+                defer { garminEmergencyRetries.remove(uid) }
+                guard pendingGarminEmergencies[uid] != nil else { return }
+                do {
+                    let reply = try await relayGarminEvent(envelope)
+                    guard pendingGarminEmergencies[uid] != nil else { return }
+                    pendingGarminEmergencies.removeValue(forKey: uid)
+                    try sendGarminReply(reply, request: envelope)
+                } catch {
+                    garminStatus = "Unable to relay emergency location: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private func sendGarminMarkerLocation(_ envelope: GarminEnvelope, fix: PhoneLocationFix) throws {
+        try garmin?.enqueue(GarminEnvelope("entity", [
+            "uid": try envelope.string("uid", maximum: 128),
+            "type": try envelope.string("type", maximum: 128),
+            "lat": fix.latitude, "lon": fix.longitude,
+            "ce": AlertLocationHistory.circularError(fix),
+            "callSign": (envelope.payload["title"] as? String) ?? "",
+            "isPoint": true, "isUser": false,
+            "time": ISO8601DateFormatter().string(from: fix.timestamp),
+            "stale": ISO8601DateFormatter().string(from: Date().addingTimeInterval(86_400))
+        ]))
+    }
+
+    private func refreshGarminMarkers(using fix: PhoneLocationFix) {
+        guard watchRoute == .garmin, garminReady, AlertLocationHistory.isUsable(fix, now: Date()) else { return }
+        for (uid, pending) in pendingGarminMarkers {
+            if fix.timestamp >= pending.requestedAt, !garminMarkerUpdates.contains(uid) {
+                var payload = pending.envelope.payload
+                payload["messageId"] = UUID().uuidString
+                let envelope = GarminEnvelope("marker", payload)
+                garminMarkerUpdates.insert(uid)
+                Task {
+                    defer { garminMarkerUpdates.remove(uid) }
+                    do {
+                        _ = try await relayGarminEvent(pending.envelope)
+                        guard pendingGarminMarkers[uid]?.envelope.payload["messageId"] as? String ==
+                                pending.envelope.payload["messageId"] as? String else { return }
+                        _ = try await relayGarminEvent(envelope)
+                        try sendGarminMarkerLocation(envelope, fix: fix)
+                        pendingGarminMarkers.removeValue(forKey: uid)
+                    } catch {
+                        garminStatus = "Marker GPS update failed: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
+
+    private func refreshPhoneEmergencies(using fix: PhoneLocationFix) {
+        guard !refreshingPhoneEmergencies, AlertLocationHistory.isUsable(fix, now: Date()),
+              !activePhoneEmergencies.isEmpty else { return }
+        refreshingPhoneEmergencies = true
+        Task {
+            defer { refreshingPhoneEmergencies = false }
+            for (uid, alert) in activePhoneEmergencies {
+                guard alert.lastFixAt.map({ fix.timestamp.timeIntervalSince($0) >= 5 }) ?? true,
+                      let xml = AlertLocationHistory.refreshingAlert(alert.xml, ownUID: alert.ownUID, fix: fix) else { continue }
+                let outputs = readyOutputs()
+                var accepted = false
+                for (_, send) in outputs {
+                    guard activePhoneEmergencies[uid]?.xml == alert.xml else { break }
+                    do { try await send(xml); accepted = true }
+                    catch { reportingLogger.error("Emergency GPS update failed: \(error.localizedDescription, privacy: .public)") }
+                }
+                if accepted, activePhoneEmergencies[uid]?.xml == alert.xml {
+                    activePhoneEmergencies[uid]?.lastFixAt = fix.timestamp
+                }
             }
         }
     }
@@ -1230,6 +1399,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
+        if message.locationRefresh == true || message.kind == .mapSnapshot {
+            requestSelfPosition()
+        }
         if message.kind == .hello {
             if let config = message.dittoConfig { _ = await dittoRuntime.apply(config) }
             chatBuffer.prune(enabledServerIDs: enabledSourceIDs)
@@ -1278,8 +1450,20 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let relayXML: String
         if !isGarmin, case .success(let identity) = watchIdentity {
             relayXML = AlertLocationHistory.fillingMissingAlertLocation(xml, ownUID: identity.uid,
-                                                                       fix: alertLocations.usable())
+                                                                       fix: alertLocations.lastKnown())
         } else { relayXML = xml }
+        if let header = PhonePLI.header(relayXML),
+           header.type == "b-a-o" || header.type.hasPrefix("b-a-o-"),
+           case .success(let identity) = watchIdentity {
+            if header.type == "b-a-o-can" || header.type.hasPrefix("b-a-o-can-") {
+                activePhoneEmergencies.removeValue(forKey: header.uid)
+            } else if header.uid.hasPrefix(identity.uid + "-alert-") || header.uid.hasPrefix(identity.uid + ".garmin-") {
+                activePhoneEmergencies[header.uid] = ActivePhoneEmergency(xml: relayXML, ownUID: identity.uid,
+                                                                         lastFixAt: alertLocations.lastKnown()?.timestamp)
+                reporter.requestFreshLocation()
+            }
+            reporter.setEmergencyActive(!activePhoneEmergencies.isEmpty || !pendingGarminEmergencies.isEmpty)
+        }
         var ready = readyOutputs()
         if let target = message.serverID {
             guard enabledSourceIDs.contains(target), let send = ready[target] else {
@@ -1369,9 +1553,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             phoneReportsByServer = [:]
         }
         publishState()
-        if settingsChanged, let fix = latestPhoneFix {
-            reportPhoneFix(fix)
-        }
+        if settingsChanged, case .success = identity { requestSelfPosition() }
     }
 
     /// Drops the watch's own PLI only while the phone recently reported that same user. Alerts and points pass through.

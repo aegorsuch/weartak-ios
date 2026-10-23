@@ -61,6 +61,8 @@ enum BridgeWire {
         /// Separate from expiring entities; at most 8 routes / 128 points.
         var routes: [GarminRoute]?
         var routeError: String?
+        /// A self-position action requests phone GPS without waiting for acquisition.
+        var locationRefresh: Bool?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)

@@ -116,6 +116,13 @@ enum GarminRelayProtocol {
             // Watches may request their larger local retention limit; replies remain capped below.
             _ = try envelope.integer("limit", range: 1...999)
             return BridgeWire.Message(kind: .mapSnapshot)
+        case "location_request":
+            let action = try envelope.string("action", maximum: 32)
+            guard ["map", "navigation", "identity", "self_marker", "pli"].contains(action) else {
+                throw Failure.invalid("location action")
+            }
+            _ = try envelope.string("requestId", maximum: 128)
+            return BridgeWire.Message(kind: .hello, locationRefresh: true)
         case "channels_servers_request": return BridgeWire.Message(kind: .channels)
         case "channels_request", "channels_update":
             let index = try envelope.integer("serverIndex", range: 0...max(0, channelServers.count - 1))
@@ -189,9 +196,13 @@ enum GarminRelayProtocol {
         if envelope.type == "marker_delete" {
             return "<event version=\"2.0\" uid=\"\(escape(scopedUID))\" type=\"t-x-d-d\" time=\"\(time)\" start=\"\(time)\" stale=\"\(stale)\" how=\"h-g-i-g-o\"><point lat=\"0\" lon=\"0\" hae=\"9999999\" ce=\"9999999\" le=\"9999999\"/><detail><link uid=\"\(escape(scopedUID))\" relation=\"p-p\" type=\"a-u-G-T\"/></detail></event>"
         }
+        if envelope.type == "emergency", p["state"] as? String == "CANCEL", fix == nil {
+            return "<event version=\"2.0\" uid=\"\(escape(scopedUID))\" type=\"b-a-o-can\" time=\"\(time)\" start=\"\(time)\" stale=\"\(stale)\"><detail><emergency cancel=\"true\"/><link uid=\"\(escape(identity.uid))\" relation=\"p-p\"/></detail></event>"
+        }
         let latitude: Double
         let longitude: Double
-        if envelope.type == "marker" {
+        let locationFix: PhoneLocationFix?
+        if envelope.type == "marker", p["locationSource"] as? String != "phone" {
             guard let lat = p["lat"] as? NSNumber, let lon = p["lon"] as? NSNumber,
                   !GarminEnvelope.isBoolean(lat), !GarminEnvelope.isBoolean(lon),
                   (-90...90).contains(lat.doubleValue), (-180...180).contains(lon.doubleValue) else {
@@ -199,13 +210,12 @@ enum GarminRelayProtocol {
             }
             latitude = lat.doubleValue
             longitude = lon.doubleValue
-        } else if let fix {
-            try PhoneReportingPolicy.validate(fix, now: now)
+            locationFix = nil
+        } else if let fix, AlertLocationHistory.isUsable(fix, now: fix.timestamp),
+                  fix.timestamp <= now.addingTimeInterval(5) {
             latitude = fix.latitude
             longitude = fix.longitude
-        } else if p["state"] as? String == "CANCEL" {
-            latitude = 0
-            longitude = 0
+            locationFix = fix
         } else { throw Failure.noLocation }
         let type: String
         let detail: String
@@ -225,7 +235,9 @@ enum GarminRelayProtocol {
             guard category.count <= 128, description.count <= 512 else { throw Failure.invalid("alert text") }
             detail = "<contact callsign=\"\(escape(identity.resolvedCallSign))\"/><emergency type=\"\(escape(category))\" cancel=\"\(state == "CANCEL")\">\(escape(description))</emergency><link uid=\"\(escape(identity.uid))\" relation=\"p-p\" type=\"a-f-G-U-C\"/>"
         }
-        return "<event version=\"2.0\" uid=\"\(escape(scopedUID))\" type=\"\(type)\" time=\"\(time)\" start=\"\(time)\" stale=\"\(stale)\" how=\"h-g-i-g-o\"><point lat=\"\(latitude)\" lon=\"\(longitude)\" hae=\"9999999\" ce=\"9999999\" le=\"9999999\"/><detail>\(detail)</detail></event>"
+        let ce = locationFix.map { AlertLocationHistory.circularError($0, now: now) } ?? 9_999_999
+        let locationDetail = locationFix.map { AlertLocationHistory.detail($0, now: now) } ?? ""
+        return "<event version=\"2.0\" uid=\"\(escape(scopedUID))\" type=\"\(type)\" time=\"\(time)\" start=\"\(time)\" stale=\"\(stale)\" how=\"h-g-i-g-o\"><point lat=\"\(latitude)\" lon=\"\(longitude)\" hae=\"9999999\" ce=\"\(ce)\" le=\"9999999\"/><detail>\(detail)\(locationDetail)</detail></event>"
     }
 
     static func incoming(_ xml: String, ownUID: String, receivedAt: Date = Date()) throws -> GarminEnvelope? {
@@ -250,7 +262,9 @@ enum GarminRelayProtocol {
             if message.isGroup { payload["participantUids"] = message.participantUids }
             return GarminEnvelope("chat_received", payload)
         }
-        guard type.hasPrefix("a-") || type.hasPrefix("b-a-o") || type == "b-a-g" || delegate.emergency != nil else { return nil }
+        guard type.hasPrefix("a-") || type.hasPrefix("b-a-o") || type == "b-a-g" ||
+                type == "b-m-p-s-m" || type.hasPrefix("u-d-") || type == "t-x-d-d" ||
+                delegate.emergency != nil else { return nil }
         var payload: [String: Any] = ["uid": uid, "type": type]
         for key in ["time", "start", "stale", "how"] { if let value = delegate.event[key] { payload[key] = value } }
         if let point = delegate.point, let lat = Double(point["lat"] ?? ""), let lon = Double(point["lon"] ?? ""),
@@ -258,7 +272,19 @@ enum GarminRelayProtocol {
            !(lat == 0 && lon == 0) {
             payload["lat"] = lat
             payload["lon"] = lon
+            if let ce = point["ce"].flatMap(Double.init), ce.isFinite, ce >= 0 { payload["ce"] = ce }
         }
+        if let link = delegate.link { payload["link"] = link }
+        if let ellipse = delegate.ellipse {
+            payload["shape"] = ["ellipse": ellipse]
+            if let major = ellipse["major"], let minor = ellipse["minor"],
+               major == minor, major <= 100_000 { payload["radius"] = major }
+        }
+        if payload["lat"] == nil, type != "t-x-d-d", !type.hasPrefix("b-a-o"), delegate.emergency == nil { return nil }
+        let isUser = type.hasPrefix("a-") &&
+            (delegate.hasUserMetadata || type.split(separator: "-").dropFirst(2).starts(with: ["G", "U", "C"]))
+        payload["isUser"] = isUser
+        payload["isPoint"] = !isUser
         if let value = delegate.callsign { payload["callSign"] = String(value.prefix(128)) }
         if let value = delegate.team { payload["team"] = String(value.prefix(32)) }
         if let value = delegate.role { payload["role"] = String(value.prefix(64)) }
@@ -279,16 +305,45 @@ private final class GarminCoTParser: NSObject, XMLParserDelegate {
     var role: String?
     var senderUID: String?
     var emergency: [String: String]?
+    var link: [String: String]?
+    var ellipse: [String: Double]?
+    var hasUserMetadata = false
+    private var depth = 0
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName qName: String?, attributes: [String: String]) {
-        switch elementName {
-        case "event": event = attributes
-        case "point": point = attributes
-        case "contact": callsign = attributes["callsign"]
-        case "__group": team = attributes["name"]; role = attributes["role"]
-        case "link": if attributes["relation"] == "p-p" { senderUID = attributes["uid"] }
-        case "emergency": emergency = attributes
+        depth += 1
+        switch (depth, elementName) {
+        case (1, "event"): event = attributes
+        case (2, "point"): point = attributes
+        case (3, "contact"):
+            callsign = attributes["callsign"]
+            if !(attributes["endpoint"]?.isEmpty ?? true) { hasUserMetadata = true }
+        case (3, "__group"):
+            team = attributes["name"]; role = attributes["role"]; hasUserMetadata = true
+        case (3, "takv"): break
+        case (3, "uid"):
+            if !(attributes["Droid"]?.isEmpty ?? true) { hasUserMetadata = true }
+        case (3, "link"):
+            if let uid = attributes["uid"], !uid.isEmpty, let relation = attributes["relation"] {
+                link = ["uid": uid, "relation": relation]
+                if relation == "p-p" { senderUID = uid }
+            }
+        case (3, "emergency"): emergency = attributes
+        case (4, "ellipse"):
+            if let major = attributes["major"].flatMap(Double.init),
+               let minor = attributes["minor"].flatMap(Double.init),
+               major.isFinite, minor.isFinite, major > 0, minor > 0,
+               major <= 100_000, minor <= 100_000 {
+                ellipse = ["major": major, "minor": minor]
+                if let angle = attributes["angle"].flatMap(Double.init), angle.isFinite {
+                    ellipse?["angle"] = angle
+                }
+            }
         default: break
         }
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
+        depth -= 1
     }
 }
