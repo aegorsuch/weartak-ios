@@ -1584,6 +1584,17 @@ and cancellation events share an alert UID; cancellations use `b-a-o-can` and
 UID, and `__forcedelete`. Incoming nonexpired CoT users and points appear on
 the map, excluding the watch's own PLI and locally saved points.
 
+The watch map uses affiliation-colored SF Symbols for fixed-wing (`A-C-F`),
+rotary-wing (`A-C-H`), UAV (`A-M-F-Q` or exact `A-M`), sea (`S`), vehicle
+(`G-U-C-I-I`), medical (`G-U-S-M`), K-9 (`G-A`), and weapon (`G-E-W`) atom
+types, independent of affiliation. UAV uses a paper-plane glyph; these are
+compact type cues, not full MIL-STD-2525 symbols. Unrecognized atom types retain
+the affiliation frame and bounded label. SPI (`b-m-p-s-p-i`) renders as a yellow
+viewfinder and is also relayed to Garmin. Explicit user/contact metadata retains
+the existing team/role styling. Type-only vehicle events are points, not chat
+contacts. The existing 50-entity bound, stale expiry and delete handling apply
+unchanged to all these points.
+
 Alerts and other self-position actions immediately request active high-accuracy
 GPS, throttled to one acquisition per five seconds. Actions never wait for GPS:
 they use the best available fix immediately, then update when a new fix arrives.
@@ -1723,7 +1734,7 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   'WearTAK Watch App/SitxCoT.swift' \
   'WearTAK Watch App/MulticastTAKTransport.swift' \
   'WearTAK Watch App/SitxClient.swift' \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift Shared/TAKMulticast.swift \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift Shared/CoTMapSymbol.swift Shared/TAKMulticast.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Shared/SitxShared.swift \
   Shared/PhoneLocationReporting.swift Tests/SitxProtocolChecks.swift -o /tmp/weartak-sitx-checks
 /tmp/weartak-sitx-checks
@@ -1744,7 +1755,7 @@ Companion map checks include retained stale/location-less alert snapshots.
 
 ```sh
 xcrun swiftc -swift-version 5 -parse-as-library \
-  Shared/RemoteAlertLifecycle.swift \
+  Shared/RemoteAlertLifecycle.swift Shared/CoTMapSymbol.swift \
   'WearTAK Watch App/RelayProtocol.swift' 'WearTAK Watch App/SitxCoT.swift' \
   Tests/BloodhoundAlertChecks.swift -o /tmp/weartak-alert-checks
 /tmp/weartak-alert-checks
@@ -1757,7 +1768,7 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 Both alert runners also work with Swift for Windows:
 
 ```powershell
-swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift 'WearTAK Watch App\RelayProtocol.swift' 'WearTAK Watch App\SitxCoT.swift' Tests\BloodhoundAlertChecks.swift -o "$env:TEMP\weartak-alert-checks.exe"
+swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift Shared\CoTMapSymbol.swift 'WearTAK Watch App\RelayProtocol.swift' 'WearTAK Watch App\SitxCoT.swift' Tests\BloodhoundAlertChecks.swift -o "$env:TEMP\weartak-alert-checks.exe"
 & "$env:TEMP\weartak-alert-checks.exe"
 swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift Tests\RemoteAlertLifecycleChecks.swift -o "$env:TEMP\weartak-alert-lifecycle-checks.exe"
 & "$env:TEMP\weartak-alert-lifecycle-checks.exe"
@@ -1769,7 +1780,7 @@ UDP PLI identity, XML and TAK v1 decoding, typed/opaque detail precedence,
 control-only messages, unknown fields, malformed packets and entity rejection.
 
 ```powershell
-swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift Shared\TAKMulticast.swift 'WearTAK Watch App\RelayProtocol.swift' 'WearTAK Watch App\SitxCoT.swift' Tests\TAKMulticastChecks.swift -o "$env:TEMP\weartak-multicast-checks.exe"
+swiftc -swift-version 5 -parse-as-library Shared\RemoteAlertLifecycle.swift Shared\CoTMapSymbol.swift Shared\TAKMulticast.swift 'WearTAK Watch App\RelayProtocol.swift' 'WearTAK Watch App\SitxCoT.swift' Tests\TAKMulticastChecks.swift -o "$env:TEMP\weartak-multicast-checks.exe"
 & "$env:TEMP\weartak-multicast-checks.exe"
 ```
 

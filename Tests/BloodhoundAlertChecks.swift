@@ -53,7 +53,7 @@ struct BloodhoundAlertChecks {
         precondition(parse(type: "a-f-G-U-C", lifetime: -1).isEmpty)
         precondition(parse(detail: "<link uid=\"parent\" relation=\"p-p\"><point lat=\"1\" lon=\"2\"/></link>").first?.lat == 38)
         precondition(parse(type: "b-t-f").isEmpty)
-        precondition(parse(type: "b-m-p-s-p-i").isEmpty)
+        precondition(parse(type: "b-m-p-s-p-i").first?.isUser == false)
         precondition(parse(type: "a-n-G").first?.emergencyState == nil)
         for type in ["a-n-A-C-F", "a-n-A-C-H", "a-f-Z", "b-m-p-s-m"] {
             let point = parse(type: type, detail: "<contact callsign=\"TRACK\"/>").first
@@ -61,6 +61,29 @@ struct BloodhoundAlertChecks {
                          point?.isUser == false && point?.hasChatEndpoint == false)
             precondition(parse(type: type, lifetime: -1).isEmpty)
         }
+        let symbols: [(String, CoTMapSymbol)] = [
+            ("A-C-F", .fixedWing), ("A-C-H", .rotaryWing), ("A-M-F-Q", .uav), ("A-M", .uav),
+            ("S", .sea), ("G-U-C-I-I", .vehicle), ("G-U-S-M", .medical), ("G-A", .canine),
+            ("G-E-W", .weapon)
+        ]
+        for affiliation in ["f", "u", "h", "n", "a", "s", "j", "k", "p", "o"] {
+            for (function, expected) in symbols {
+                let type = "a-\(affiliation)-\(function)"
+                precondition(CoTMapSymbol(cotType: type) == expected)
+                let point = parse(type: type, detail: "<contact callsign=\"SYMBOL\"/><takv device=\"ATOS\"/>").first
+                precondition(point?.type == type && point?.isUser == false && point?.hasChatEndpoint == false)
+                precondition(point?.staleAt == now.addingTimeInterval(300))
+                precondition(parse(type: type, lifetime: -1).isEmpty)
+            }
+        }
+        precondition(CoTMapSymbol(cotType: "b-m-p-s-p-i") == .spi)
+        precondition(CoTMapSymbol(cotType: "a-f-A-C-F-extra") == .fixedWing)
+        for type in ["a-f-G-U-C", "a-f-Z", "a-f-A-C-FF", "a-f-G-U-C-I", "b-m-p-s-m", "invalid"] {
+            precondition(CoTMapSymbol(cotType: type) == nil, "Unsupported types must use existing fallback")
+        }
+        precondition(parse(type: "b-m-p-s-p-i", lifetime: -1).isEmpty)
+        precondition(parse(type: "b-m-p-s-p-i", point: "").isEmpty)
+        precondition(parse(type: "a-f-G-U-C-I-I", detail: "<contact endpoint=\"*:-1:stcp\"/>").first?.isUser == true)
         precondition(parse(type: "a-f-Z", detail: "<contact endpoint=\"*:-1:stcp\"/>").first?.hasChatEndpoint == true)
         let circle = parse(type: "u-d-c-c", detail: "<shape><ellipse major=\"100\" minor=\"100\" angle=\"0\"/></shape>").first
         precondition(circle?.circleRadius == 100)

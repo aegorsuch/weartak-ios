@@ -11,14 +11,16 @@ import FoundationXML
 
 enum SitxCoT {
     static func isUser(type: String) -> Bool {
-        type.hasPrefix("a-") && type.split(separator: "-").dropFirst(2).starts(with: ["G", "U", "C"])
+        type.hasPrefix("a-") && CoTMapSymbol(cotType: type) == nil &&
+            type.split(separator: "-").dropFirst(2).starts(with: ["G", "U", "C"])
     }
 
     /// TAK clients identify user PLI with `__group`, `takv`, a contact `endpoint`, or ATAK's
     /// `<uid Droid>`; those markers win over the 2525 type so e.g. a K9 user is not drawn as a point.
     static func isUser(type: String, hasGroup: Bool, hasTAKVersion: Bool, hasContactEndpoint: Bool,
                        hasDeviceUID: Bool = false) -> Bool {
-        type.hasPrefix("a-") && (isUser(type: type) || hasGroup || hasTAKVersion || hasContactEndpoint || hasDeviceUID)
+        type.hasPrefix("a-") && (isUser(type: type) || hasGroup ||
+            (hasTAKVersion && CoTMapSymbol(cotType: type) == nil) || hasContactEndpoint || hasDeviceUID)
     }
 
     private static let roleBadges: [String: String] = [
@@ -261,7 +263,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                                                hasUsableLocation: false, deletedUID: deletedUID))
             return
         }
-        guard eventType.hasPrefix("a-") || eventType == "b-m-p-s-m" ||
+        guard eventType.hasPrefix("a-") || eventType == "b-m-p-s-m" || eventType == "b-m-p-s-p-i" ||
                 eventType.hasPrefix("u-d-") || emergencyState != nil else {
             SitxCoT.diagnose("Rejected CoT entity: unsupported type")
             return

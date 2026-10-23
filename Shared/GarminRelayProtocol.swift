@@ -263,7 +263,7 @@ enum GarminRelayProtocol {
             return GarminEnvelope("chat_received", payload)
         }
         guard type.hasPrefix("a-") || type.hasPrefix("b-a-o") || type == "b-a-g" ||
-                type == "b-m-p-s-m" || type.hasPrefix("u-d-") || type == "t-x-d-d" ||
+                type == "b-m-p-s-m" || type == "b-m-p-s-p-i" || type.hasPrefix("u-d-") || type == "t-x-d-d" ||
                 delegate.emergency != nil else { return nil }
         var payload: [String: Any] = ["uid": uid, "type": type]
         for key in ["time", "start", "stale", "how"] { if let value = delegate.event[key] { payload[key] = value } }
@@ -282,7 +282,8 @@ enum GarminRelayProtocol {
         }
         if payload["lat"] == nil, type != "t-x-d-d", !type.hasPrefix("b-a-o"), delegate.emergency == nil { return nil }
         let isUser = type.hasPrefix("a-") &&
-            (delegate.hasUserMetadata || type.split(separator: "-").dropFirst(2).starts(with: ["G", "U", "C"]))
+            (delegate.hasUserMetadata || (CoTMapSymbol(cotType: type) == nil &&
+                type.split(separator: "-").dropFirst(2).starts(with: ["G", "U", "C"])))
         payload["isUser"] = isUser
         payload["isPoint"] = !isUser
         if let value = delegate.callsign { payload["callSign"] = String(value.prefix(128)) }

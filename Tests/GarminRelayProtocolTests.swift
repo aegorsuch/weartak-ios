@@ -95,7 +95,8 @@ struct GarminRelayProtocolTests {
                 identity: identity, fix: nil, channelServers: [])
             fatalError("Unknown GPS action accepted.")
         } catch GarminRelayProtocol.Failure.invalid {}
-        for type in ["a-n-A-C-F", "a-n-A-C-H", "a-f-Z", "b-m-p-s-m", "u-d-c-c"] {
+        for type in ["a-n-A-C-F", "a-n-A-C-H", "a-f-A-M-F-Q", "a-f-S", "a-f-G-U-C-I-I",
+                     "a-f-Z", "b-m-p-s-m", "b-m-p-s-p-i", "u-d-c-c"] {
             let xml = "<event uid=\"generic\" type=\"\(type)\" time=\"2026-10-23T00:00:00Z\" stale=\"2026-10-23T00:05:00Z\"><point lat=\"38\" lon=\"-77\" ce=\"10\"/><detail><contact callsign=\"Generic\"/><takv device=\"ADS-B\"/><link uid=\"sender\" relation=\"p-p\"/><shape><ellipse major=\"500\" minor=\"500\"/></shape></detail></event>"
             let incoming = try GarminRelayProtocol.incoming(xml, ownUID: "watch")!
             precondition(incoming.payload["isUser"] as? Bool == false && incoming.payload["isPoint"] as? Bool == true)
