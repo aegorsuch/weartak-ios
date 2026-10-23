@@ -1310,10 +1310,20 @@ private struct TacticalMapView: View {
             } else {
                 Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
                     VStack(spacing: 2) {
-                        Circle()
-                            .fill(genericPointColor(entity))
-                            .overlay(Circle().stroke(.black, lineWidth: 1))
-                            .frame(width: 12, height: 12)
+                        if let symbol = CoTMapSymbol(cotType: entity.type) {
+                            Image(systemName: symbol.rawValue)
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundStyle(genericPointColor(entity))
+                                .frame(width: 26, height: 26)
+                                .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
+                        } else if let kind = entity.symbolKind {
+                            MapPointSymbol(kind: kind)
+                        } else {
+                            Circle()
+                                .fill(genericPointColor(entity))
+                                .overlay(Circle().stroke(.black, lineWidth: 1))
+                                .frame(width: 12, height: 12)
+                        }
                         Text(incomingMapTitle(entity))
                             .font(.caption2)
                             .foregroundStyle(.white)

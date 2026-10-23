@@ -15,7 +15,7 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/cot-field-safety-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/RemoteAlertLifecycle.swift "WearTAK Watch App/RelayProtocol.swift" \
+  Shared/RemoteAlertLifecycle.swift Shared/CoTMapSymbol.swift "WearTAK Watch App/RelayProtocol.swift" \
   "WearTAK Watch App/SitxCoT.swift" Tests/BloodhoundAlertChecks.swift \
   -o "$build_dir/cot-map-alert-checks"
 "$build_dir/cot-map-alert-checks"
@@ -26,6 +26,7 @@ swiftc -swift-version 5 -parse-as-library Tests/StringCatalogEncodingChecks.swif
 
 swiftc -swift-version 5 -parse-as-library \
   Shared/GarminRelayProtocol.swift \
+  Shared/CoTMapSymbol.swift \
   Shared/CoTFieldSafety.swift \
   Shared/PhoneLocationReporting.swift \
   Shared/UserMetrics.swift \
