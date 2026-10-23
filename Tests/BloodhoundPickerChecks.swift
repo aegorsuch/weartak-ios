@@ -8,6 +8,14 @@ struct BloodhoundPickerChecks {
         let targets: [Target] = [.route("server\nroute"), .route("other\nroute"),
             .marker(markerID), .contact("same-id"), .point("same-id")]
         precondition(Set(targets).count == targets.count, "Target kinds and route sources cannot collide")
+        precondition(BloodhoundPicker.indicator(for: nil) == nil, "No target must hide the compass icon")
+        for target in targets {
+            if case .route = target {
+                precondition(BloodhoundPicker.indicator(for: target) == .route)
+            } else {
+                precondition(BloodhoundPicker.indicator(for: target) == .bloodhound)
+            }
+        }
         let activeTargets: [Target?] = [nil] + targets.map { Optional($0) }
         for target in targets {
             for active in activeTargets {

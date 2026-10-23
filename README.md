@@ -719,11 +719,19 @@ subscribed mission routes reuse the same parser/store.
 raw-deflate ZIPs, CRC/hash/size/path failures, manifest instructions, route
 geometry, protocol snapshots, source-scoped local removal/replay behavior,
 `BloodhoundPickerChecks` (map/start/stop action isolation, typed/source-scoped
-identities, route start policy and fitted map bounds), and `RouteFollowerChecks`
+identities, active-target compass icons, route start policy and fitted map bounds), and `RouteFollowerChecks`
 (start modes, dense-point advancement, completion and remaining route distance).
 These changes were prepared on Windows without Swift/Xcode. Run the script on
 macOS and build both native targets before acceptance; the script does not
 claim simulator or physical-device validation.
+
+Starting a whole route from the Bloodhound chooser or Routes details returns
+to the watch dashboard, closing nested route screens and preview sheets.
+The dashboard compass shows a small route glyph for an active route point or
+the existing ATAK Bloodhound icon for any other target; neither is shown when
+there is no active target. This is watch-side navigation; Companion does not
+have an equivalent route-following dashboard. No runtime app-launch identifier
+is needed, and persistent Keychain service names are deliberately unchanged.
 
 Hardware acceptance remains: ATAK → TAK server → iPhone → Apple Watch import,
 disconnected refresh/replay, route-line hit selection with overlapping map

@@ -11,6 +11,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPointTypePicker = false
     @State private var showMapPreview = false
+    @State private var mainNavigationID = UUID()
     @State private var toastMessage: String?
 
     var body: some View {
@@ -27,6 +28,11 @@ struct ContentView: View {
             .navigationDestination(isPresented: $showMapPreview) {
                 TacticalMapView(model: model, settings: settings)
             }
+        }
+        .id(mainNavigationID)
+        .onChange(of: model.routeStartRevision) { _, _ in
+            showMapPreview = false
+            mainNavigationID = UUID()
         }
         .overlay(alignment: .bottom) {
             if let toastMessage {
@@ -436,6 +442,18 @@ private struct WatchDashboardView: View {
                                     .offset(x: 4, y: -3)
                             }
                         }
+                    if let indicator = BloodhoundPicker.indicator(for: hasTarget ? model.activeBloodhoundPickerTarget : nil) {
+                        Group {
+                            if indicator == .route {
+                                Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                            } else {
+                                Image("ATAKBloodhound").resizable().scaledToFit()
+                            }
+                        }
+                        .font(.system(size: small ? 13 : 15, weight: .semibold))
+                        .frame(width: small ? 13 : 15, height: small ? 13 : 15)
+                        .accessibilityHidden(true)
+                    }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(model.bloodhoundTarget?.displayTitle ?? String(localized: "Compass", table: "WatchMain"))
                             .font(.system(size: small ? 10 : 11, weight: .medium))
