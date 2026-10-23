@@ -74,12 +74,19 @@ struct CompanionMapChecks {
             writes += 1
             persistedValue = latestValue
         }
+        func waitForWrites(_ expected: Int) async throws {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+            while writes < expected, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            precondition(writes == expected, "Timed out waiting for the scheduled cache write")
+        }
         for index in 1...500 {
             latestValue = index
             batcher.schedule()
         }
         precondition(writes == 0)
-        try await Task.sleep(for: .milliseconds(80))
+        try await waitForWrites(1)
         precondition(writes == 1 && persistedValue == 500)
         latestValue = 501
         batcher.schedule()
@@ -93,7 +100,7 @@ struct CompanionMapChecks {
         try await Task.sleep(for: .milliseconds(80))
         precondition(writes == 2)
         batcher.schedule()
-        try await Task.sleep(for: .milliseconds(80))
+        try await waitForWrites(3)
         precondition(writes == 3)
         print("PASS: 500 updates coalesced, latest-state persistence, inactive flush, cancellation and rescheduling")
         try checkMissionPaging()
