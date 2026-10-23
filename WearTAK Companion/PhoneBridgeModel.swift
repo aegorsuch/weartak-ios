@@ -1015,6 +1015,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                    !current.hasSameSettings(as: identity),
                    let fix = self.latestPhoneFix {
                     self.reportPhoneFix(fix)
+                } else if let requested = self.selfPositionRequestedAt, let fix = self.latestPhoneFix,
+                          fix.timestamp >= requested {
+                    self.lastPhoneReportAt = nil
+                    self.reportPhoneFix(fix)
                 }
             }
             var failures: [String] = []
@@ -1228,7 +1232,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func sendGarminMarkerLocation(_ envelope: GarminEnvelope, fix: PhoneLocationFix) throws {
-        try garmin?.enqueue(GarminEnvelope("entity", [
+        guard watchRoute == .garmin, garminReady, garminQueue.count < 64 else {
+            throw CompanionFailure.message("Garmin marker position reply deferred; retry when the watch is ready.")
+        }
+        enqueueGarmin(GarminEnvelope("entity", [
             "uid": try envelope.string("uid", maximum: 128),
             "type": try envelope.string("type", maximum: 128),
             "lat": fix.latitude, "lon": fix.longitude,
@@ -1293,6 +1300,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             var payload: [String: Any] = [
                 "ready": reply.ready == true, "detail": reply.detail ?? "",
                 "reliableDelivery": true,
+                "phoneLocation": true,
                 "chatGroups": false,
                 "routeVersion": GarminRoute.version,
             ]
