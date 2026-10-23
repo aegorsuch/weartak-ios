@@ -50,6 +50,7 @@ struct AlertLocationHistory {
         parser.delegate = delegate
         guard parser.parse(), delegate.isAlert, delegate.needsLocation,
               delegate.parentUID == ownUID || delegate.uid?.hasPrefix(ownUID + "-alert-") == true else { return xml }
+        if delegate.hasPosition, let measuredAt = delegate.measuredAt, measuredAt >= fix.timestamp { return xml }
         return delegate.output
     }
 
@@ -85,7 +86,10 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
     var parentUID: String?
     var isAlert = false
     var needsLocation = false
+    var hasPosition = false
+    var measuredAt: Date?
     private var hasPoint = false
+    private var remarks: String?
     private var depth = 0
     private let now: Date
     private let refresh: Bool
@@ -116,10 +120,9 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
             hasPoint = true
             let lat = values["lat"].flatMap(Double.init), lon = values["lon"].flatMap(Double.init)
             let ce = values["ce"].flatMap(Double.init)
-            needsLocation = lat == nil || lon == nil || lat == 0 && lon == 0 ||
-                !(lat.map { $0.isFinite && (-90...90).contains($0) } ?? false) ||
-                !(lon.map { $0.isFinite && (-180...180).contains($0) } ?? false) ||
-                !(ce.map { $0.isFinite && (0..<9_999_999).contains($0) } ?? false)
+            hasPosition = (lat.map { $0.isFinite && (-90...90).contains($0) } ?? false) &&
+                (lon.map { $0.isFinite && (-180...180).contains($0) } ?? false) && !(lat == 0 && lon == 0)
+            needsLocation = !hasPosition || !(ce.map { $0.isFinite && (0..<9_999_999).contains($0) } ?? false)
             if needsLocation || refresh {
                 values["lat"] = String(fix.latitude)
                 values["lon"] = String(fix.longitude)
@@ -132,17 +135,30 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
             needsLocation = true
             output += "<point lat=\"\(fix.latitude)\" lon=\"\(fix.longitude)\" ce=\"\(AlertLocationHistory.circularError(fix, now: now))\" hae=\"9999999\" le=\"9999999\"/>"
         }
+        if depth == 3, name == "remarks" { remarks = "" }
         output += "<" + name
         for key in values.keys.sorted() { output += " \(key)=\"\(PhonePLI.escape(values[key]!))\"" }
         output += ">"
         if depth == 2, name == "detail" { output += AlertLocationHistory.detail(fix) }
     }
 
-    func parser(_ parser: XMLParser, foundCharacters string: String) { output += PhonePLI.escape(string) }
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        output += PhonePLI.escape(string)
+        if remarks != nil { remarks? += string }
+    }
     func parser(_ parser: XMLParser, foundCDATA data: Data) {
         output += PhonePLI.escape(String(decoding: data, as: UTF8.self))
+        if remarks != nil { remarks? += String(decoding: data, as: UTF8.self) }
     }
     func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {
+        if depth == 3, name == "remarks", let text = remarks {
+            let prefix = "Last-known GPS fix: "
+            if text.hasPrefix(prefix), let timestamp = text.dropFirst(prefix.count).split(separator: ";").first,
+               let date = ISO8601DateFormatter().date(from: String(timestamp)) {
+                measuredAt = max(measuredAt ?? .distantPast, date)
+            }
+            remarks = nil
+        }
         output += "</\(name)>"
         depth -= 1
     }

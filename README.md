@@ -1596,7 +1596,10 @@ The newest intrinsically valid watch/phone fix is retained across invalid
 updates and normal restarts. Alerts retain even an old fix instead of replacing
 it with `0,0`; measurements older than 120 seconds use unknown `ce=9999999`,
 with the original measurement timestamp and accuracy in remarks. Companion can
-fill a verified watch alert's missing position from phone history. No-ever-fix
+fill a verified watch alert's missing position from phone history.
+GPS measurements from older phone history never displace a newer timestamped
+watch position solely because its stale accuracy is unknown.
+No-ever-fix
 emergencies also send immediate All Chat Rooms text identifying the sender and
 GPS acquisition. Apple Watch may send unknown positional coordinates only in
 that case; Garmin positional activations wait for the first real phone fix
