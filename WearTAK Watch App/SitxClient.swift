@@ -90,7 +90,17 @@ final class SitxClient: ObservableObject, TAKTransport {
     var onReady: (() -> Void)?
     var onDisconnected: (() -> Void)?
     var onChat: ((TAKChatMessage) -> Void)?
-    var currentLocation: CLLocation?
+    private var alertLocations = AlertLocationHistory()
+    var currentLocation: CLLocation? {
+        didSet {
+            if let location = currentLocation {
+                alertLocations.receive(PhoneLocationFix(latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude, horizontalAccuracy: location.horizontalAccuracy,
+                    altitude: location.altitude, verticalAccuracy: location.verticalAccuracy,
+                    speed: location.speed, course: location.course, timestamp: location.timestamp))
+            }
+        }
+    }
     var additionalOutput: (any CoTOutput)?
     var companionOutput: (any CoTOutput)?
     /// Latest watch vitals; stale readings are sent as N/A.
@@ -439,11 +449,15 @@ final class SitxClient: ObservableObject, TAKTransport {
         if pendingEvents[key] == xml { pendingEvents.removeValue(forKey: key) }
     }
 
-    private func deliver(_ xml: String, eventKey: String? = nil) async throws {
+    private func deliver(_ xml: String, eventKey: String? = nil, deliveryID: UUID? = nil) async throws {
         var delivered = false
         var failure: Error = TAKTransportError.notConfigured
         if let companionOutput, companionOutput.isReady {
-            do { try await companionOutput.send(xml); delivered = true }
+            do {
+                if let deliveryID { try await companionOutput.send(xml, id: deliveryID) }
+                else { try await companionOutput.send(xml) }
+                delivered = true
+            }
             catch { failure = error }
         }
         if let additionalOutput, additionalOutput.isReady {
@@ -452,11 +466,12 @@ final class SitxClient: ObservableObject, TAKTransport {
         }
         if settings.sitxEnabled && !isPhoneReachable {
             do {
-                if let eventKey { try await sendEvent(xml, key: eventKey) }
+                if let eventKey, !delivered { try await sendEvent(xml, key: eventKey) }
                 else { try await sendXML(xml) }
                 delivered = true
             } catch { failure = error }
         }
+        if delivered, let eventKey { pendingEvents.removeValue(forKey: eventKey) }
         if !delivered { throw failure }
     }
 
@@ -512,6 +527,8 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     func emergencyXML(state: EmergencyState, type: String) -> String {
+        let now = Date()
+        let fix = alertLocations.usable(at: now)
         let uid = Self.deviceID() + "-alert-" + type
         let cancel = state == .cancel
         let emergency = cancel ? "<emergency cancel=\"true\">\(SitxCoT.escape(settings.callSign))</emergency>"
@@ -519,13 +536,15 @@ final class SitxClient: ObservableObject, TAKTransport {
         let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\"/><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/><remarks>\(SitxCoT.escape(type))</remarks>" +
             biometrics.fresh(reportingInterval: biometricsReportingInterval).biometricsElement(uid: Self.deviceID(),
                 alertAttributes: " alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertCategory=\"\(SitxCoT.escape(type))\" alertPriority=\"1\" alertDescription=\"\(SitxCoT.escape(type))\"") + emergency
-        return SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                            detail: detail, lifetime: 86_400)
+        return SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o",
+                            coordinate: CLLocationCoordinate2D(latitude: fix?.latitude ?? 0, longitude: fix?.longitude ?? 0),
+                            detail: detail + (fix.map { AlertLocationHistory.detail($0, now: now) } ?? ""),
+                            lifetime: 86_400, now: now, circularError: fix?.horizontalAccuracy ?? 9_999_999)
     }
 
     /// The durable session outbox owns retries; do not also retain events in the transient Sit(x) queue.
-    func sendQueuedEvent(_ xml: String) async throws {
-        try await deliver(xml)
+    func sendQueuedEvent(_ xml: String, id: UUID) async throws {
+        try await deliver(xml, deliveryID: id)
     }
 
     func incomingEntities() -> AsyncStream<EntityRelayPayload> {

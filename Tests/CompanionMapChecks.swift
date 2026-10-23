@@ -116,6 +116,24 @@ struct CompanionMapChecks {
         precondition(cache.events.count == 1 && cache.events[0].lastSeen == now.addingTimeInterval(-45))
         cache.receive(event("contact", age: 10), now: now)
         precondition(cache.events.count == 1 && cache.events[0].lastSeen == now.addingTimeInterval(-10))
+        let deleteXML = """
+        <event uid="contact-delete" type="t-x-d-d" time="\(formatter.string(from: now))" stale="\(formatter.string(from: now.addingTimeInterval(120)))">
+        <detail><link uid="contact" relation="p-p"/><__forcedelete/></detail></event>
+        """
+        var deletedCache = cache
+        let deleteEvent = CompanionMapEvent(xml: deleteXML, sourceServerID: server,
+                                           sourceGeneration: 0, receivedAt: now)
+        precondition(deleteEvent.isValid && deleteEvent.header?.deletedUID == "contact")
+        deletedCache.receive(deleteEvent, now: now)
+        deletedCache.receive(event("contact", age: 10), now: now)
+        precondition(deletedCache.events.count == 1 && deletedCache.events.first?.header?.type == "t-x-d-d")
+        let deletedSnapshot = try deletedCache.filling(BridgeWire.Message(kind: .mapSnapshot))
+        let decodedDelete = try BridgeWire.Message.decode(deletedSnapshot.encoded())
+        precondition(decodedDelete.mapEvents?.first?.header?.deletedUID == "contact")
+        let newerContact = CompanionMapEvent(xml: event("contact", age: -1).xml, sourceServerID: server,
+            sourceGeneration: 0, receivedAt: now.addingTimeInterval(1))
+        deletedCache.receive(newerContact, now: now.addingTimeInterval(1))
+        precondition(deletedCache.events.count == 1 && deletedCache.events.first?.header?.type == "a-f-G-U-C")
         cache.receive(event("expired", stale: -1), now: now)
         cache.receive(event("too-old", age: 301), now: now)
         precondition(cache.events.count == 1)

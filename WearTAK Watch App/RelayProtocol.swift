@@ -59,6 +59,9 @@ struct EntityRelayPayload: Codable {
     var staleAt: Date? = nil
     /// False for location-less emergencies; legacy payloads infer validity from lat/lon.
     var hasUsableLocation: Bool? = nil
+    var hasChatEndpoint: Bool? = nil
+    var deletedUID: String? = nil
+    var circleRadius: Double? = nil
 
     var isHumanEntered: Bool { how?.hasPrefix("h") == true }
 
@@ -76,6 +79,24 @@ struct EntityRelayPayload: Codable {
         if senderUID?.isEmpty ?? true { merged.senderUID = previousSenderUID }
         if previousIsUser { merged.isUser = true }
         return merged
+    }
+
+    struct CoTMapDeletionHistory {
+        private var times: [String: Date] = [:]
+
+        mutating func receive(uid: String, at sentAt: Date, now: Date) {
+            times = times.filter { now.timeIntervalSince($0.value) <= 300 }
+            guard sentAt <= now.addingTimeInterval(30) else { return }
+            times[uid] = max(times[uid] ?? .distantPast, sentAt)
+            if times.count > 200, let oldest = times.min(by: { $0.value < $1.value }) {
+                times.removeValue(forKey: oldest.key)
+            }
+        }
+
+        func allows(uid: String, at sentAt: Date, now: Date) -> Bool {
+            guard let deletedAt = times[uid], now.timeIntervalSince(deletedAt) <= 300 else { return true }
+            return sentAt > deletedAt
+        }
     }
 }
 

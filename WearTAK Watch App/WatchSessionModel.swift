@@ -81,6 +81,8 @@ struct IncomingMapEntity: Identifiable {
     var isLastKnownAlertLocation: Bool = false
     var alertUID: String? = nil
     var alertLocationObservedAt: Date? = nil
+    var hasChatEndpoint: Bool = true
+    var circleRadius: Double? = nil
 
     var displayTitle: String {
         callSign.flatMap { $0.isEmpty ? nil : $0 } ??
@@ -88,6 +90,11 @@ struct IncomingMapEntity: Identifiable {
     }
 
     var chatRoute: ContactChatRoute? {
+        guard hasChatEndpoint else { return nil }
+        return ingressRoute
+    }
+
+    var ingressRoute: ContactChatRoute? {
         if let sourceServerID { return .companion(sourceServerID) }
         return sourceTransport
     }
@@ -348,6 +355,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var isUpdatingHeading = false
     private var lastPLISentAt: Date?
     private var sourceGenerations: [UUID: Int] = [:]
+    private var mapDeletions = CoTMapDeletionHistory()
     private let networkPathMonitor = NWPathMonitor()
     @Published private(set) var networkConnectivity: DashboardNetworkConnectivity = .offline
     @Published private(set) var watchLocationEnabled = false
@@ -531,7 +539,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     team: entity.team, role: entity.role, senderUID: entity.senderUID,
                     sourceServerID: entity.sourceServerID,
                     sourceGeneration: 0, expiresAt: entity.expiresAt, isUser: entity.isUser,
-                    missionName: entity.missionName, alertCategory: entity.alertCategory, isAlert: entity.isAlert)
+                    missionName: entity.missionName, alertCategory: entity.alertCategory, isAlert: entity.isAlert,
+                    hasChatEndpoint: entity.hasChatEndpoint, circleRadius: entity.circleRadius)
             }
             self.saveCompanionMapCache()
         }
@@ -1039,7 +1048,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard item.hasUsableLocation else {
             throw ContactChatFailure.message(String(localized: "Alert location unavailable", table: "WatchMain"))
         }
-        if !item.isAlert {
+        if !item.isAlert, canReply(to: item) {
             try await sendMapItemReply(item, text: "Roger, bloodhounding to \(mapItemTitle(item))")
         }
         clearRouteBloodhound()
@@ -1080,7 +1089,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     func markInPosition() async throws {
         clearRouteBloodhound()
         let item = bloodhoundMapItemID.flatMap { id in incomingMapPoints.first { $0.id == id } }
-        if let item, !item.isAlert {
+        if let item, !item.isAlert, canReply(to: item) {
             try await sendMapItemReply(item, text: "In Position at \(mapItemTitle(item))")
         }
         bloodhoundTargetID = nil
@@ -1092,6 +1101,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     /// Retains the original recipient and GeoChat message ID until its route accepts the message.
+    private func canReply(to item: IncomingMapEntity) -> Bool {
+        guard let uid = item.senderUID else { return false }
+        return incomingEntities.contains { $0.id == uid && $0.isUser && $0.chatRoute != nil }
+    }
+
     private func sendMapItemReply(_ item: IncomingMapEntity, text: String) async throws {
         guard let senderUID = item.senderUID, !senderUID.isEmpty, senderUID != SitxClient.deviceID() else {
             throw ContactChatFailure.message("This point has no sender to reply to.")
@@ -1101,7 +1115,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
             senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
             recipientUID: senderUID, recipientCallSign: sender?.callSign ?? senderUID, text: text)
-        let route = sender?.chatRoute ?? item.chatRoute
+        let route = sender?.chatRoute ?? item.ingressRoute
         guard storeOffline(OfflineOperation(kind: .chat, scope: offlineScope, xml: xml,
                                             route: route, recipientUID: senderUID),
                            key: "chat-\(UUID())", notice: String(localized: "Chat stored and will be sent when connected", table: "WatchStatus")) else {
@@ -1224,6 +1238,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
             chatLogger.debug("Rejected entity from obsolete source generation")
             return
         }
+        if let deletedUID = payload.deletedUID, let sentAt = payload.sentAt {
+            guard sentAt <= Date().addingTimeInterval(30) else { return }
+            mapDeletions.receive(uid: deletedUID, at: sentAt, now: Date())
+            incomingEntities.removeAll { $0.id == deletedUID && $0.lastSeen <= sentAt }
+            pruneIncomingEntities(now: now)
+            return
+        }
         if let state = payload.emergencyState {
             if let sourceServerID, let connectedRemoteAlertServers,
                !connectedRemoteAlertServers.contains(sourceServerID) {
@@ -1264,6 +1285,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             return
         }
         guard !payload.uid.isEmpty, !markers.contains(where: { $0.id.uuidString == payload.uid }),
+              mapDeletions.allows(uid: payload.uid, at: payload.sentAt ?? now, now: Date()),
               CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)) else { return }
         let previousSend = pointSendTimes[payload.uid] ?? incomingEntities.first(where: { $0.id == payload.uid })?.lastSeen
         let isNewerSend = payload.sentAt.map { sent in previousSend.map { sent > $0 } ?? true } ?? false
@@ -1290,7 +1312,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
             sourceServerID: sourceServerID, sourceGeneration: sourceGeneration, expiresAt: expiresAt ?? payload.staleAt,
             isUser: payload.emergencyState == nil && (metadata.isUser == true || SitxCoT.isUser(type: payload.type)),
             sourceTransport: sourceTransport, missionName: previous?.missionName,
-            alertCategory: payload.alertCategory, isAlert: payload.emergencyState == .alert
+            alertCategory: payload.alertCategory, isAlert: payload.emergencyState == .alert,
+            hasChatEndpoint: payload.hasChatEndpoint == true || previous?.hasChatEndpoint == true,
+            circleRadius: payload.circleRadius
         )
         let isNew: Bool
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
@@ -1994,12 +2018,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private func storeAlert(state: EmergencyState, type: String) -> Bool {
-        let xml = usableMarkerCoordinate != nil || state == .cancel ? sitxClient.emergencyXML(state: state, type: type) : nil
         let notice = state == .cancel
             ? String(localized: "Cancel alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
             : String(localized: "Alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
         return storeOffline(OfflineOperation(kind: .alert, scope: offlineScope, alertState: state,
-                                             alertType: type, xml: xml),
+                                             alertType: type),
                             key: "alert-\(type)", notice: notice)
     }
 
@@ -2047,7 +2070,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     }
                     if operation.xml == nil, operation.kind == .alert,
                        let state = operation.alertState, let type = operation.alertType,
-                       usableMarkerCoordinate != nil {
+                       sitxClient.hasReadyOutput {
                         operation.xml = sitxClient.emergencyXML(state: state, type: type)
                         try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
                     }
@@ -2067,7 +2090,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                         }
                     } else {
                         guard sitxClient.hasReadyOutput else { continue }
-                        try await sitxClient.sendQueuedEvent(xml)
+                        try await sitxClient.sendQueuedEvent(xml, id: entry.id)
                     }
                     try offlineOutbox.acknowledge(id: entry.id)
                     offlineError = nil

@@ -7,6 +7,17 @@ trap 'rm -rf "$build_dir"' EXIT
 
 cd "$repo_root"
 
+swiftc -swift-version 5 -parse-as-library \
+  Shared/PhoneLocationReporting.swift Shared/CoTFieldSafety.swift Tests/CoTFieldSafetyChecks.swift \
+  -o "$build_dir/cot-field-safety-checks"
+"$build_dir/cot-field-safety-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/RemoteAlertLifecycle.swift "WearTAK Watch App/RelayProtocol.swift" \
+  "WearTAK Watch App/SitxCoT.swift" Tests/BloodhoundAlertChecks.swift \
+  -o "$build_dir/cot-map-alert-checks"
+"$build_dir/cot-map-alert-checks"
+
 swiftc -swift-version 5 -parse-as-library Tests/StringCatalogEncodingChecks.swift \
   -o "$build_dir/string-catalog-encoding-checks"
 "$build_dir/string-catalog-encoding-checks" "$repo_root"
