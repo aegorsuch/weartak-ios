@@ -55,6 +55,28 @@ struct BloodhoundAlertChecks {
         precondition(parse(type: "b-t-f").isEmpty)
         precondition(parse(type: "b-m-p-s-p-i").isEmpty)
         precondition(parse(type: "a-n-G").first?.emergencyState == nil)
+        for type in ["a-n-A-C-F", "a-n-A-C-H", "a-f-Z", "b-m-p-s-m"] {
+            let point = parse(type: type, detail: "<contact callsign=\"TRACK\"/>").first
+            precondition(point?.type == type && point?.callSign == "TRACK" &&
+                         point?.isUser == false && point?.hasChatEndpoint == false)
+            precondition(parse(type: type, lifetime: -1).isEmpty)
+        }
+        precondition(parse(type: "a-f-Z", detail: "<contact endpoint=\"*:-1:stcp\"/>").first?.hasChatEndpoint == true)
+        let circle = parse(type: "u-d-c-c", detail: "<shape><ellipse major=\"100\" minor=\"100\" angle=\"0\"/></shape>").first
+        precondition(circle?.circleRadius == 100)
+        precondition(parse(type: "u-d-c-c", detail: "<shape><ellipse major=\"nan\" minor=\"nan\"/></shape>").first?.circleRadius == nil)
+        precondition(parse(type: "u-d-c-c", detail: "<shape><ellipse major=\"100\" minor=\"50\"/></shape>").first?.circleRadius == nil)
+        let deletion = parse(type: "t-x-d-d", detail: "<link uid=\"target\" relation=\"p-p\"/><__forcedelete/>", point: "").first
+        precondition(deletion?.deletedUID == "target" && deletion?.hasUsableLocation == false)
+        precondition(parse(type: "t-x-d-d", detail: "<link uid=\"self\"/>", point: "").isEmpty)
+        precondition(parse(type: "t-x-d-d", point: "").isEmpty)
+        precondition(parse(type: "t-x-d-d", detail: "<link uid=\"target\"/>", lifetime: -1, point: "").isEmpty)
+        var deleted = CoTMapDeletionHistory()
+        deleted.receive(uid: "target", at: now, now: now)
+        precondition(!deleted.allows(uid: "target", at: now, now: now))
+        precondition(!deleted.allows(uid: "target", at: now.addingTimeInterval(-1), now: now))
+        precondition(deleted.allows(uid: "target", at: now.addingTimeInterval(1), now: now))
+        precondition(deleted.allows(uid: "other", at: now, now: now))
         precondition(parse(type: "a-f-G-U-C").first?.isUser == true)
         precondition(parse(type: "a-f-G-U-C", detail: "<emergency type=\"911 Alert\"/>").first?.isUser == false)
         let manual = parse(detail: "<contact callsign=\"WATCH\"/><link uid=\"watch\" relation=\"p-p\"/><emergency type=\"Gunshot Injury\">WATCH</emergency>",
@@ -75,6 +97,10 @@ struct BloodhoundAlertChecks {
         let noLocation = parse(point: "")[0]
         let restoredNoLocation = try JSONDecoder().decode(EntityRelayPayload.self, from: JSONEncoder().encode(noLocation))
         precondition(restoredNoLocation.hasUsableLocation == false)
+        let restoredDelete = try JSONDecoder().decode(EntityRelayPayload.self, from: JSONEncoder().encode(deletion!))
+        precondition(restoredDelete.deletedUID == "target")
+        let restoredCircle = try JSONDecoder().decode(EntityRelayPayload.self, from: JSONEncoder().encode(circle!))
+        precondition(restoredCircle.circleRadius == 100)
         print("PASS: ATAK/WearTAK alerts, parent links, own-alert suppression, stale/location-less emergencies and relay compatibility")
     }
 }

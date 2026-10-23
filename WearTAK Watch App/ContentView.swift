@@ -1253,6 +1253,11 @@ private struct TacticalMapView: View {
             .tag(MapPointSelection.marker(marker.id))
         }
         ForEach(model.mapEntities) { entity in
+            if let radius = entity.circleRadius {
+                MapCircle(center: entity.coordinate, radius: radius)
+                    .foregroundStyle(.yellow.opacity(0.12))
+                    .stroke(.yellow, lineWidth: 2)
+            }
             if entity.isAlert {
                 Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
                     IncomingAlertMarker(stale: entity.isStaleAlert)
@@ -1268,15 +1273,30 @@ private struct TacticalMapView: View {
                     .annotationTitles(.hidden)
                     .tag(MapPointSelection.contact(entity.id))
                 }
-            } else if let kind = entity.symbolKind {
+            } else if let kind = entity.symbolKind,
+                      entity.type.split(separator: "-").count == 3,
+                      entity.type.hasSuffix("-G") {
                 Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
                     MapPointSymbol(kind: kind)
                 }
                 .tag(MapPointSelection.incoming(entity.id))
             } else {
-                Marker(incomingMapTitle(entity), systemImage: "mappin", coordinate: entity.coordinate)
-                    .tint(.yellow)
-                    .tag(MapPointSelection.incoming(entity.id))
+                Annotation(incomingMapTitle(entity), coordinate: entity.coordinate, anchor: .center) {
+                    VStack(spacing: 2) {
+                        Circle()
+                            .fill(genericPointColor(entity))
+                            .overlay(Circle().stroke(.black, lineWidth: 1))
+                            .frame(width: 12, height: 12)
+                        Text(incomingMapTitle(entity))
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .padding(2)
+                            .background(.black.opacity(0.8), in: Capsule())
+                    }
+                    .accessibilityLabel(entity.displayTitle)
+                }
+                .annotationTitles(.hidden)
+                .tag(MapPointSelection.incoming(entity.id))
             }
         }
     }
@@ -1323,6 +1343,15 @@ private struct TacticalMapView: View {
 
     private func incomingMapTitle(_ entity: IncomingMapEntity) -> String {
         entity.displayTitle
+    }
+
+    private func genericPointColor(_ entity: IncomingMapEntity) -> Color {
+        switch entity.symbolKind {
+        case .friendly: return .cyan
+        case .hostile: return .red
+        case .neutral: return .green
+        case .unknown, nil: return .yellow
+        }
     }
 
     private func openMapPoint(_ selection: MapPointSelection) {

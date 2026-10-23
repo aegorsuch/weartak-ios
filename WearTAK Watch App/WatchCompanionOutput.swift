@@ -419,8 +419,12 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     func send(_ xml: String) async throws {
+        try await send(xml, id: UUID())
+    }
+
+    func send(_ xml: String, id: UUID) async throws {
         guard isReady else { throw TAKTransportError.notConfigured }
-        let reply = try await request(BridgeWire.Message(kind: .cot, xml: xml))
+        let reply = try await request(BridgeWire.Message(kind: .cot, id: id, xml: xml))
         guard reply.kind == .acknowledgement, reply.ready == true else {
             if reply.kind == .status { apply(reply) }
             throw TAKTransportError.notConfigured

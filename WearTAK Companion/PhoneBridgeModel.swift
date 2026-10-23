@@ -96,14 +96,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var lastPhoneReportAt: Date?
     private var phoneReportsByServer: [UUID: Date] = [:]
     private var latestPhoneFix: PhoneLocationFix?
+    private var alertLocations = AlertLocationHistory()
     private var phoneInterval = PhoneReportingPolicy.minimumInterval
     private var phoneSendInFlight = false
     private var phoneDittoTrackInFlight = false
     private var lastPhoneDittoTrackAt: Date?
     private var evaluatingReporting = false
     private var requestedWhenInUse = false
-    private var completedMessages: [UUID: Set<UUID>] = [:]
-    private var completedOrder: [UUID] = []
+    private var relayReceipts = CoTRelayReceiptLedger()
+    private var relayWritesInFlight = Set<UUID>()
+    private static let relayReceiptsKey = "WearTAK.companion.relayReceipts"
     private var incomingInFlight = 0
     private var watchWritesInFlight = 0
     private var sourceGenerations: [UUID: Int] = [:]
@@ -150,6 +152,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             pdlStore: SecurePDLStore(service: "com.aegorsuch.weartak.ditto"))
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
+        if let data = defaults.data(forKey: Self.relayReceiptsKey) {
+            do {
+                relayReceipts = try JSONDecoder().decode(CoTRelayReceiptLedger.self, from: data)
+            } catch {
+                reportingLogger.error("Relay receipts could not be restored: \(error.localizedDescription, privacy: .public)")
+            }
+        }
         garminSitxRouteConfig = sitx.config
         if let data = defaults.data(forKey: Self.garminRoutesStorageKey) {
             do {
@@ -932,6 +941,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private func reportPhoneFix(_ fix: PhoneLocationFix) {
         guard reporter.isRunning, case .success(let identity) = watchIdentity else { return }
         latestPhoneFix = fix
+        alertLocations.receive(fix)
         do { try PhoneReportingPolicy.validate(fix) }
         catch {
             phoneReporting.detail = error.localizedDescription
@@ -1257,10 +1267,19 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
         watchWritesInFlight += 1
         defer { watchWritesInFlight -= 1 }
+        guard relayWritesInFlight.insert(message.id).inserted else {
+            throw CompanionFailure.message("This relay write is already in progress; retry with the same ID.")
+        }
+        defer { relayWritesInFlight.remove(message.id) }
         let isGarmin = garminWrites.contains(message.id)
         let generation = garminGeneration
         let connectionToken = garmin?.connectionToken
-        var successful = completedMessages[message.id] ?? []
+        var successful = relayReceipts.outputs(for: message.id)
+        let relayXML: String
+        if !isGarmin, case .success(let identity) = watchIdentity {
+            relayXML = AlertLocationHistory.fillingMissingAlertLocation(xml, ownUID: identity.uid,
+                                                                       fix: alertLocations.usable())
+        } else { relayXML = xml }
         var ready = readyOutputs()
         if let target = message.serverID {
             guard enabledSourceIDs.contains(target), let send = ready[target] else {
@@ -1276,16 +1295,18 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 continue
             }
             do {
-                try await send(xml)
+                try await send(relayXML)
                 successful.insert(id)
+                relayReceipts.accept(message.id, output: id)
+                do { defaults.set(try JSONEncoder().encode(relayReceipts), forKey: Self.relayReceiptsKey) }
+                catch {
+                    reportingLogger.error("Relay receipts could not be saved: \(error.localizedDescription, privacy: .public)")
+                }
             } catch {
                 reportingLogger.error("Watch relay write failed: \(error.localizedDescription, privacy: .public)")
             }
         }
         guard !successful.isEmpty else { throw CompanionFailure.message("No server accepted the relay write.") }
-        if completedMessages[message.id] == nil { completedOrder.append(message.id) }
-        completedMessages[message.id] = successful
-        if completedOrder.count > 128 { completedMessages.removeValue(forKey: completedOrder.removeFirst()) }
         return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true)
     }
 
