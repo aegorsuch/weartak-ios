@@ -74,12 +74,19 @@ struct CompanionMapChecks {
             writes += 1
             persistedValue = latestValue
         }
+        func waitForWrites(_ expected: Int) async throws {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+            while writes < expected, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            precondition(writes == expected, "Timed out waiting for the scheduled cache write")
+        }
         for index in 1...500 {
             latestValue = index
             batcher.schedule()
         }
         precondition(writes == 0)
-        try await Task.sleep(for: .milliseconds(80))
+        try await waitForWrites(1)
         precondition(writes == 1 && persistedValue == 500)
         latestValue = 501
         batcher.schedule()
@@ -93,7 +100,7 @@ struct CompanionMapChecks {
         try await Task.sleep(for: .milliseconds(80))
         precondition(writes == 2)
         batcher.schedule()
-        try await Task.sleep(for: .milliseconds(80))
+        try await waitForWrites(3)
         precondition(writes == 3)
         print("PASS: 500 updates coalesced, latest-state persistence, inactive flush, cancellation and rescheduling")
         try checkMissionPaging()
@@ -116,6 +123,24 @@ struct CompanionMapChecks {
         precondition(cache.events.count == 1 && cache.events[0].lastSeen == now.addingTimeInterval(-45))
         cache.receive(event("contact", age: 10), now: now)
         precondition(cache.events.count == 1 && cache.events[0].lastSeen == now.addingTimeInterval(-10))
+        let deleteXML = """
+        <event uid="contact-delete" type="t-x-d-d" time="\(formatter.string(from: now))" stale="\(formatter.string(from: now.addingTimeInterval(120)))">
+        <detail><link uid="contact" relation="p-p"/><__forcedelete/></detail></event>
+        """
+        var deletedCache = cache
+        let deleteEvent = CompanionMapEvent(xml: deleteXML, sourceServerID: server,
+                                           sourceGeneration: 0, receivedAt: now)
+        precondition(deleteEvent.isValid && deleteEvent.header?.deletedUID == "contact")
+        deletedCache.receive(deleteEvent, now: now)
+        deletedCache.receive(event("contact", age: 10), now: now)
+        precondition(deletedCache.events.count == 1 && deletedCache.events.first?.header?.type == "t-x-d-d")
+        let deletedSnapshot = try deletedCache.filling(BridgeWire.Message(kind: .mapSnapshot))
+        let decodedDelete = try BridgeWire.Message.decode(deletedSnapshot.encoded())
+        precondition(decodedDelete.mapEvents?.first?.header?.deletedUID == "contact")
+        let newerContact = CompanionMapEvent(xml: event("contact", age: -1).xml, sourceServerID: server,
+            sourceGeneration: 0, receivedAt: now.addingTimeInterval(1))
+        deletedCache.receive(newerContact, now: now.addingTimeInterval(1))
+        precondition(deletedCache.events.count == 1 && deletedCache.events.first?.header?.type == "a-f-G-U-C")
         cache.receive(event("expired", stale: -1), now: now)
         cache.receive(event("too-old", age: 301), now: now)
         precondition(cache.events.count == 1)

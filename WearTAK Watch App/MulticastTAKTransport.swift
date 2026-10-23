@@ -7,6 +7,11 @@ import OSLog
 protocol CoTOutput {
     var isReady: Bool { get }
     func send(_ xml: String) async throws
+    func send(_ xml: String, id: UUID) async throws
+}
+
+extension CoTOutput {
+    func send(_ xml: String, id: UUID) async throws { try await send(xml) }
 }
 @MainActor
 final class MulticastTAKTransport: ObservableObject, CoTOutput {

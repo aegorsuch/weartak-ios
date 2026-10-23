@@ -59,12 +59,16 @@ struct CompanionMapCache: Codable {
 
     mutating func receive(_ event: CompanionMapEvent, now: Date = Date()) {
         guard event.isValid, let header = event.header else { return }
+        if header.deletedUID == nil, events.contains(where: {
+            $0.sourceServerID == event.sourceServerID && $0.header?.deletedUID == header.uid &&
+                $0.lastSeen >= event.lastSeen
+        }) { return }
         events.removeAll {
-            $0.sourceServerID == event.sourceServerID && $0.header?.uid == header.uid &&
+            $0.sourceServerID == event.sourceServerID && $0.header?.mapUID == header.mapUID &&
                 $0.lastSeen <= event.lastSeen
         }
         if !events.contains(where: {
-            $0.sourceServerID == event.sourceServerID && $0.header?.uid == header.uid
+            $0.sourceServerID == event.sourceServerID && $0.header?.mapUID == header.mapUID
         }), event.isCurrent(at: now) {
             events.append(event)
         }
@@ -162,6 +166,8 @@ struct CoTMapHeader {
     let time: Date?
     let stale: Date?
     let isEmergency: Bool
+    var deletedUID: String? = nil
+    var mapUID: String { deletedUID ?? uid }
 
     static func parse(_ xml: String) -> Self? {
         guard CoTStreamFramer.isEvent(Data(xml.utf8)) else { return nil }
@@ -170,7 +176,7 @@ struct CoTMapHeader {
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
         guard parser.parse(), let attributes = delegate.attributes,
-              delegate.hasPoint || delegate.isEmergency,
+              delegate.hasPoint || delegate.isEmergency || delegate.deletedUID != nil,
               let uid = attributes["uid"], !uid.isEmpty else { return nil }
         func date(_ value: String?) -> Date? {
             guard let value else { return nil }
@@ -185,7 +191,7 @@ struct CoTMapHeader {
         guard attributes["time"] == nil || time != nil,
               attributes["stale"] == nil || stale != nil else { return nil }
         return Self(uid: uid, type: attributes["type"], time: time, stale: stale,
-                    isEmergency: delegate.isEmergency)
+                    isEmergency: delegate.isEmergency, deletedUID: delegate.deletedUID)
     }
 }
 
@@ -193,6 +199,7 @@ private final class CoTMapHeaderParser: NSObject, XMLParserDelegate {
     var attributes: [String: String]?
     var hasPoint = false
     var isEmergency = false
+    var deletedUID: String?
     private var depth = 0
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
@@ -204,6 +211,10 @@ private final class CoTMapHeaderParser: NSObject, XMLParserDelegate {
             isEmergency = type == "b-a-o" || type.hasPrefix("b-a-o-")
         }
         if depth == 3, elementName == "emergency" { isEmergency = true }
+        if depth == 3, elementName == "link", self.attributes?["type"] == "t-x-d-d",
+           let uid = attributes["uid"], !uid.isEmpty {
+            deletedUID = uid
+        }
         if depth == 2, elementName == "point",
            let lat = attributes["lat"].flatMap(Double.init),
            let lon = attributes["lon"].flatMap(Double.init),

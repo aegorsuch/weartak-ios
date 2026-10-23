@@ -452,7 +452,20 @@ its type is `a-?-G-U-C?`, so a user is not shown as a pin, or left out of Team
 Colors/Default Roles, because of its 2525 type (e.g. an ATAK `a-f-G` or
 `a-f-G-E-V-C` self type). A later update for the same UID that omits
 `__group`/contact detail keeps the last known team, role and callsign.
-Other incoming `a-` events keep the hostile/friendly/unknown pin.
+Non-user ground markers (`a-?-G`) keep their existing affiliation symbols.
+Other incoming `a-` events (including ADS-B aircraft and `a-f-Z` phones without
+user metadata), spot markers (`b-m-p-s-m`) and anchored drawing shapes use a
+generic dot and label. Dots use the existing cyan/red/green/yellow affiliation
+palette; non-affiliated points use yellow. Circular `u-d-c-c` drawings with
+equal finite ellipse axes up to 1,000 km also draw their circle. Non-circular
+ellipses and other drawing geometries currently show only their anchor dot.
+Live entities remain capped at 50 and expire at the CoT stale deadline or
+after five minutes without a report. `t-x-d-d` linked-UID deletes remove incoming
+entities and stop their navigation; bounded deletion records prevent older
+updates from immediately resurrecting them. Companion snapshots retain deletes.
+Contacts without an advertised chat endpoint have no actionable Start Chat.
+Senderless points, or points whose sender has no known chat-capable contact,
+can be bloodhounded without sending an automated RGR/nPos message.
 
 Below each user dot, a label such as `ODIN-ATAK ? 45s` shows the age of that
 contact's last report. The age counts from the CoT event time, including for
@@ -1547,6 +1560,16 @@ and cancellation events share an alert UID; cancellations use `b-a-o-can` and
 UID, and `__forcedelete`. Incoming nonexpired CoT users and points appear on
 the map, excluding the watch's own PLI and locally saved points.
 
+Outbound alerts select the newest valid watch fix no older than 120 seconds
+(at most five seconds of future clock skew), retaining it across empty/invalid
+updates. Coordinates carry the measured horizontal accuracy as `ce`, with the
+measurement timestamp and accuracy explicitly marked last-known in remarks.
+If watch GPS is unavailable, Companion can fill an alert's missing position
+from its last valid phone fix under the same age bound and verified watch
+identity. With neither fix available the alert still sends, using `0,0` and
+unknown accuracy rather than indefinitely waiting for GPS. The alert payload
+is frozen at its first ready transport attempt and retained unchanged on retry.
+
 Failed Sit(x) alert/point events are retained in a bounded in-memory queue and
 retried after reconnect. Cancellation supersedes a queued activation. Queued
 events do not survive app termination and are discarded when Sit(x) is turned
@@ -1571,6 +1594,17 @@ Queue-full/storage errors are displayed; failed transport attempts remain
 queued for retry while the watch app is active. Foreground retries run at most
 once per five seconds. A location-pending marker becomes a normal saved map
 marker once a valid fix arrives.
+
+Durable outbox retries keep the same Companion request ID. Companion serializes
+each request's fan-out and persists per-output acceptance receipts for 24 hours
+(up to 512 requests), so a lost watch acknowledgement does not resend to outputs
+that already accepted it. A cancellation has a distinct request ID from its
+activation. Durable operations are not also retained by the transient Sit(x)
+queue, and legacy transient events are cleared once another output accepts them.
+Independent multicast/server routes remain independent: deployments forwarding
+multiple routes to the same server may still observe one copy per route.
+An interrupted socket write can also have an ambiguous outcome; this is not an
+end-to-end exactly-once delivery guarantee.
 
 An operation is removed only when a transport accepts it. This is not a
 recipient acknowledgement: multicast UDP can be lost even after a successful

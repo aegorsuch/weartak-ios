@@ -71,11 +71,12 @@ enum SitxCoT {
 
     #if canImport(CoreLocation)
     static func event(uid: String, type: String, coordinate: CLLocationCoordinate2D,
-                      detail: String, lifetime: TimeInterval, now: Date = Date()) -> String {
+                      detail: String, lifetime: TimeInterval, now: Date = Date(),
+                      circularError: Double = 9_999_999) -> String {
         let formatter = ISO8601DateFormatter()
         let start = formatter.string(from: now)
         let stale = formatter.string(from: now.addingTimeInterval(lifetime))
-        return "<event version=\"2.0\" uid=\"\(escape(uid))\" type=\"\(escape(type))\" time=\"\(start)\" start=\"\(start)\" stale=\"\(stale)\" how=\"m-g\"><point lat=\"\(coordinate.latitude)\" lon=\"\(coordinate.longitude)\" hae=\"9999999\" ce=\"9999999\" le=\"9999999\"/><detail>\(detail)</detail></event>"
+        return "<event version=\"2.0\" uid=\"\(escape(uid))\" type=\"\(escape(type))\" time=\"\(start)\" start=\"\(start)\" stale=\"\(stale)\" how=\"m-g\"><point lat=\"\(coordinate.latitude)\" lon=\"\(coordinate.longitude)\" hae=\"9999999\" ce=\"\(circularError)\" le=\"9999999\"/><detail>\(detail)</detail></event>"
     }
     #endif
 
@@ -130,6 +131,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     private var emergencyText = ""
     private var remarksText = ""
     private var textElement: String?
+    private var deletedUID: String?
+    private var circleRadius: Double?
 
     init(excludedUID: String, now: Date) {
         self.excludedUID = excludedUID
@@ -160,6 +163,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             emergencyText = ""
             remarksText = ""
             textElement = nil
+            deletedUID = nil
+            circleRadius = nil
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             var stale = attributes["stale"].flatMap { formatter.date(from: $0) }
@@ -189,6 +194,14 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             hasTAKVersion = attributes["device"]?.caseInsensitiveCompare("Map Marker") != .orderedSame
         } else if elementName == "uid", !(attributes["Droid"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             hasDeviceUID = true
+        } else if elementName == "link", depth == 3, eventType == "t-x-d-d" {
+            deletedUID = attributes["uid"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if elementName == "ellipse", depth == 4, eventType == "u-d-c-c",
+                  let major = attributes["major"].flatMap(Double.init),
+                  let minor = attributes["minor"].flatMap(Double.init),
+                  major.isFinite, minor.isFinite, major > 0, major <= 1_000_000,
+                  abs(major - minor) < 0.01 {
+            circleRadius = major
         } else if elementName == "link", ["p-p", "p-c"].contains(attributes["relation"] ?? "") {
             if attributes["uid"] == excludedUID { hasOwnParent = true }
             parentUID = attributes["uid"]?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -240,7 +253,16 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             SitxCoT.diagnose("Rejected CoT entity: missing UID/type")
             return
         }
-        guard eventType.hasPrefix("a-") || emergencyState != nil else {
+        if eventType == "t-x-d-d" {
+            guard let deletedUID, !deletedUID.isEmpty, deletedUID != excludedUID,
+                  let sentAt, !expired else { return }
+            entities.append(EntityRelayPayload(uid: eventUID, lat: 0, lon: 0, type: eventType,
+                                               sentAt: sentAt, staleAt: staleAt,
+                                               hasUsableLocation: false, deletedUID: deletedUID))
+            return
+        }
+        guard eventType.hasPrefix("a-") || eventType == "b-m-p-s-m" ||
+                eventType.hasPrefix("u-d-") || emergencyState != nil else {
             SitxCoT.diagnose("Rejected CoT entity: unsupported type")
             return
         }
@@ -268,6 +290,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                                            callSign: callSign, team: team, role: role, senderUID: senderUID,
                                            isUser: emergencyState == nil && isUser, sentAt: sentAt, how: how,
                                            emergencyState: emergencyState, alertCategory: alertCategory, staleAt: staleAt,
-                                           hasUsableLocation: point != nil))
+                                           hasUsableLocation: point != nil, hasChatEndpoint: hasContactEndpoint,
+                                           circleRadius: circleRadius))
     }
 }
