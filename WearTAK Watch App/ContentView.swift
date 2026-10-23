@@ -1289,7 +1289,9 @@ private struct TacticalMapView: View {
                             .frame(width: 12, height: 12)
                         Text(incomingMapTitle(entity))
                             .font(.caption2)
+                            .foregroundStyle(.white)
                             .lineLimit(1)
+                            .frame(maxWidth: 110)
                             .padding(2)
                             .background(.black.opacity(0.8), in: Capsule())
                     }

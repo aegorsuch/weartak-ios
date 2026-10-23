@@ -1100,12 +1100,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
         removeIncomingPoint(item.id)
     }
 
-    /// Retains the original recipient and GeoChat message ID until its route accepts the message.
     private func canReply(to item: IncomingMapEntity) -> Bool {
         guard let uid = item.senderUID else { return false }
         return incomingEntities.contains { $0.id == uid && $0.isUser && $0.chatRoute != nil }
     }
 
+    /// Retains the original recipient and GeoChat message ID until its route accepts the message.
     private func sendMapItemReply(_ item: IncomingMapEntity, text: String) async throws {
         guard let senderUID = item.senderUID, !senderUID.isEmpty, senderUID != SitxClient.deviceID() else {
             throw ContactChatFailure.message("This point has no sender to reply to.")
