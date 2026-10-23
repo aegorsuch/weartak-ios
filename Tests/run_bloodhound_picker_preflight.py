@@ -81,6 +81,12 @@ def main():
     assert "TacticalMapView(model: model, settings: settings, initialFocus: points)" in picker
     assert "BloodhoundMapBounds(points: initialFocus.map" in picker
     assert "BloodhoundNavigationView(model: model)" in picker
+    assert ".id(mainNavigationID)" in picker
+    assert ".onChange(of: model.routeStartRevision)" in picker
+    assert "showMapPreview = false" in picker
+    assert "routeStartRevision &+= 1" in model
+    assert "BloodhoundPicker.indicator(for: hasTarget ? model.activeBloodhoundPickerTarget : nil)" in picker
+    assert 'Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")' in picker
     for case in ("route(route.id)", "marker(marker.id)", "contact(contact.id)", "point(item.id)"):
         assert case in picker, case
     start = model.index("    func startPickerBloodhound(")

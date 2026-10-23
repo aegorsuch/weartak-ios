@@ -239,6 +239,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var routeError: String?
     @Published private(set) var routeBloodhoundKey: String?
     @Published private(set) var routeBloodhoundIndex: Int?
+    @Published private(set) var routeStartRevision = 0
     @Published private(set) var routeFollow: RouteFollower?
     @Published private(set) var routeCompletionMessage: String?
     private static let routesStorageKey = "WearTAK.watchRoutes"
@@ -934,6 +935,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             requestLocation()
             startLiveLocation()
         }
+        routeStartRevision &+= 1
     }
 
     var activeBloodhoundPickerTarget: BloodhoundPicker.Target? {
