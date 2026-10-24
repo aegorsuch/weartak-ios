@@ -207,6 +207,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
         var xml: String?
         var route: ContactChatRoute?
         var recipientUID: String?
+        var normalDelivered: Bool?
+        var dittoDelivered: Bool?
     }
     private static let markerStorageKey = "WearTAK.droppedPoints"
     private static let companionCacheKey = "WearTAK.cachedCompanionMap"
@@ -271,12 +273,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
         for server in companionClient.channelServers { routes.insert(.companion(server.id)) }
         if multicastClient.isReady { routes.insert(.multicast) }
         if sitxClient.isSitxConnected { routes.insert(.sitx) }
+        if settings.dittoEnabled { routes.insert(.companion(DittoCoTDocument.sourceID)) }
         return routes.sorted { chatRouteTitle($0) < chatRouteTitle($1) }
     }
 
     func chatRouteTitle(_ route: ContactChatRoute) -> String {
         switch route {
         case .companion(let id):
+            if id == DittoCoTDocument.sourceID { return "Ditto" }
             return companionClient.channelServers.first { $0.id == id }?.name ??
                 companionClient.missionServers.first { $0.id == id }?.name ?? id.uuidString
         case .multicast: return "TAK SA Multicast"
@@ -515,6 +519,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
             if let source = message.sourceServerID,
                let chat = TAKChatMessage.parse(xml, ownUID: SitxClient.deviceID()) {
+                if source == DittoCoTDocument.sourceID, chat.senderUID == SitxClient.deviceID() { return }
                 self.chatLogger.notice("Companion GeoChat parsed for this watch")
                 self.recordChat(chat, route: .companion(source))
                 return
@@ -1273,7 +1278,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func sendContactChat(uid: String, route: ContactChatRoute, text: String, isGroup: Bool = false,
                          allowUnknownDirectRecipient: Bool = false) async throws {
-        if isGroup, uid != TAKChatMessage.allChatRoomsUID {
+        let isDitto = route == .companion(DittoCoTDocument.sourceID)
+        let groupMembers = contactMessages[ContactConversation(uid: uid, route: route, isGroup: true)]?
+            .last?.participantUids.filter { $0 != SitxClient.deviceID() && $0 != uid } ?? []
+        if isGroup, uid != TAKChatMessage.allChatRoomsUID, !isDitto || groupMembers.isEmpty {
             throw ContactChatFailure.message("Group replies require verified recipient routing, which is not available on this transport yet.")
         }
         let conversation = ContactConversation(uid: uid, route: route, isGroup: isGroup)
@@ -1287,7 +1295,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
         let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
             senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
             recipientUID: uid, recipientCallSign: isGroup ? chatTitle(for: conversation) :
-                (contact?.callSign ?? chatTitle(for: conversation)), text: text, isGroup: isGroup)
+                (contact?.callSign ?? chatTitle(for: conversation)), text: text, isGroup: isGroup,
+                participantUids: isDitto && isGroup ? groupMembers : [])
         guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
             throw ContactChatFailure.message("Unable to record the outgoing chat message.")
         }
@@ -1306,7 +1315,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private func recordChat(_ message: TAKChatMessage, route: ContactChatRoute) {
         let ownUID = SitxClient.deviceID()
         let key = ContactConversation(uid: message.conversationUID(ownUID: ownUID), route: route, isGroup: message.isGroup)
-        switch chatCommandRuntime.handle(message, ownUID: ownUID, settings: settings) {
+        switch route == .companion(DittoCoTDocument.sourceID) ? WatchChatCommandOutcome.notCommand :
+            chatCommandRuntime.handle(message, ownUID: ownUID, settings: settings) {
         case .notCommand:
             break
         case .consumed:
@@ -2221,7 +2231,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     private func routeReady(_ route: ContactChatRoute) -> Bool {
         switch route {
-        case .companion: return companionClient.isReady
+        case .companion(let id):
+            return id == DittoCoTDocument.sourceID ? companionClient.dittoStatus?.state == .syncing : companionClient.isReady
         case .multicast: return multicastClient.isReady
         case .sitx: return sitxClient.isSitxConnected
         }
@@ -2263,14 +2274,25 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     }
                     if operation.xml == nil, operation.kind == .alert,
                        let state = operation.alertState, let type = operation.alertType,
-                       sitxClient.hasReadyOutput {
+                       (sitxClient.hasReadyOutput || settings.dittoEnabled) {
                         if operation.manualAlert == true, state == .alert, lastLocation == nil { continue }
                         operation.xml = sitxClient.emergencyXML(state: state, type: type,
                                                                manual: operation.manualAlert == true)
                         try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
                     }
                     guard let xml = operation.xml else { continue }
-                    if operation.kind == .chat {
+                    let meshEligible = operation.kind == .marker || operation.kind == .alert ||
+                        operation.kind == .chat || (operation.kind == .broadcast && PhonePLI.header(xml)?.type == "b-t-f")
+                    let dittoOnly = operation.kind == .chat && operation.route == .companion(DittoCoTDocument.sourceID)
+                    if meshEligible, settings.dittoEnabled, operation.dittoDelivered != true,
+                       companionClient.dittoStatus?.state == .syncing {
+                        do {
+                            try await companionClient.sendDittoEvent(xml, id: entry.id)
+                            operation.dittoDelivered = true
+                            try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
+                        } catch { reportOfflineError(error) }
+                    }
+                    if operation.normalDelivered != true, operation.kind == .chat, !dittoOnly {
                         if operation.route == nil, let recipient = operation.recipientUID,
                            let route = incomingEntities.first(where: { $0.id == recipient && $0.isUser })?.chatRoute {
                             operation.route = route
@@ -2283,10 +2305,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
                         case .multicast: try await multicastClient.send(xml)
                         case .sitx: try await sitxClient.sendContactChat(xml)
                         }
-                    } else {
-                        guard sitxClient.hasReadyOutput else { continue }
+                        operation.normalDelivered = true
+                    } else if operation.normalDelivered != true, operation.kind != .chat, sitxClient.hasReadyOutput {
                         try await sitxClient.sendQueuedEvent(xml, id: entry.id)
+                        operation.normalDelivered = true
                     }
+                    try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
+                    guard operation.normalDelivered == true || operation.dittoDelivered == true else { continue }
+                    if meshEligible, settings.dittoEnabled, operation.dittoDelivered != true { continue }
                     try offlineOutbox.acknowledge(id: entry.id)
                     offlineError = nil
                     offlineNotice = String(localized: "Accepted by transport; recipient delivery is not confirmed.", table: "WatchStatus")

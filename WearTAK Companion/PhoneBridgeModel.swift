@@ -202,6 +202,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             self.dittoStatus = status
             self.publishState()
         }
+        dittoRuntime.ownUID = {
+            try? WatchReportingIdentity.decode(
+                contextValue: WCSession.default.receivedApplicationContext[WatchReportingIdentity.contextKey]).uid
+        }
+        dittoRuntime.onEvent = { [weak self] xml in self?.receiveDitto(xml) }
         do {
             let url = try GarminDeliveryLedger.storageURL()
             if FileManager.default.fileExists(atPath: url.path) {
@@ -891,6 +896,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var enabledSourceIDs: Set<UUID> {
         var ids = Set(servers.filter(\.enabled).map(\.id))
         if sitx.isConfigured { ids.insert(SitxRelayConfig.serverID) }
+        if dittoStatus.enabled { ids.insert(DittoCoTDocument.sourceID) }
         return ids
     }
 
@@ -1530,6 +1536,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         if message.kind == .dittoTrack, let xml = message.xml {
             return await dittoTrackReply(to: message, xml: xml)
         }
+        if message.kind == .dittoEvent, let xml = message.xml {
+            let identity = try WatchReportingIdentity.decode(
+                contextValue: WCSession.default.receivedApplicationContext[WatchReportingIdentity.contextKey])
+            let published = await dittoRuntime.publishEvent(xml, uid: identity.uid, callsign: identity.callSign)
+            return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: published,
+                                      dittoStatus: dittoRuntime.status)
+        }
         if message.kind == .sitxConfig, let config = message.sitxConfig {
             var released: SitxRelayConfig?
             if config.removeConnection == true {
@@ -1723,7 +1736,36 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private var connectedAlertSourceIDs: Set<UUID> {
-        Set(enabledSourceIDs.filter { serverStates[$0]?.connected == true })
+        var ids = Set(enabledSourceIDs.filter { serverStates[$0]?.connected == true })
+        if dittoStatus.state == .syncing { ids.insert(DittoCoTDocument.sourceID) }
+        return ids
+    }
+
+    /// Ditto is a data-only source independent of TAK connectivity. Never dispatch packages or commands here.
+    private func receiveDitto(_ xml: String) {
+        guard watchRoute == .apple, dittoStatus.enabled else { return }
+        let source = DittoCoTDocument.sourceID
+        let event = CompanionMapEvent(xml: xml, sourceServerID: source, sourceGeneration: 0, receivedAt: Date())
+        if event.header?.type == "b-t-f" {
+            if chatBuffer.receive(event) { chatLogger.warning("Ditto chat buffer evicted oldest messages") }
+        } else {
+            mapCache.receive(event)
+            mapCacheWrites.schedule()
+        }
+        guard WCSession.default.isReachable, incomingInFlight < 16 else { return }
+        do {
+            let data = try BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: source,
+                sourceGeneration: 0, sessionID: bridgeSessionID).encoded()
+            incomingInFlight += 1
+            WCSession.default.sendMessageData(data, replyHandler: { [weak self] _ in
+                Task { @MainActor in self?.incomingInFlight = max(0, (self?.incomingInFlight ?? 1) - 1) }
+            }, errorHandler: { [weak self] error in
+                Task { @MainActor in
+                    self?.incomingInFlight = max(0, (self?.incomingInFlight ?? 1) - 1)
+                    self?.chatLogger.error("Ditto watch delivery pending: \(error.localizedDescription, privacy: .public)")
+                }
+            })
+        } catch { chatLogger.error("Ditto event exceeds bridge limits: \(error.localizedDescription, privacy: .public)") }
     }
 
     private func appleRouteSnapshot(id: UUID = UUID()) -> BridgeWire.Message {
@@ -1923,7 +1965,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         var failures: [String] = []
         if let mapCacheError { failures.append(mapCacheError) }
         let enabled = servers.filter(\.enabled)
-        if enabled.isEmpty, !sitx.isConfigured { failures.append("Enable a TAK server in Companion on the phone.") }
+        if enabled.isEmpty, !sitx.isConfigured, dittoStatus.state != .syncing {
+            failures.append("Enable a TAK server or Ditto in Companion on the phone.")
+        }
         for server in enabled where serverStates[server.id]?.connected != true {
             failures.append("\(server.host): \(serverStates[server.id]?.detail ?? "Disconnected")")
         }

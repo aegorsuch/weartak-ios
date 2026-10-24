@@ -217,7 +217,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
            configuration != lastAcceptedDittoConfig {
             Task { await updateDittoConfiguration() }
         }
-        guard active, usesCompanion, WCSession.default.activationState == .activated,
+        guard active, (usesCompanion || settings.dittoEnabled), WCSession.default.activationState == .activated,
               WCSession.default.isReachable else {
             if active, usesCompanion {
                 mapRefreshError = "Phone unavailable. Showing cached positions."
@@ -275,7 +275,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     func refreshMap() async {
-        guard active, usesCompanion, !mapRefreshing else { return }
+        guard active, (usesCompanion || settings.dittoEnabled), !mapRefreshing else { return }
         guard WCSession.default.activationState == .activated, WCSession.default.isReachable else {
             mapRefreshError = "Phone unavailable. Showing cached positions."
             return
@@ -406,6 +406,17 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             return reply.kind == .acknowledgement && reply.ready == true
         } catch {
             return false
+        }
+    }
+
+    func sendDittoEvent(_ xml: String, id: UUID) async throws {
+        guard active, settings.dittoEnabled, dittoStatus?.state == .syncing else {
+            throw CompanionRefreshFailure.message("Ditto is waiting for iPhone Companion in the foreground.")
+        }
+        let reply = try await request(BridgeWire.Message(kind: .dittoEvent, id: id, xml: xml))
+        if let status = reply.dittoStatus { dittoStatus = status }
+        guard reply.kind == .acknowledgement, reply.ready == true else {
+            throw CompanionRefreshFailure.message("Ditto did not accept the tactical event; it remains queued.")
         }
     }
 

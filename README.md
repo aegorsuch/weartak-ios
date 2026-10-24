@@ -1465,13 +1465,40 @@ app's Info.plist and must not be committed. Custom PDLs can be saved from a
 direct watch chat message using its press-and-hold action or entered in the
 Ditto settings. They are validated and stored in each device's Keychain, then
 the watch sends the selected identity to the iPhone over WatchConnectivity.
-Status messages never include the PDL. Companion subscribes to the `track`
-collection and reports startup, syncing, pause and failure states to the watch.
+Status messages never include the PDL. Companion subscribes to and observes
+`track`, `mapitem`, `alert` and `chat`, and reports startup, syncing, pause and
+failure states to the watch. These use the same v2 CoT-alias document schema as
+WearOS/Tracker: `_id`/`d` event UID, `a` originating peer, `AuthorId` author UID,
+`b`/`n`/`o` integer Unix-millisecond time/start/stale, `h`–`l` point attributes,
+`r` complete detail XML, and `w` CoT type.
 While syncing, Companion also upserts this watch's position into `track` using
 WearTAK-Tracker's document format (`_id` = watch UID, fields `a`–`w`), at the
 watch's PLI reporting interval and even when no TAK server is connected. When
 phone GPS reporting is on, the phone-GPS PLI is published; otherwise the watch
 sends its own fix to Companion for publishing, on any TAK route.
+Remote peer positions, markers and active/cancel alerts enter the existing watch
+contact/map/Bloodhound/alert lifecycle, deduplicated by UID against other CoT
+transports. Local-peer and own-UID/author echoes, malformed fields, future times,
+hidden/removed documents and repeated/older revisions are rejected or ignored.
+Absent or hidden documents are not inferred to be authenticated deletion commands.
+Ditto ingress is data-only; it does not execute watch chat commands or load
+configuration, plugins or data packages.
+
+Locally generated markers and alerts are queued to Ditto independently of TAK
+connectivity; each accepted output is recorded in the durable watch operation so
+a later retry does not resend to an output that already accepted it. Turning
+Ditto off does not block the ordinary TAK route. Direct, named-group replies and
+All Chat Rooms use the same GeoChat addressing and existing chat UI, with a
+**Ditto** transport option. Named-group replies retain the verified participants
+from the received conversation. Built-in/custom quick replies work unchanged.
+`chat` keeps the full original event UID and message ID, with a 24-hour document
+TTL. Expired chat documents are not delivered; expiry does not remove inbox
+history. Direct chats are recipient-filtered, own echoes ignored, and the same
+sender/message ID arriving over multiple transports is recorded only once.
+There is no separate chat-enable setting on iOS; the existing chat availability
+is retained. The chat schema is WearTAK interoperability, not a claim of verified
+official ATAK Ditto-plugin chat compatibility.
+
 Ditto is stopped when Companion backgrounds; iOS does not guarantee continuous
 background peer-to-peer sync. Nearby-peer discovery and record exchange require
 testing on physical devices.

@@ -229,6 +229,9 @@ struct TAKChatInbox<Conversation: Hashable> {
     mutating func record(_ message: TAKChatMessage, conversation: Conversation, ownUID: String,
                          receivedAt: Date = Date()) -> Bool {
         guard message.isGroup || message.senderUID == ownUID || message.recipientUID == ownUID else { return false }
+        guard !messages.values.contains(where: {
+            $0.contains(where: { $0.deduplicationID == message.deduplicationID })
+        }) else { return false }
         var history = messages[conversation] ?? []
         guard !history.contains(where: { $0.deduplicationID == message.deduplicationID }) else { return false }
         open(conversation)
