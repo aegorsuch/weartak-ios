@@ -1500,6 +1500,11 @@ be reachable; watchOS does not own a TAK TLS client identity or run the Ditto SD
 The Garmin relay's existing 6,000-byte envelope and 512-character chat relay are
 not a certificate-transfer transport; Garmin provisioning is implemented in its
 own app, not by expanding this bridge.
+Legacy Garmin `chat_received` includes the original verified CoT `sentAt`
+(Unix milliseconds) separately from `receivedAt`, preserving the message ID.
+It rejects provisioning commands and over-512-character commands with an explicit
+iPhone status instead of truncating credential material or partially executing a
+shortened command. Ordinary chat keeps its existing 512-character display limit.
 
 Provisioning bodies are consumed without entering watch chat history, notifications,
 or the durable outgoing queue; local sends require an immediately available direct

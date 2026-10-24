@@ -1911,11 +1911,19 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let isRoute = receiveGarminRoutes(xml, sourceID: sourceID)
         if isRoute { return }
         if watchRoute == .garmin {
-            guard canRelay, connected, garminReady, let envelope = try? GarminRelayProtocol.incoming(xml,
-                ownUID: garminIdentity?.uid ?? "", receivedAt: event.receivedAt) else {
-                return
+            guard canRelay, connected, garminReady else { return }
+            do {
+                if let envelope = try GarminRelayProtocol.incoming(xml,
+                    ownUID: garminIdentity?.uid ?? "", receivedAt: event.receivedAt) {
+                    enqueueGarmin(envelope)
+                }
+            } catch GarminRelayProtocol.Failure.unsupported {
+                garminStatus = "Garmin relay cannot carry certificate commands or commands longer than 512 characters; nothing was forwarded."
+                chatLogger.error("Garmin relay rejected an unsupported command without forwarding its body.")
+            } catch {
+                garminStatus = "Garmin relay rejected invalid incoming CoT."
+                chatLogger.error("Garmin relay rejected invalid incoming CoT.")
             }
-            enqueueGarmin(envelope)
             return
         }
         guard canRelay, connected, WCSession.default.isReachable, incomingInFlight < 16,

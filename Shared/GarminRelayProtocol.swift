@@ -252,11 +252,18 @@ enum GarminRelayProtocol {
         if uid == ownUID || delegate.senderUID == ownUID { return nil }
         if type == "b-t-f" {
             guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else { return nil }
+            let command = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased().hasPrefix("#weartakcommand")
+            guard !TAKChatMessage.isProvisioningCommand(message.text),
+                  !command || message.text.count <= 512 else {
+                throw Failure.unsupported("credential or oversized command")
+            }
             var payload: [String: Any] = ["uid": message.id, "sender": message.senderCallSign,
                 "text": String(message.text.prefix(512)), "messageId": message.id,
                 "senderUid": message.senderUID, "senderCallsign": message.senderCallSign,
                 "msg": String(message.text.prefix(512)), "eventUid": uid,
                 "receivedAt": Int64(receivedAt.timeIntervalSince1970 * 1_000),
+                "sentAt": Int64(message.sentAt.timeIntervalSince1970 * 1_000),
                 "conversationUid": message.conversationUID(ownUID: ownUID),
                 "conversationTitle": message.title ?? message.senderCallSign, "isGroup": message.isGroup]
             if message.isGroup { payload["participantUids"] = message.participantUids }
