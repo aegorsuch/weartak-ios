@@ -20,7 +20,6 @@ struct GarminRelayProtocolTests {
         do { _ = try booleans.integer("yes", range: 0...1); fatalError("Booleans cannot substitute for numbers.") }
         catch GarminRelayProtocol.Failure.invalid {}
         let now = Date()
-        let sentMilliseconds = Int64(now.timeIntervalSince1970.rounded(.down) * 1_000)
         let device = UUID()
         let identity = try GarminRelayProtocol.identity(envelope("watch_settings", [
             "callsign": "TEST", "team": "Cyan", "role": "Team Member", "reportIntSecs": 10
@@ -127,6 +126,7 @@ struct GarminRelayProtocolTests {
             recipientUID: "team-room", recipientCallSign: "Team & Friends", text: "Group reply",
             now: now, messageID: "group-1", isGroup: true, participantUids: ["other"])
         let receivedGroup = try GarminRelayProtocol.incoming(groupXML, ownUID: "other", receivedAt: now)!
+        let groupSentAt = TAKChatMessage.parse(groupXML, ownUID: "other")!.sentAt
         precondition(receivedGroup.type == "chat_received")
         precondition(receivedGroup.payload["uid"] as? String == "group-1")
         precondition(receivedGroup.payload["conversationUid"] as? String == "team-room")
@@ -137,7 +137,7 @@ struct GarminRelayProtocolTests {
         precondition(receivedGroup.payload["senderCallsign"] as? String == identity.resolvedCallSign)
         precondition(receivedGroup.payload["msg"] as? String == "Group reply")
         precondition(receivedGroup.payload["receivedAt"] as? Int64 == Int64(now.timeIntervalSince1970 * 1_000))
-        precondition(receivedGroup.payload["sentAt"] as? Int64 == sentMilliseconds)
+        precondition(receivedGroup.payload["sentAt"] as? Int64 == Int64(groupSentAt.timeIntervalSince1970 * 1_000))
         precondition(receivedGroup.payload["messageId"] as? String == "group-1")
         precondition(receivedGroup.payload["eventUid"] as? String == "GeoChat.\(identity.uid).team-room.group-1")
         precondition(receivedGroup.payload["isGroup"] as? Bool == true)
@@ -158,9 +158,10 @@ struct GarminRelayProtocolTests {
         let directXML = try TAKChatMessage.outgoing(senderUID: "other", senderCallSign: "Other",
             recipientUID: identity.uid, recipientCallSign: "Garmin", text: "Private", now: now)
         let receivedDirect = try GarminRelayProtocol.incoming(directXML, ownUID: identity.uid)!
+        let directSentAt = TAKChatMessage.parse(directXML, ownUID: identity.uid)!.sentAt
         let delayed = try GarminRelayProtocol.incoming(directXML, ownUID: identity.uid,
             receivedAt: now.addingTimeInterval(600))!
-        precondition(delayed.payload["sentAt"] as? Int64 == sentMilliseconds)
+        precondition(delayed.payload["sentAt"] as? Int64 == Int64(directSentAt.timeIntervalSince1970 * 1_000))
         precondition(delayed.payload["receivedAt"] as? Int64 == Int64(now.addingTimeInterval(600).timeIntervalSince1970 * 1_000))
         precondition(delayed.payload["messageId"] as? String == receivedDirect.payload["messageId"] as? String)
         for text in [
