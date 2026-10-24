@@ -93,6 +93,9 @@ enum DittoDocumentChecks {
             if recipient != "group-1" {
                 let nativeDecoded = try DittoChatDocument.decode(native, ownUID: "other", now: now)
                 precondition(TAKChatMessage.parse(nativeDecoded.xml, ownUID: "other")?.text == parsed.text)
+                var twoCoordinates = native
+                twoCoordinates["authorLoc"] = "38,-77"
+                _ = try DittoChatDocument.decode(twoCoordinates, ownUID: "other", now: now)
                 var multiline = native
                 multiline["msg"] = "First line\nSecond\tline"
                 let multilineReceived = try DittoChatDocument.decode(multiline, ownUID: "other", now: now)
@@ -116,6 +119,19 @@ enum DittoDocumentChecks {
             do {
                 _ = try DittoChatDocument.decode(conflict, ownUID: "other", now: now)
                 preconditionFailure("Conflicting extension detail accepted")
+            } catch DittoCoTDocument.Failure.invalid {}
+            var wrongTitle = doc
+            wrongTitle["room"] = "Different title"
+            do {
+                _ = try DittoChatDocument.decode(wrongTitle, ownUID: "other", now: now)
+                preconditionFailure("Conflicting extension room title accepted")
+            } catch DittoCoTDocument.Failure.invalid {}
+            var repeatedDetail = doc
+            repeatedDetail["r"] = (doc["r"] as! String).replacingOccurrences(
+                of: "</detail>", with: "<remarks>A&amp;B &lt;ready&gt;</remarks></detail>")
+            do {
+                _ = try DittoChatDocument.decode(repeatedDetail, ownUID: "other", now: now)
+                preconditionFailure("Duplicate chat remarks accepted")
             } catch DittoCoTDocument.Failure.invalid {}
             var wrongAuthor = doc
             wrongAuthor["AuthorId"] = "different-author"

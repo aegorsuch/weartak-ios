@@ -44,11 +44,14 @@ enum DittoChatDocument {
         doc["o"] = raw["o"] ?? nativeStale
         doc["p"] = raw["p"] ?? "h-g-i-g-o"
         doc["q"] = raw["q"] ?? "Undefined"
-        let location = try text("authorLoc").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
-        guard location.count == 3, location.allSatisfy(\.isFinite),
+        let components = try text("authorLoc").split(separator: ",", omittingEmptySubsequences: false)
+        var location = components.compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard (2...3).contains(components.count), location.count == components.count,
+              location.allSatisfy(\.isFinite),
               (-90...90).contains(location[0]), (-180...180).contains(location[1]) else {
             throw DittoCoTDocument.Failure.invalid
         }
+        if location.count == 2 { location.append(0) }
         doc["j"] = raw["j"] ?? location[0]
         doc["l"] = raw["l"] ?? location[1]
         doc["i"] = raw["i"] ?? location[2]
@@ -66,6 +69,10 @@ enum DittoChatDocument {
             doc["r"] = """
             <detail><__chat id="\(e(room))" chatroom="\(e(title))" senderCallsign="\(e(name))" messageId="\(e(id))" parent="\(e(parent))"><chatgrp uid0="\(e(sender))" \(attributes) id="\(e(room))"/></__chat><remarks to="\(e(room))">\(e(body))</remarks></detail>
             """
+        }
+        guard let detail = doc["r"] as? String,
+              DittoCoTDocument.validChatDetail(detail, title: title, parent: parent) else {
+            throw DittoCoTDocument.Failure.invalid
         }
         let decoded = try DittoCoTDocument.decodeAliases(doc, collection: "chat", now: now)
         guard let parsed = TAKChatMessage.parse(decoded.xml, ownUID: ownUID ?? sender),

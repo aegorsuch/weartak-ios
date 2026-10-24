@@ -173,6 +173,13 @@ security default-keychain -d user -s "$keychain_path"
 cp "$APP_STORE_CONNECT_API_PRIVATE_KEY" "$api_key_path"
 chmod 600 "$api_key_path"
 
+companion_info="$work_dir/Companion-Info.plist"
+python3 scripts/prepare-ditto-info.py \
+  --template "$CI_PROJECT_DIR/WearTAKCompanion-Info.plist" \
+  --output "$companion_info"
+# Keep the credential out of Xcode's exported build settings and script-phase logs.
+unset DITTO_COMMUNITY_PDL
+
 archive_path="$work_dir/WearTAK.xcarchive"
 export_path="$work_dir/export"
 xcodebuild \
@@ -183,6 +190,7 @@ xcodebuild \
   -derivedDataPath "$CI_PROJECT_DIR/build/DerivedData-Release" \
   MARKETING_VERSION="$marketing_version" \
   CURRENT_PROJECT_VERSION="$CI_PIPELINE_IID" \
+  WEARTAK_COMPANION_INFO_PLIST="$companion_info" \
   archive
 
 xcodebuild -exportArchive \
@@ -196,6 +204,7 @@ if [[ ${#ipas[@]} -ne 1 || ! -f "${ipas[0]}" ]]; then
   echo "ERROR: Expected exactly one exported App Store IPA." >&2
   exit 1
 fi
+python3 scripts/prepare-ditto-info.py --template "$companion_info" --verify-ipa "${ipas[0]}"
 
 artifact_dir="$(mktemp -d "$CI_PROJECT_DIR/build/app-store-connect-output.XXXXXX")"
 cp -R "$archive_path" "$artifact_dir/WearTAK-iOS-$marketing_version-p$CI_PIPELINE_IID.xcarchive"

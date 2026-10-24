@@ -126,6 +126,12 @@ struct DittoCoTDocument {
             .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "'", with: "&apos;")
     }
+    static func validChatDetail(_ detail: String, title: String, parent: String) -> Bool {
+        let fields = DittoXMLFields()
+        return fields.parse(detail, expectedRoot: "detail") && fields.chatCount == 1 &&
+            fields.chatGroupCount == 1 && fields.remarksCount == 1 && fields.room == title &&
+            (fields.parent ?? "RootContactGroup") == parent
+    }
     private static func milliseconds(_ value: Date) -> Double { (value.timeIntervalSince1970 * 1_000).rounded() }
     private static func date(_ value: String) -> Date? {
         let f = ISO8601DateFormatter()
@@ -161,6 +167,10 @@ private final class DittoXMLFields: NSObject, XMLParserDelegate {
     var parentUID: String?
     var room: String?
     var parent: String?
+    var chatCount = 0
+    var chatGroupCount = 0
+    var remarksCount = 0
+    private var elements: [String] = []
     private var depth = 0
     private var root = ""
     private var valid = true
@@ -175,15 +185,31 @@ private final class DittoXMLFields: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?,
                 qualifiedName: String?, attributes: [String: String]) {
         depth += 1
+        elements.append(name)
         if depth == 1 { root = name; if name == "event" { event = attributes } }
         if name == "event", depth != 1 { valid = false }
         if name == "detail", depth != (root == "event" ? 2 : 1) { valid = false }
         if name == "point", depth == 2 { point = attributes }
         if name == "contact" { callsign = attributes["callsign"] }
-        if name == "__chat", depth == 3 { room = attributes["chatroom"]; parent = attributes["parent"] }
+        let path = root == "event" ? Array(elements.dropFirst()) : elements
+        if name == "__chat" {
+            chatCount += 1
+            if path != ["detail", "__chat"] { valid = false }
+            room = attributes["chatroom"]
+            parent = attributes["parent"]
+        }
+        if name == "chatgrp" {
+            chatGroupCount += 1
+            if path != ["detail", "__chat", "chatgrp"] { valid = false }
+        }
+        if name == "remarks" {
+            remarksCount += 1
+            if path != ["detail", "remarks"] { valid = false }
+        }
         if name == "link", depth == 3, attributes["relation"] == "p-p" { parentUID = attributes["uid"] }
     }
     func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {
         depth -= 1
+        elements.removeLast()
     }
 }

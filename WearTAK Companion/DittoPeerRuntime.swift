@@ -17,6 +17,7 @@ final class DittoPeerRuntime {
     private var observers: [DittoStoreObserver] = []
     private var ingress = DittoIngress()
     private var chatEvictionInFlight = false
+    private var chatEvictionTask: Task<Void, Never>?
     private var verifiedChatGroups: [String: [String]] = [:]
     var ownUID: (() -> String?)?
     var onEvent: ((String) -> Void)?
@@ -162,6 +163,7 @@ final class DittoPeerRuntime {
                         let value = item.value
                         item.dematerialize()
                         bytes += (value["r"] as? String)?.utf8.count ?? 0
+                        bytes += (value["msg"] as? String)?.utf8.count ?? 0
                         guard bytes <= 4_194_304 else {
                             Task { @MainActor [weak self] in self?.logger.error("Ditto snapshot rejected: detail byte budget exceeded") }
                             return
@@ -180,6 +182,14 @@ final class DittoPeerRuntime {
                 opened.sync.stop()
                 releaseCurrentInstance()
                 return
+            }
+            evictExpiredChat()
+            chatEvictionTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                    guard let self, self.generation == requestedGeneration else { return }
+                    self.evictExpiredChat()
+                }
             }
             updateStatus(DittoBridgeStatus(enabled: true, source: configuration.source, state: .syncing,
                 detail: "Sync enabled on iPhone while Companion is open. Peer discovery may take time."))
@@ -223,8 +233,9 @@ final class DittoPeerRuntime {
         Task {
             defer { chatEvictionInFlight = false }
             do {
-                try await instance.store.execute(query: "EVICT FROM chat WHERE b <= :oldest",
-                    arguments: ["oldest": ((Date().timeIntervalSince1970 - 86_400) * 1_000).rounded()])
+                let now = (Date().timeIntervalSince1970 * 1_000).rounded()
+                try await instance.store.execute(query: "EVICT FROM chat WHERE o <= :now OR b <= :oldest",
+                    arguments: ["now": now, "oldest": now - 86_400_000])
             } catch { logger.error("Ditto expired chat eviction failed: \(error.localizedDescription, privacy: .public)") }
         }
     }
@@ -272,6 +283,8 @@ final class DittoPeerRuntime {
     }
 
     private func releaseCurrentInstance() {
+        chatEvictionTask?.cancel()
+        chatEvictionTask = nil
         if let instance, instance.sync.isActive { instance.sync.stop() }
         observers.forEach { $0.cancel() }
         observers.removeAll()

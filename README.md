@@ -1457,10 +1457,10 @@ UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
 impersonate an allowed sender.
 
 Ditto is an iPhone Companion service; its SDK is linked only to the iOS target.
-It is off by default. Community requires a locally provisioned Community PDL;
-the released build does not currently contain one and reports a clear missing
-identity status rather than pretending to sync. Custom PDLs from the watch still
-work. Before building with an authorized Community identity, create the ignored file
+It is off by default. Community requires an authorized Community PDL; if absent,
+the app reports a clear missing-identity status rather than pretending to sync.
+Custom PDLs from the watch still work. For local builds with an authorized
+Community identity, create the ignored file
 `BuildConfiguration/Companion.local.xcconfig` with
 `DITTO_COMMUNITY_PDL = <Community PDL>`; this value is embedded in the iPhone
 app's Info.plist and must not be committed. Custom PDLs can be saved from a
@@ -1505,7 +1505,8 @@ and text must match native fields. Native direct/broadcast documents work
 without extensions. A native named group without a roster requires previously
 verified local membership and is never treated as a broadcast.
 
-Chat has a 24-hour document TTL. Expired chat documents are locally evicted and
+Chat has a 24-hour document TTL. Expired chat documents are locally evicted on
+startup and every 10 seconds, including shortened extension stale times, and
 are not delivered; expiry does not remove inbox
 history. Direct chats are recipient-filtered, own echoes ignored, and the same
 sender/message ID arriving over multiple transports is recorded only once.
@@ -1520,11 +1521,26 @@ testing on physical devices.
 
 All peers must use the same authorized Ditto database and compatible identity
 credentials; matching collection schemas alone does not join different meshes.
-The existing WearOS and official ATAK plugin Community database IDs differ.
-Either import an authorized common WearTAK PDL into ATAK (using its identity
-import), or obtain a compatible PDL from Ditto Federal. Do not edit an app ID
-inside an issued PDL or copy credentials out of an APK. Provisioning a default
-iOS build identity is a separate, explicit change.
+Use an authorized common identity, either by provisioning the approved official
+ATAK community PDL to WearTAK, importing an authorized WearTAK PDL into ATAK
+(using its identity import), or obtaining a compatible PDL from Ditto Federal.
+Do not edit an app ID inside an issued PDL. Default identity provisioning requires
+explicit authorization and never commits the credential.
+
+Signed CI builds consume the optional masked, protected **standard variable**
+`DITTO_COMMUNITY_PDL`. The signing script writes it to a private temporary
+iPhone-only Info.plist, unsets the environment variable before Xcode, and verifies
+the exported IPA against that plist before upload. Logs contain only length and
+SHA256, never the encoded PDL. The original tracked plist and watch provisioning
+are unchanged; the temporary plist is removed by the signing job's cleanup.
+Verification jobs do not consume this credential. Missing CI provisioning still
+builds successfully and leaves Community unavailable with explicit guidance.
+
+The Swift SDK resolves to **5.1.0**, the latest release in the vendor's
+[Swift release notes](https://docs.ditto.live/sdk/latest/release-notes/swift).
+The vendor documents backward-compatible data sync with v4 and v5.0 peers,
+including WearOS's 4.14.6 SDK. This is vendor-supported protocol compatibility,
+not a claim that physical-device interoperability has been tested here.
 
 Companion performs the requests on the watch's behalf. TAK Server uses the
 client certificate on HTTPS port `8443` (`GET /Marti/api/missions`,
