@@ -42,6 +42,14 @@ struct TAKChatChecks {
                 fatalError("Invalid message accepted")
             } catch TAKChatMessage.ChatError.invalidMessage {}
         }
+        let provisioning = "#weartakcommandusep12 " + String(repeating: "ab", count: 4_096)
+        let credentialXML = try TAKChatMessage.outgoing(senderUID: "atak", senderCallSign: "ATAK",
+            recipientUID: "watch", recipientCallSign: "Watch", text: provisioning, now: now)
+        precondition(TAKChatMessage.parse(credentialXML, ownUID: "watch")?.text == provisioning)
+        precondition(TAKChatMessage.containsProvisioningCommand(in: credentialXML))
+        precondition(!TAKChatMessage.containsProvisioningCommand(in: xml))
+        precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12 " + String(repeating: "a", count: 24_000)))
+        precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12other " + String(repeating: "a", count: 3_000)))
         checkInbox(now: now)
         try checkGroupsAndOrdering(now: now)
         let atak = """
@@ -206,10 +214,10 @@ struct TAKChatChecks {
         precondition(inbox.unreadCount == 1 && inbox.conversations == [first])
         precondition(!inbox.record(incoming(1), conversation: first, ownUID: "watch"))
         precondition(inbox.unreadCount == 1)
-        precondition(inbox.record(incoming(1), conversation: second, ownUID: "watch"))
-        precondition(inbox.unreadCount == 2 && inbox.messages.count == 2)
+        precondition(!inbox.record(incoming(1), conversation: second, ownUID: "watch"))
+        precondition(inbox.unreadCount == 1 && inbox.messages.count == 1)
         inbox.setVisible(first, visible: true)
-        precondition(inbox.unreadCount == 1 && inbox.unreadCounts[first] == nil)
+        precondition(inbox.unreadCount == 0 && inbox.unreadCounts[first] == nil)
         precondition(!inbox.record(incoming(2), conversation: first, ownUID: "watch"))
         // A disappearing older screen must not clear the currently visible conversation.
         inbox.setVisible(second, visible: false)

@@ -127,6 +127,18 @@ enum DittoDocumentChecks {
             if recipient != "group-1" {
                 let nativeDecoded = try DittoChatDocument.decode(native, ownUID: "other", now: now)
                 precondition(TAKChatMessage.parse(nativeDecoded.xml, ownUID: "other")?.text == parsed.text)
+                if !group {
+                    var provision = native
+                    let text = "#weartakcommandusep12 " + String(repeating: "ab", count: 4_096)
+                    provision["msg"] = text
+                    let decoded = try DittoChatDocument.decode(provision, ownUID: "other", now: now)
+                    precondition(TAKChatMessage.parse(decoded.xml, ownUID: "other")?.text == text)
+                    provision["msg"] = String(repeating: "a", count: 2_001)
+                    do {
+                        _ = try DittoChatDocument.decode(provision, ownUID: "other", now: now)
+                        preconditionFailure("Oversize ordinary native chat accepted")
+                    } catch DittoCoTDocument.Failure.invalid {}
+                }
                 var twoCoordinates = native
                 twoCoordinates["authorLoc"] = "38,-77"
                 _ = try DittoChatDocument.decode(twoCoordinates, ownUID: "other", now: now)

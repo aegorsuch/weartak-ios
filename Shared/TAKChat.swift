@@ -37,6 +37,16 @@ struct TAKChatMessage: Identifiable, Equatable {
 
     static let allChatRoomsUID = "All Chat Rooms"
     static let maximumTextBytes = 2_000
+    static func isProvisioningCommand(_ text: String) -> Bool {
+        let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace).first?.lowercased()
+        return name == "#weartakcommandusep12" || name == "#weartakcommandsetpdl"
+    }
+
+    // Only provisioning commands may exceed the ordinary chat budget.
+    static func acceptsTextLength(_ text: String) -> Bool {
+        text.utf8.count <= (isProvisioningCommand(text) ? 24_000 : maximumTextBytes)
+    }
     static let quickMessages = ["In Position", "Negative", "Objective Sighted", "Roger"]
 
     static func quickMessages(including custom: [String]) -> [String] {
@@ -49,7 +59,7 @@ struct TAKChatMessage: Identifiable, Equatable {
                          participantUids: [String] = []) throws -> String {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !senderUID.isEmpty, !recipientUID.isEmpty, senderUID != recipientUID,
-              !body.isEmpty, body.utf8.count <= maximumTextBytes, !messageID.isEmpty,
+              !body.isEmpty, acceptsTextLength(body), !messageID.isEmpty,
               !body.unicodeScalars.contains(where: { $0.value < 32 && $0 != "\n" && $0 != "\t" }) else {
             throw ChatError.invalidMessage
         }
@@ -87,18 +97,27 @@ struct TAKChatMessage: Identifiable, Equatable {
         """
     }
 
-    static func parse(_ xml: String, ownUID: String) -> Self? {
+    private static func parsedXML(_ xml: String) -> TAKChatParser? {
         guard CoTStreamFramer.isEvent(Data(xml.utf8)) else { return nil }
         let delegate = TAKChatParser()
         let parser = XMLParser(data: Data(xml.utf8))
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
-        guard parser.parse(), delegate.type == "b-t-f", let chat = delegate.chat,
+        return parser.parse() ? delegate : nil
+    }
+
+    static func containsProvisioningCommand(in xml: String) -> Bool {
+        guard let delegate = parsedXML(xml), delegate.type == "b-t-f" else { return false }
+        return isProvisioningCommand(delegate.text)
+    }
+
+    static func parse(_ xml: String, ownUID: String) -> Self? {
+        guard let delegate = parsedXML(xml), delegate.type == "b-t-f", let chat = delegate.chat,
               let group = delegate.group, let sender = group["uid0"], let recipient = group["uid1"],
               sender != recipient,
               let id = chat["messageId"], !id.isEmpty, !sender.isEmpty, !recipient.isEmpty,
               !delegate.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              delegate.text.utf8.count <= maximumTextBytes,
+              acceptsTextLength(delegate.text),
               let stamp = delegate.timestamp else { return nil }
         let room = chat["id"] ?? group["id"] ?? recipient
         guard !room.isEmpty else { return nil }
