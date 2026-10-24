@@ -7,6 +7,10 @@ struct BloodhoundPickerChecks {
         precondition(WatchPinTitle.trimmingTrailingWhitespace("  Pin \u{2003}\u{00A0}") == "  Pin")
         precondition(WatchPinTitle.trimmingTrailingWhitespace(" \t") == "")
         precondition(WatchPinTitle.trimmingTrailingWhitespace("Pin \u{1F9ED}") == "Pin \u{1F9ED}")
+        for title in ["", "  Leading", "Inner  whitespace", "A&B <tag>", "MOPP 2", "e\u{301}"] {
+            precondition(WatchPinTitle.trimmingTrailingWhitespace(title) == title)
+            precondition(WatchPinTitle.trimmingTrailingWhitespace(title + "\t \r\n\u{2003}") == title)
+        }
         let source = try String(contentsOfFile: "WearTAK Watch App/WatchSessionModel.swift", encoding: .utf8)
         let removal = source.components(separatedBy: "func removePickerTarget(")[1]
             .components(separatedBy: "func removeAllPickerTargets(")[0]
@@ -20,6 +24,8 @@ struct BloodhoundPickerChecks {
         let delete = source.components(separatedBy: "func deleteMarker(id: UUID) {")[1]
             .components(separatedBy: "func clearAllPoints()")[0]
         precondition(delete.contains("markers.firstIndex(where: { $0.id == id })"))
+        precondition(delete.range(of: "markers.firstIndex")!.lowerBound <
+            delete.range(of: "storeOffline(")!.lowerBound)
         precondition(delete.contains("OfflineOperation(kind: .delete") && delete.contains("deleteMarkerXML(uid: id.uuidString)"))
         let creation = source.components(separatedBy: "func storeMarker(")[1]
             .components(separatedBy: "func updateMarker(")[0]
@@ -33,6 +39,7 @@ struct BloodhoundPickerChecks {
         precondition(payload.contains("relation=\\\"none\\\" type=\\\"none\\\"") &&
             payload.contains("<__forcedelete/>") && payload.contains("SitxCoT.escape(uid)"))
         precondition(payload.contains("type: \"t-x-d-d\"") && payload.contains("uid: uid + \"-delete\""))
+        print("PASS: new-title trailing whitespace only; own-marker deletion guard precedes queue; received items remain local-only")
         typealias Target = BloodhoundPicker.Target
         let markerID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let targets: [Target] = [.route("server\nroute"), .route("other\nroute"),

@@ -37,6 +37,14 @@ struct PluginPreferenceChecks {
         let copy = try String(contentsOfFile: "WearTAK Watch App/WatchSettings.xcstrings", encoding: .utf8)
         precondition(!copy.contains("Manual status saved on this watch only."))
         precondition(copy.contains("included in outgoing watch-identity position remarks"))
+        precondition(mopp.contains("When enabled and connected to a supported Companion"))
+        precondition(!mopp.contains("phone UID") && !mopp.contains("watch only"))
+        let view = try String(contentsOfFile: "WearTAK Watch App/SettingsView.swift", encoding: .utf8)
+        let controls = view.components(separatedBy: "struct PhysiologicalControlsView: View {")[1]
+            .components(separatedBy: "struct PhysiologicalAlertsView: View {")[0]
+        precondition(!controls.contains("Change alert thresholds"))
+        precondition(controls.contains(".accessibilityLabel(String(localized: \"Edit alert thresholds\""))
+        precondition(controls.contains("isOn: $settings.physiologicalAlertsEnabled"))
         let appSettings = try String(contentsOfFile: "WearTAK Watch App/AppSettings.swift", encoding: .utf8)
         precondition(appSettings.contains("moppEnabled = defaults.object(forKey: Keys.moppEnabled) as? Bool ?? false"))
         let symbols = Dictionary(uniqueKeysWithValues: WatchPluginEntry.current.map { ($0.id, $0.symbol) })
