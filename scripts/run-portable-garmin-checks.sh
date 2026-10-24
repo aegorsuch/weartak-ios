@@ -7,6 +7,10 @@ trap 'rm -rf "$build_dir"' EXIT
 
 cd "$repo_root"
 
+swiftc -swift-version 5 -parse-as-library Shared/DashboardMetric.swift Tests/DashboardMetricChecks.swift \
+  -o "$build_dir/dashboard-metric-checks"
+"$build_dir/dashboard-metric-checks"
+
 swiftc -swift-version 5 -parse-as-library Shared/ChatCommands.swift Tests/ChatCommandChecks.swift \
   -o "$build_dir/chat-command-checks"
 "$build_dir/chat-command-checks"

@@ -493,13 +493,24 @@ The dashboard uses the watchOS status-area clock; it has no duplicate bottom
 clock or More button. Marker tools remain available by holding the point
 picker's center button.
 
-Tap the center metric to choose Exertion or Heart Rate. Exertion is the default;
-the selection is remembered. Heart Rate uses a heartbeat waveform icon and
-displays BPM. The selection menu has the existing Physiological Alerts On/Off
-toggle at the top. Exertion and Heart Rate show their current readings or
-Unavailable beside each option; there is no separate Physiology link. The alert
-toggle is independent of the Physiological Monitoring preference that controls
-sensing.
+Tap the center metric for a simple, localized-alphabetical list: Exertion,
+Heart Rate, Lat/Long, and MGRS. The selected row has a checkmark; selecting a
+metric never changes monitoring or alerts. Exertion is the default; selections
+and the existing `Lat/Lon` storage value are preserved, with unknown old choices
+falling back to Exertion. Per the user's iOS-specific decision, Skin Temp and
+Steps are not added: this app has no existing live display source for either.
+Companion has no equivalent top-metric surface.
+
+The same screen has independent Alerts and Physiological Monitoring switches.
+The separate chevron beside Alerts opens the existing threshold editor even
+when alerts are off; it does not toggle alerts. Switching alerts off does not
+stop on-screen sensing, and switching sensing back on resumes live readings
+without enabling alerts. Existing threshold values are preserved.
+With monitoring off, Exertion/Heart Rate show Disabled before considering old
+readings. With monitoring on, stale, missing, or future-dated readings show
+Unavailable. Lat/Long and MGRS remain location-driven and show their existing
+no-fix placeholder rather than invented coordinates. iOS has no existing
+wear-detection/“Not worn” label to rename, so no Off-Wrist state is fabricated.
 
 The top Exertion/Heart Rate control gains a yellow outline for an active
 physiological warning and a red outline for an active physiological alert.
@@ -515,6 +526,10 @@ server transport takes priority and shows the compact TAK logo with a small gree
 check for a confirmed server connection or red X when disconnected. Working
 multicast does not turn a disconnected server's badge green. GPS stays at the
 upper right.
+Tapping that location-status icon opens the existing reporting strategy/rate
+settings without changing location enablement or icon state. The action is
+accessible as “Location status. Reporting rate settings.” Companion has no
+equivalent location-status icon or independent reporting-rate editor.
 The GPS icon is filled when watch location permission/services are enabled or
 a reachable Companion confirms its phone location session is running. It is
 crossed out otherwise; cached positions do not enable it. Phone status expires

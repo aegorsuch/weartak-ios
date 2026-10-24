@@ -993,7 +993,7 @@ private struct AlertingPreferencesView: View {
     }
 }
 
-private struct PhysiologicalAlertsView: View {
+struct PhysiologicalAlertsView: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
