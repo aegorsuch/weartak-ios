@@ -29,7 +29,7 @@ jobs:
         run: bash scripts/run-portable-garmin-checks.sh
 
       - name: Check manual App Review automation (mocked API only)
-        run: node --test Tests/app-store-review.test.mjs
+        run: bash scripts/with-node.sh --test Tests/app-store-review.test.mjs
 
       - name: Build Companion and Watch app for iOS Simulator
         run: |

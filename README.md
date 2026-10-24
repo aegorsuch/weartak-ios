@@ -179,8 +179,12 @@ submission or version bump. On protected `v*` tag pipelines,
 same tag, commit, pipeline and build. It cannot submit a different or older build.
 Existing tag pipelines (including `v5.8.5` / build 37) are not retroactively changed.
 
-The submission script requires Node.js 22 or newer on the macOS runner, with no
-third-party packages. Its API tests use mocked responses only. The API key must
+The submission script uses Node.js 22 or newer, with no third-party packages.
+`scripts/with-node.sh` uses an existing runtime when available; otherwise on macOS
+it downloads Node.js 22.23.2 from nodejs.org, verifies the pinned SHA-256 before
+extracting/running it, and removes the job-local runtime afterward. It does not
+install or change software on the shared host. Its API tests use mocked responses
+only. The API key must
 have **App Manager or Admin** rights and access to WearTAK; permission to upload
 TestFlight builds alone is insufficient. HTTP 403 fails with explicit role/access
 guidance, and HTTP 401 identifies an authentication problem. No roles, agreements,

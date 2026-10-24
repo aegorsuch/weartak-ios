@@ -13,7 +13,7 @@ variables:
 verify:
   stage: verify
   script:
-    - node --test Tests/app-store-review.test.mjs
+    - bash scripts/with-node.sh --test Tests/app-store-review.test.mjs
     - bash scripts/run-portable-garmin-checks.sh
     - xcodebuild -project WearTAK.xcodeproj -scheme "WearTAK Companion" -destination "generic/platform=iOS Simulator" -derivedDataPath "$DERIVED_DATA_PATH" EXCLUDED_ARCHS=x86_64 CODE_SIGNING_ALLOWED=NO build
   artifacts:
@@ -52,7 +52,7 @@ app_store_review_submit:
   variables:
     APP_STORE_UPLOAD_RECEIPT: "$CI_PROJECT_DIR/build/app-store-connect-upload.json"
   script:
-    - node scripts/app-store-review.mjs submit
+    - bash scripts/with-node.sh scripts/app-store-review.mjs submit
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-testflight\.[1-9][0-9]*)?$/ && $CI_COMMIT_REF_PROTECTED == "true"'
       when: manual
