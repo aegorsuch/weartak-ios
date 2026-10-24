@@ -11,6 +11,10 @@ swiftc -swift-version 5 -parse-as-library Shared/DashboardMetric.swift Tests/Das
   -o "$build_dir/dashboard-metric-checks"
 "$build_dir/dashboard-metric-checks"
 
+swiftc -swift-version 5 -parse-as-library Shared/MOPPStatus.swift Shared/DataSyncRequestGate.swift Tests/PluginPreferenceChecks.swift \
+  -o "$build_dir/plugin-preference-checks"
+"$build_dir/plugin-preference-checks"
+
 swiftc -swift-version 5 -parse-as-library Shared/ChatCommands.swift Tests/ChatCommandChecks.swift \
   -o "$build_dir/chat-command-checks"
 "$build_dir/chat-command-checks"

@@ -1,6 +1,24 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "None" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "None" } } }
+    },
+    "PPE Status" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "PPE Status" } } }
+    },
+    "Select Status" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Select Status" } } }
+    },
+    "Save Status" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Status" } } }
+    },
+    "Enable DataSync" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Enable DataSync" } } }
+    },
+    "Manual status saved on this watch only. Not a command, sensor reading, or network transmission." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Manual status saved on this watch only. Not a command, sensor reading, or network transmission." } } }
+    },
     "Linked Account" : {
       "localizations" : {
         "ar" : {

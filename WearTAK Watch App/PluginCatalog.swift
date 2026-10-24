@@ -5,6 +5,7 @@ struct WatchPluginEntry: Identifiable, Equatable {
         case commands
         case dataSync
         case ditto
+        case mopp
         case placeholder
         case sensorManager
     }
@@ -15,7 +16,7 @@ struct WatchPluginEntry: Identifiable, Equatable {
 
     var subtitle: String {
         switch content {
-        case .commands, .dataSync, .ditto:
+        case .commands, .dataSync, .ditto, .mopp:
             return ""
         case .placeholder, .sensorManager:
             return "Unfunded Request"
@@ -28,6 +29,7 @@ struct WatchPluginEntry: Identifiable, Equatable {
         WatchPluginEntry(id: "ditto", title: "Ditto", content: .ditto),
         WatchPluginEntry(id: "everywhere-comms", title: "Everywhere Comms", content: .placeholder),
         WatchPluginEntry(id: "gotenna", title: "GoTenna", content: .placeholder),
+        WatchPluginEntry(id: "mopp", title: "MOPP", content: .mopp),
         WatchPluginEntry(id: "sensor-manager", title: "Sensor Manager", content: .sensorManager),
         WatchPluginEntry(id: "somewear-labs", title: "Somewear Labs", content: .placeholder)
     ])

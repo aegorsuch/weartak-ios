@@ -1223,10 +1223,28 @@ private struct PluginsView: View {
                             .labelsHidden()
                     }
                 case .dataSync:
-                    NavigationLink {
-                        DataSyncMenuView(model: model, client: model.companionClient, settings: settings)
-                    } label: {
-                        Label(plugin.title, systemImage: "arrow.triangle.2.circlepath")
+                    HStack {
+                        NavigationLink {
+                            DataSyncMenuView(model: model, client: model.companionClient, settings: settings)
+                        } label: {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(plugin.title)
+                                    Text(settings.dataSyncEnabled ? "Enabled" : "Disabled")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("data-sync-settings")
+                        Toggle(isOn: $settings.dataSyncEnabled) { EmptyView() }
+                            .labelsHidden()
+                            .accessibilityLabel(String(localized: "Enable DataSync", table: "WatchSettings"))
+                            .accessibilityIdentifier("data-sync-enabled")
                     }
                 case .ditto:
                     HStack {
@@ -1246,6 +1264,22 @@ private struct PluginsView: View {
                         Toggle(isOn: dittoEnabledBinding) { EmptyView() }
                             .labelsHidden()
                     }
+                case .mopp:
+                    NavigationLink {
+                        MOPPView(settings: settings)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(plugin.title)
+                                Text(settings.moppStatus.localizedLabel)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            ProtectiveMaskIcon().frame(width: 24, height: 24)
+                        }
+                    }
+                    .accessibilityIdentifier("mopp-settings")
                 case .placeholder:
                     Toggle(isOn: .constant(false)) {
                         VStack(alignment: .leading, spacing: 2) {
