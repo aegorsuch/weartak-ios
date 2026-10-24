@@ -11,6 +11,8 @@ required_variables=(
   APP_STORE_CONNECT_API_ISSUER_ID
   CI_PROJECT_DIR
   CI_COMMIT_TAG
+  CI_COMMIT_SHA
+  CI_PIPELINE_ID
   CI_PIPELINE_IID
 )
 for variable in "${required_variables[@]}"; do
@@ -31,13 +33,18 @@ for variable in \
   fi
 done
 
-if [[ ! "$CI_COMMIT_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
-  echo "ERROR: Release tag must be vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH.BUILD." >&2
+if [[ ! "$CI_COMMIT_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)(-testflight\.[1-9][0-9]*)?$ ]]; then
+  echo "ERROR: Release tag must be vMAJOR.MINOR.PATCH[.BUILD], optionally suffixed -testflight.N." >&2
   exit 1
 fi
 marketing_version="${BASH_REMATCH[1]}"
 if [[ ! "$CI_PIPELINE_IID" =~ ^[1-9][0-9]*$ ]]; then
   echo "ERROR: CI_PIPELINE_IID must be a positive numeric build number." >&2
+  exit 1
+fi
+if [[ ! "$CI_PIPELINE_ID" =~ ^[1-9][0-9]*$ ]] ||
+   [[ ! "$CI_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "ERROR: CI_PIPELINE_ID or CI_COMMIT_SHA is invalid for the upload receipt." >&2
   exit 1
 fi
 if [[ ! "$APP_STORE_CONNECT_API_KEY_ID" =~ ^[A-Za-z0-9]+$ ]] ||
@@ -50,6 +57,7 @@ team_id="H284X28FTP"
 container_bundle_id="com.aegorsuch.weartak"
 watch_bundle_id="com.aegorsuch.weartak.watchkitapp"
 mkdir -p "$CI_PROJECT_DIR/build"
+rm -f "$CI_PROJECT_DIR/build/app-store-connect-upload.json"
 work_dir="$(mktemp -d "$CI_PROJECT_DIR/build/app-store-connect.XXXXXX")"
 profile_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
 api_key_dir="$work_dir/private_keys"
@@ -205,3 +213,6 @@ xcrun altool --upload-app \
   --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
 printf 'TestFlight upload accepted: WearTAK-iOS-%s-p%s; Apple processing and availability are not confirmed by this upload job.\n' \
   "$marketing_version" "$CI_PIPELINE_IID"
+cat > "$CI_PROJECT_DIR/build/app-store-connect-upload.json" <<JSON
+{"tag":"$CI_COMMIT_TAG","version":"$marketing_version","build":"$CI_PIPELINE_IID","sha":"$CI_COMMIT_SHA","pipelineID":"$CI_PIPELINE_ID","uploadAccepted":true}
+JSON

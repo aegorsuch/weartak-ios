@@ -164,6 +164,68 @@ with an adjacent `.ipa.sha256` checksum.
 The canonical version tag remains `v<version>` and App Store Connect receives a
 numeric `CFBundleVersion` equal to the pipeline IID; `p` is a human-facing artifact/
 release-name separator, not part of Apple's numeric build identifier.
+For another TestFlight build of an unchanged marketing version, use an unused
+immutable tag such as `v5.8.4-testflight.1` (then `.2`, etc.). The release script
+strips only this trigger suffix: both phone and watch remain `5.8.4`, with the new
+pipeline IID as their numeric build. Existing tags are never moved or deleted.
+
+#### Optional App Review submission
+
+TestFlight-only uploads are unchanged: **neither uploading nor processing a build
+creates an App Store version or submits it for review**. There is no automatic
+submission or version bump. On protected `v*` tag pipelines,
+`app_store_review_submit` is a separate, optional **manual** job after a successful
+`app_store_connect_upload`. It verifies that job's upload receipt against the
+same tag, commit, pipeline and build. It cannot submit a different or older build.
+Existing tag pipelines (including `v5.8.5` / build 37) are not retroactively changed.
+
+The submission script requires Node.js 22 or newer on the macOS runner, with no
+third-party packages. Its API tests use mocked responses only. The API key must
+have **App Manager or Admin** rights and access to WearTAK; permission to upload
+TestFlight builds alone is insufficient. HTTP 403 fails with explicit role/access
+guidance, and HTTP 401 identifies an authentication problem. No roles, agreements,
+export-compliance answers or other app metadata are changed automatically.
+
+Only when ready to submit, open the manual submission job's variable form and set:
+
+- `APP_STORE_SUBMISSION_CONFIRM`: the exact `<marketing version> (<pipeline IID>)`,
+  for example `5.8.5 (42)`. Do **not** save this as a project/group variable.
+- Exactly one of `APP_STORE_WHATS_NEW` (release-note text) or
+  `APP_STORE_WHATS_NEW_FILE` (UTF-8 file path, e.g. a GitLab File variable). Text
+  must be nonempty and at most 4,000 characters.
+- Optionally `APP_STORE_WHATS_NEW_LOCALE`: defaults to the app's primary locale;
+  only that localization's What's New is updated. Maintain other required
+  localizations and submission metadata in App Store Connect before submitting.
+- Optionally `APP_STORE_RELEASE_TYPE`: `MANUAL` (default; approval does not publish
+  the app) or `AFTER_APPROVAL` (Apple publishes after approval). This controls
+  release *after* approval, not whether the CI job runs automatically.
+- Optionally `APP_STORE_CREATE_VERSION=true`: explicitly allow creating the
+  matching App Store version if absent. **Default is false**: the job only uses an
+  existing, editable, unreleased iOS version with the exact tag marketing version,
+  attaches the new build and leaves its version string unchanged. It never
+  increments a version or changes a released version.
+- Optionally `APP_STORE_PROCESSING_TIMEOUT_SECONDS`: 30–7200, default 1800.
+
+The job waits for the exact build to become `VALID`, rejects failed/expired or
+internal-only builds, attaches it, sets What's New and the chosen release mode,
+then submits for App Review. Apple may still reject missing screenshots, privacy
+information, review details or other metadata; the API error is surfaced. An
+existing matching draft is reused, but unrelated draft items and active or
+unresolved reviews block submission rather than being modified. An already
+submitted matching build is a read-only success. API writes are not automatically
+retried on transport errors: inspect App Store Connect before retrying an uncertain
+write. Successful submission means waiting/in review, **not approved or released**.
+
+For a strictly read-only status check using the same three API credential
+variables (the private key variable points to a `.p8` file):
+
+```sh
+node scripts/app-store-review.mjs status 5.8.5 37
+```
+
+This reports live and Prepare for Submission versions, processing status and
+internal/external TestFlight states separately. `VALID` alone does not imply
+external beta review approval or tester availability.
 
 ### Developers: build from source onto a watch
 
