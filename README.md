@@ -1470,9 +1470,13 @@ the watch sends the selected identity to the iPhone over WatchConnectivity.
 Status messages never include the PDL. Companion subscribes to and observes
 `track`, `mapitem`, `alert` and `chat`, and reports startup, syncing, pause and
 failure states to the watch. The tactical collections use the same v2 CoT-alias document schema as
-WearOS/Tracker: `_id`/`d` event UID, `a` originating peer, `AuthorId` author UID,
+WearOS/Tracker: `_id` event UID, `d` sender UID, `a` originating peer, `AuthorId` author UID,
 `b`/`n`/`o` integer Unix-millisecond time/start/stale, `h`–`l` point attributes,
 `r` complete detail XML, and `w` CoT type.
+Native mapitem/alert event identity comes from `_id`, never the sender field.
+Older WearTAK tactical documents with `d` equal to the event UID remain readable;
+when native `d` differs from `_id`, it supplies the author if `AuthorId` is absent,
+and must agree with `AuthorId` if both are present. Track identity remains strict.
 While syncing, Companion also upserts this watch's position into `track` using
 WearTAK-Tracker's document format (`_id` = watch UID, fields `a`–`w`), at the
 watch's PLI reporting interval and even when no TAK server is connected. When
