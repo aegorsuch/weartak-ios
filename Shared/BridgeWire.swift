@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, missions, missionUpdate, routes }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -81,7 +81,7 @@ enum BridgeWire {
                 guard store.routes.count == routes.count else { throw Failure.invalidCoT }
             }
             if let error = message.routeError, error.utf8.count > 512 { throw Failure.tooLarge }
-            if message.kind == .cot || message.kind == .dittoTrack {
+            if message.kind == .cot || message.kind == .dittoTrack || message.kind == .dittoEvent {
                 guard let xml = message.xml, CoTStreamFramer.isEvent(Data(xml.utf8)) else { throw Failure.invalidCoT }
             }
             if let events = message.mapEvents {

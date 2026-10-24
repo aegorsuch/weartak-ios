@@ -1,1 +1,2 @@
+WEARTAK_COMPANION_INFO_PLIST = WearTAKCompanion-Info.plist
 #include? "Companion.local.xcconfig"

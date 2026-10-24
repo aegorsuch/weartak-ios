@@ -13,6 +13,8 @@ variables:
 verify:
   stage: verify
   script:
+    - unset DITTO_COMMUNITY_PDL
+    - python3 Tests/prepare_ditto_info_test.py
     - bash scripts/with-node.sh --test Tests/app-store-review.test.mjs
     - bash scripts/run-portable-garmin-checks.sh
     - xcodebuild -project WearTAK.xcodeproj -scheme "WearTAK Companion" -destination "generic/platform=iOS Simulator" -derivedDataPath "$DERIVED_DATA_PATH" EXCLUDED_ARCHS=x86_64 CODE_SIGNING_ALLOWED=NO build

@@ -1457,24 +1457,90 @@ UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
 impersonate an allowed sender.
 
 Ditto is an iPhone Companion service; its SDK is linked only to the iOS target.
-It is off by default and uses a locally provisioned Community PDL unless Custom
-is selected. Before building, create the ignored file
+It is off by default. Community requires an authorized Community PDL; if absent,
+the app reports a clear missing-identity status rather than pretending to sync.
+Custom PDLs from the watch still work. For local builds with an authorized
+Community identity, create the ignored file
 `BuildConfiguration/Companion.local.xcconfig` with
 `DITTO_COMMUNITY_PDL = <Community PDL>`; this value is embedded in the iPhone
 app's Info.plist and must not be committed. Custom PDLs can be saved from a
 direct watch chat message using its press-and-hold action or entered in the
 Ditto settings. They are validated and stored in each device's Keychain, then
 the watch sends the selected identity to the iPhone over WatchConnectivity.
-Status messages never include the PDL. Companion subscribes to the `track`
-collection and reports startup, syncing, pause and failure states to the watch.
+Status messages never include the PDL. Companion subscribes to and observes
+`track`, `mapitem`, `alert` and `chat`, and reports startup, syncing, pause and
+failure states to the watch. The tactical collections use the same v2 CoT-alias document schema as
+WearOS/Tracker: `_id`/`d` event UID, `a` originating peer, `AuthorId` author UID,
+`b`/`n`/`o` integer Unix-millisecond time/start/stale, `h`–`l` point attributes,
+`r` complete detail XML, and `w` CoT type.
 While syncing, Companion also upserts this watch's position into `track` using
 WearTAK-Tracker's document format (`_id` = watch UID, fields `a`–`w`), at the
 watch's PLI reporting interval and even when no TAK server is connected. When
 phone GPS reporting is on, the phone-GPS PLI is published; otherwise the watch
 sends its own fix to Companion for publishing, on any TAK route.
+Remote peer positions, markers and active/cancel alerts enter the existing watch
+contact/map/Bloodhound/alert lifecycle, deduplicated by UID against other CoT
+transports. Local-peer and own-UID/author echoes, malformed fields, future times,
+hidden/removed documents and repeated/older revisions are rejected or ignored.
+Absent or hidden documents are not inferred to be authenticated deletion commands.
+Ditto ingress is data-only; it does not execute watch chat commands or load
+configuration, plugins or data packages.
+
+Locally generated markers and alerts are queued to Ditto independently of TAK
+connectivity; each accepted output is recorded in the durable watch operation so
+a later retry does not resend to an output that already accepted it. Turning
+Ditto off does not block the ordinary TAK route. Direct, named-group replies and
+All Chat Rooms use the same GeoChat addressing and existing chat UI, with a
+**Ditto** transport option. Named-group replies retain the verified participants
+from the received conversation. Built-in/custom quick replies work unchanged.
+`chat` uses the native Ditto ATAK Edge Sync 1.1.1 schema: `_id` is the GeoChat
+message ID, `d` the sender UID, `e` callsign, `msg` plain text, `room` title,
+`roomId` conversation UID, `parent` contact-group parent, `authorType` sender CoT
+type and `authorLoc` the latitude/longitude/altitude string. `_c` is a native
+legacy PN counter (created with `APPLY _c PN_INCREMENT BY`), not a numeric
+register or the newer settable counter. The common peer/schema/lifecycle/time fields
+remain. Optional WearTAK `eventUid`/detail/envelope extensions preserve original
+GeoChat event identity and verified named-group participants; extension identity
+and text must match native fields. Native direct/broadcast documents work
+without extensions. A native named group without a roster requires previously
+verified local membership and is never treated as a broadcast.
+
+Chat has a 24-hour document TTL. Expired chat documents are locally evicted on
+startup and every 10 seconds, including shortened extension stale times, and
+are not delivered; expiry does not remove inbox
+history. Direct chats are recipient-filtered, own echoes ignored, and the same
+sender/message ID arriving over multiple transports is recorded only once.
+There is no separate chat-enable setting on iOS; the existing chat availability
+is retained. The schema matches the inspected official plugin format, but actual
+peer exchange requires matching database/identity credentials and physical-device
+verification; schema compatibility alone is not proof of end-to-end delivery.
+
 Ditto is stopped when Companion backgrounds; iOS does not guarantee continuous
 background peer-to-peer sync. Nearby-peer discovery and record exchange require
 testing on physical devices.
+
+All peers must use the same authorized Ditto database and compatible identity
+credentials; matching collection schemas alone does not join different meshes.
+Use an authorized common identity, either by provisioning the approved official
+ATAK community PDL to WearTAK, importing an authorized WearTAK PDL into ATAK
+(using its identity import), or obtaining a compatible PDL from Ditto Federal.
+Do not edit an app ID inside an issued PDL. Default identity provisioning requires
+explicit authorization and never commits the credential.
+
+Signed CI builds consume the optional masked, protected **standard variable**
+`DITTO_COMMUNITY_PDL`. The signing script writes it to a private temporary
+iPhone-only Info.plist, unsets the environment variable before Xcode, and verifies
+the exported IPA against that plist before upload. Logs contain only length and
+SHA256, never the encoded PDL. The original tracked plist and watch provisioning
+are unchanged; the temporary plist is removed by the signing job's cleanup.
+Verification jobs do not consume this credential. Missing CI provisioning still
+builds successfully and leaves Community unavailable with explicit guidance.
+
+The Swift SDK resolves to **5.1.0**, the latest release in the vendor's
+[Swift release notes](https://docs.ditto.live/sdk/latest/release-notes/swift).
+The vendor documents backward-compatible data sync with v4 and v5.0 peers,
+including WearOS's 4.14.6 SDK. This is vendor-supported protocol compatibility,
+not a claim that physical-device interoperability has been tested here.
 
 Companion performs the requests on the watch's behalf. TAK Server uses the
 client certificate on HTTPS port `8443` (`GET /Marti/api/missions`,

@@ -4,6 +4,7 @@ import Foundation
 struct GarminRelayProtocolTests {
     static func main() throws {
         try SavedChatMessageChecks.run()
+        try DittoDocumentChecks.run()
         func envelope(_ type: String, _ payload: [String: Any]) throws -> GarminEnvelope {
             let data = try JSONSerialization.data(withJSONObject: GarminEnvelope(type, payload).object)
             return try GarminEnvelope(object: JSONSerialization.jsonObject(with: data))

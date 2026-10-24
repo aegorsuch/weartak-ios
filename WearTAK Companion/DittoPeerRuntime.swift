@@ -13,7 +13,14 @@ final class DittoPeerRuntime {
     private var configuration = DittoBridgeConfiguration(enabled: false, source: .community)
     private var foreground = true
     private var instance: Ditto?
-    private var trackSubscription: DittoSyncSubscription?
+    private var subscriptions: [DittoSyncSubscription] = []
+    private var observers: [DittoStoreObserver] = []
+    private var ingress = DittoIngress()
+    private var chatEvictionInFlight = false
+    private var chatEvictionTask: Task<Void, Never>?
+    private var verifiedChatGroups: [String: [String]] = [:]
+    var ownUID: (() -> String?)?
+    var onEvent: ((String) -> Void)?
     private var generation = 0
     private var operation: Task<Void, Never>?
     private var configurationError: String?
@@ -126,7 +133,7 @@ final class DittoPeerRuntime {
         do {
             let pdlText: String
             if configuration.source == .community {
-                guard let communityPDL, !communityPDL.isEmpty else { throw DittoPDLError.missing }
+                guard let communityPDL, !communityPDL.isEmpty else { throw DittoPDLError.communityNotProvisioned }
                 pdlText = communityPDL
             } else if let customPDL = configuration.customPDL, !customPDL.isEmpty {
                 pdlText = customPDL
@@ -140,25 +147,119 @@ final class DittoPeerRuntime {
             let opened = try await Ditto.open(config: config)
             guard generation == requestedGeneration else { return }
             try opened.setOfflineOnlyLicenseToken(pdl.licenseToken)
-            let subscription = try opened.sync.registerSubscription(query: "SELECT * FROM track")
-            guard generation == requestedGeneration else {
-                subscription.cancel()
-                return
+            instance = opened
+            for collection in DittoCoTDocument.collections {
+                subscriptions.append(try opened.sync.registerSubscription(query: "SELECT * FROM \(collection)"))
+                let observer = try opened.store.registerObserver(query: "SELECT * FROM \(collection)") { [weak self] result in
+                    // Materialize within the SDK callback; never retain SDK result items across an actor hop.
+                    let items = result.items
+                    guard items.count <= 4_096 else {
+                        Task { @MainActor [weak self] in self?.logger.error("Ditto snapshot rejected: more than4096 documents") }
+                        return
+                    }
+                    var documents: [[String: Any]] = []
+                    var bytes = 0
+                    for item in items {
+                        let value = item.value
+                        item.dematerialize()
+                        bytes += (value["r"] as? String)?.utf8.count ?? 0
+                        bytes += (value["msg"] as? String)?.utf8.count ?? 0
+                        guard bytes <= 4_194_304 else {
+                            Task { @MainActor [weak self] in self?.logger.error("Ditto snapshot rejected: detail byte budget exceeded") }
+                            return
+                        }
+                        documents.append(value)
+                    }
+                    Task { @MainActor [weak self] in
+                        guard let self, self.generation == requestedGeneration else { return }
+                        self.receive(documents, collection: collection)
+                    }
+                }
+                observers.append(observer)
             }
             try opened.sync.start()
             guard generation == requestedGeneration else {
                 opened.sync.stop()
-                subscription.cancel()
+                releaseCurrentInstance()
                 return
             }
-            instance = opened
-            trackSubscription = subscription
+            evictExpiredChat()
+            chatEvictionTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                    guard let self, self.generation == requestedGeneration else { return }
+                    self.evictExpiredChat()
+                }
+            }
             updateStatus(DittoBridgeStatus(enabled: true, source: configuration.source, state: .syncing,
                 detail: "Sync enabled on iPhone while Companion is open. Peer discovery may take time."))
         } catch {
+            releaseCurrentInstance()
             logger.error("Ditto startup failed: \(error.localizedDescription, privacy: .public)")
             updateStatus(DittoBridgeStatus(enabled: true, source: configuration.source, state: .failed,
                 detail: String(error.localizedDescription.prefix(400))))
+        }
+    }
+
+    private func receive(_ documents: [[String: Any]], collection: String) {
+        guard let instance, foreground, configuration.enabled, let uid = ownUID?() else { return }
+        for raw in documents {
+            if raw["_r"] as? Bool == true || raw["visible"] as? Bool == false || raw["f"] as? Bool == false { continue }
+            do {
+                let room = raw["roomId"] as? String ?? ""
+                let doc = try collection == "chat" ? DittoChatDocument.decode(raw, ownUID: uid,
+                    verifiedMembers: verifiedChatGroups[room] ?? []) :
+                    DittoCoTDocument.decode(raw, collection: collection)
+                if collection == "chat" {
+                    if doc.stale <= Date() { evictExpiredChat(); continue }
+                    guard let chat = TAKChatMessage.parse(doc.xml, ownUID: uid),
+                          chat.senderUID != uid, doc.author == chat.senderUID else { continue }
+                    if chat.isGroup, chat.conversationUid != TAKChatMessage.allChatRoomsUID,
+                       let room = chat.conversationUid, raw["r"] != nil, verifiedChatGroups.count < 50 {
+                        verifiedChatGroups[room] = chat.participantUids
+                    }
+                }
+                guard ingress.accept(doc, ownUID: uid, localPeer: instance.presence.graph.localPeer.peerKey) else { continue }
+                onEvent?(doc.xml)
+            } catch {
+                logger.error("Rejected Ditto \(collection, privacy: .public) document: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func evictExpiredChat() {
+        guard !chatEvictionInFlight, let instance else { return }
+        chatEvictionInFlight = true
+        Task {
+            defer { chatEvictionInFlight = false }
+            do {
+                let now = (Date().timeIntervalSince1970 * 1_000).rounded()
+                try await instance.store.execute(query: "EVICT FROM chat WHERE o <= :now OR b <= :oldest",
+                    arguments: ["now": now, "oldest": now - 86_400_000])
+            } catch { logger.error("Ditto expired chat eviction failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
+    func publishEvent(_ xml: String, uid: String, callsign: String) async -> Bool {
+        guard let instance, instance.sync.isActive else { return false }
+        do {
+            let (collection, document) = try DittoCoTDocument.make(xml: xml,
+                peer: instance.presence.graph.localPeer.peerKey, author: uid, callsign: callsign)
+            guard collection != "track" else { throw DittoCoTDocument.Failure.invalid }
+            let doc = document
+            let query = collection == "chat" ? DittoChatDocument.upsertQuery :
+                "INSERT INTO \(collection) DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE"
+            try await instance.store.execute(query: query,
+                                             arguments: ["doc": doc])
+            if collection == "chat" {
+                guard let messageID = doc["_id"] as? String else { throw DittoCoTDocument.Failure.invalid }
+                try await instance.store.execute(query: DittoChatDocument.counterQuery,
+                    arguments: ["increment": 1, "id": messageID])
+            }
+            return true
+        } catch {
+            logger.error("Ditto publication failed: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
@@ -182,9 +283,15 @@ final class DittoPeerRuntime {
     }
 
     private func releaseCurrentInstance() {
+        chatEvictionTask?.cancel()
+        chatEvictionTask = nil
         if let instance, instance.sync.isActive { instance.sync.stop() }
-        trackSubscription?.cancel()
-        trackSubscription = nil
+        observers.forEach { $0.cancel() }
+        observers.removeAll()
+        subscriptions.forEach { $0.cancel() }
+        subscriptions.removeAll()
+        ingress = DittoIngress()
+        verifiedChatGroups.removeAll()
         instance = nil
     }
 
