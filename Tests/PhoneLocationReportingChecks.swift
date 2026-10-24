@@ -166,6 +166,8 @@ struct PhoneLocationReportingChecks {
         precondition(noHR.contains("<exert>N/A</exert>"))
         precondition(WatchBiometrics.decode(contextValue: "bad") == nil)
 
+        try WatchSelfStatusChecks.run(identity: identity, fix: fix, now: now)
+
         // Duplicate watch PLI suppression only affects the same user's position report.
         let watchPLI = "<event version=\"2.0\" uid=\"\(uid)\" type=\"a-f-G-U-C\" time=\"t\" start=\"t\" stale=\"t\" how=\"m-g\"><point lat=\"1\" lon=\"1\" hae=\"0\" ce=\"0\" le=\"0\"/><detail/></event>"
         precondition(PhonePLI.isSelfPLI(watchPLI, uid: uid))

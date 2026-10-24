@@ -21,10 +21,11 @@ struct ManualAlertChecks {
         precondition(translated[1] == .vehicle, "Alert ordering must use displayed localized labels")
         let custom = try saved.add("  Need assistance  ", defaults: defaults)
         precondition(custom.rawValue == "Need assistance")
-        let duplicate = try saved.add("need ASSISTANCE", defaults: defaults)
-        precondition(duplicate == custom && saved.types == [custom])
-        let preset = try saved.add("  911 alert  ", defaults: defaults)
-        precondition(preset == .alert911 && saved.types.count == 1)
+        for duplicate in ["need ASSISTANCE", "  911 alert  "] {
+            do { try saved.add(duplicate, defaults: defaults); preconditionFailure("Duplicate accepted") }
+            catch SavedManualAlerts.Failure.duplicate {}
+        }
+        precondition(saved.types == [custom])
         let restored = try SavedManualAlerts(defaults: defaults)
         precondition(restored.types == [custom])
         for text in ["", "  ", "\n", "line\nbreak", "line\tbreak", String(repeating: "a", count: 129)] {
@@ -40,15 +41,30 @@ struct ManualAlertChecks {
         saved.remove(custom, defaults: defaults)
         let afterDelete = try SavedManualAlerts(defaults: defaults)
         precondition(afterDelete.types == [escaped])
-        defaults.set(["Test", "test", "Injury"], forKey: SavedManualAlerts.storageKey)
-        let deduplicated = try SavedManualAlerts(defaults: defaults)
-        precondition(deduplicated.types.map(\.rawValue) == ["Test"])
-        defaults.set(["Valid", "\u{0}invalid"], forKey: SavedManualAlerts.storageKey)
-        do {
-            _ = try SavedManualAlerts(defaults: defaults)
-            preconditionFailure("Corrupt saved alerts silently accepted")
-        } catch SavedManualAlerts.Failure.unreadable {}
-        precondition(defaults.stringArray(forKey: SavedManualAlerts.storageKey) == ["Valid", "\u{0}invalid"])
+        let legacy = ["Test", "test", "Injury", "  unchanged  ", String(repeating: "L", count: 129), "old\ttext"]
+        defaults.set(legacy, forKey: SavedManualAlerts.storageKey)
+        var legacySaved = try SavedManualAlerts(defaults: defaults)
+        precondition(legacySaved.types.map(\.rawValue) == legacy)
+        legacySaved.remove(legacySaved.types[4], defaults: defaults)
+        precondition(defaults.stringArray(forKey: SavedManualAlerts.storageKey) == legacy.enumerated().filter { $0.offset != 4 }.map(\.element))
+        defaults.removeObject(forKey: SavedManualAlerts.storageKey)
+        var bounded = try SavedManualAlerts(defaults: defaults)
+        _ = try bounded.add(String(repeating: "a", count: 60), defaults: defaults)
+        _ = try bounded.add(String(repeating: "😀", count: 30), defaults: defaults)
+        for invalid in [String(repeating: "a", count: 61), String(repeating: "😀", count: 31),
+                        " \nvalid", "valid\t ", "a\u{7f}b", "a\u{85}b"] {
+            do { try bounded.add(invalid, defaults: defaults); preconditionFailure("Invalid shared-rule text accepted") }
+            catch SavedManualAlerts.Failure.invalidText {}
+        }
+        let collapsed = try bounded.add("  Need\u{a0}  help\u{2003}now  ", defaults: defaults)
+        precondition(collapsed.rawValue == "Need help now")
+        for i in 3..<20 { _ = try bounded.add("Alert \(i)", defaults: defaults) }
+        precondition(bounded.types.count == 20)
+        do { try bounded.add("Twenty first", defaults: defaults); preconditionFailure("21st accepted") }
+        catch SavedManualAlerts.Failure.full {}
+        defaults.set((0..<21).map { "Legacy \($0)" }, forKey: SavedManualAlerts.storageKey)
+        let overLimitLegacy = try SavedManualAlerts(defaults: defaults)
+        precondition(overLimitLegacy.types.count == 21)
 
         for type in ManualAlertType.allCases + [custom, escaped] {
             var session = ManualAlertSession()

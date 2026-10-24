@@ -95,8 +95,13 @@ retain their explicitly defined units.
 
 Manual Alert on the watch uses one single-line row per alert. Tap the bottom
 **+** to enter **Type Custom Alert**, then **Save** to keep the choice without
-sending it. Custom choices are trimmed, case-insensitively deduplicated against
-saved choices and presets, retained across restarts and individually deletable.
+sending it. New custom alerts allow 1–60 UTF-16 code units after Unicode
+whitespace collapse and trimming, with at most 20 saved custom alerts. C0 and
+DEL/C1 controls (including newline/tab) are rejected before normalization.
+Case-insensitive saved/preset duplicates report an error instead of saving or
+sending again. Existing saved strings are loaded unchanged, including legacy
+length/count/spacing, and remain individually deletable; they are not truncated,
+deduplicated or deleted at load. These rules do not change saved chat limits.
 Their send and delete controls have separate 44-point targets; text truncates
 instead of wrapping into another control. Presets and saved choices are alphabetized
 together by their displayed labels; each saved choice has a visible right-side
@@ -495,7 +500,12 @@ picker's center button.
 
 Tap the center metric for a simple, localized-alphabetical list: Exertion,
 Heart Rate, Lat/Long, and MGRS. The selected row has a checkmark; selecting a
-metric never changes monitoring or alerts. Exertion is the default; selections
+metric never changes monitoring or alerts. Each row shows its name and actual
+live value/status on one scaling line without changing the selected metric
+when readings refresh. Lat/Long retains five decimal places (latitude/longitude
+separated by a slash); MGRS retains five easting/northing digits (one meter).
+These full-precision values also remain available in the dashboard's two lines.
+Exertion is the default; selections
 and the existing `Lat/Lon` storage value are preserved, with unknown old choices
 falling back to Exertion. Per the user's iOS-specific decision, Skin Temp and
 Steps are not added: this app has no existing live display source for either.
@@ -1099,6 +1109,52 @@ user's identity. Companion never generates a phone UID. If the watch is
 unavailable, the identity is missing or invalid, or the watch sends PLI with a
 different UID, reporting stops and the reason is shown.
 
+Phone-generated watch-identity PLI uses ephemeral **SELF_STATUS v1** snapshots
+only while the selected watch is genuinely connected. Apple Watch requires an
+activated, paired, installed and reachable WatchConnectivity session. The
+phone's hello/status reply advertises `selfStatus: 1`; the watch then sends
+immediate `selfStatus` messages with `selfStatusPayload`, never application
+context or an outbox. Other versions are unsupported. The watch generates a
+new session per observed connection; the phone binds that session to the
+authorized source and requires strictly increasing sequence numbers.
+
+The full snapshot has `version`, `session`, `seq`, `deviceUid`, `model`, and
+explicit `ppe`/`physio` objects or null. Only saved, enabled MOPP is shared;
+draft changes and Back do not send a candidate. `ppe.level` remains `None` or
+`MOPP 0` through `MOPP 4`; `savedAt` is ISO UTC or null for an unknown legacy
+save time. No historical save time is fabricated. Physiological Monitoring
+and BATDOK output must both be enabled for Apple Watch physiology. HR uses
+the actual HealthKit sample time, not receipt time. Native exertion is retained
+as a 0..1 fraction derived from that same real HR sample and timestamp, never
+from simulator readings. Apple Watch has no skin-temperature source.
+
+Each physiological metric expires independently after 120 seconds, with at
+most 30 seconds of future clock skew. All managed contributions expire after
+300 seconds without a snapshot or on disconnect/unpair/route change.
+Connect, Save and opt-in changes send a current full snapshot; new samples
+are limited to one send per 15 seconds, with a 45-second active-app keepalive.
+watchOS suspension cannot guarantee that keepalive; the phone fails closed
+instead of replaying cached status. Missing/off fields are nulled immediately.
+The managed remarks line is ordered `MOPP2; HR: 72 bpm @ 18:15:30Z; Exert: 45% @ 18:15:30Z`.
+MOPP tokens have no space or prefix; None is omitted, not treated as MOPP0.
+Fresh HR and optional native exertion share one versioned biometrics device,
+with actual sample times and fractional exertion. No N/A placeholder device
+is generated on the phone proxy.
+
+Garmin negotiates `relay_status.payload.selfStatus: 1` and sends immediate
+`self_status` envelopes with the same snapshot. The phone binds the opaque
+existing `relay_hello.watchUid` and current `relaySession` to `deviceUid` and
+`session` without normalizing either or expecting a nonexistent `pli.uid`.
+The existing SDK-device proxy UID and phone GPS remain unchanged. Legacy
+`pli.hr` lacks the source sample time and monitoring contract and is not
+promoted into this augmentation. A matching Garmin sender is required.
+A changed or expired contribution requests a clean proxy position report;
+an unpaired watch stops reporting and old server records expire normally.
+There is no independent iPhone self-marker or ATAK-on-iPhone enrichment path.
+These rules apply to the existing watch-UID proxy, not another app's phone UID
+or another provider's details. iOS generates no “WearTAK PLI” remarks boilerplate
+and does not strip similarly named user remarks from relayed events.
+
 The interval follows the watch's Constant or Activity-based setting, chosen
 from the phone's GPS speed, and is bounded to 10-600 seconds. While any watch
 alert is active, the watch's While Alerting Reporting Interval overrides both
@@ -1488,11 +1544,20 @@ protective-mask icon. **PPE Status** shows the saved manual choice. Choose
 checkmark marks the candidate. **Save Status** commits it locally, while Back
 without saving discards the candidate. Reopening selects the saved choice.
 None/unset is distinct from MOPP 0; unknown saved values resolve to None.
+The independent plugin enable switch defaults off. Off disables candidate
+editing and Save without erasing or hiding the saved status.
 
-This is a manually entered status on this watch only, not a commanded level,
-CBR detector, PPE/compliance assessment, filter timer, or network report. There
-is no Send button or delivery banner. Companion has no independent plugin
+This is a manually entered saved status, not a commanded level, CBR detector,
+PPE/compliance assessment or filter timer. When enabled, it is shared with a
+connected compatible Companion using SELF_STATUS v1 as described above.
+There is no Send button or delivery banner. Companion has no independent plugin
 catalogue or MOPP display; it does not invent a second local status.
+
+Existing watch plugin entries use native semantic icons, not fabricated brand
+logos: Commands keeps a megaphone, Ditto uses branching arrows, Everywhere a
+globe, GoTenna an antenna, Somewear radio waves, and Sensor Manager a waveform.
+MOPP keeps its original mask and DataSync its independent sync icon. Navigation
+and enable controls remain separate; disabled integrations stay disabled.
 
 The Everywhere Comms, GoTenna and Somewear Labs entries in Plugins are disabled
 placeholders labeled “Unfunded Request”; they do not enable or open a feature.
@@ -1931,9 +1996,11 @@ PLI also carries the watch's vitals in the same format as WearTAK for WearOS:
 `<biometrics><device><model>WATCHOS</model><uid/><hr/><exert/></device></biometrics>`.
 Exertion is heart rate as a percentage of age-predicted maximum. Apple Watch
 does not capture skin temperature, so it is omitted. Heart rate and exertion
-are `N/A` when missing or more than five minutes old. Companion's
-phone-GPS PLI carries the same block using vitals the watch shares through
-application context (at most every 30 seconds). Alert events include the
+use the existing reporting-interval freshness rule on direct-watch PLI.
+Companion's phone-GPS proxy instead uses capability-gated ephemeral snapshots
+and per-metric freshness, withholding stale/disabled/disconnected fields.
+Saved MOPP and real HR/derived exertion are projected under the live-session
+rules above; legacy application-context vitals are not replayed. Alert events include the
 `<biometrics>` device block with `alertUid`, `alertState`, `alertCategory`,
 `alertPriority="1"` and `alertDescription` attributes.
 

@@ -316,6 +316,7 @@ enum PhonePLI {
 
     static func event(identity: WatchReportingIdentity, fix: PhoneLocationFix, interval: TimeInterval,
                       appVersion: String, osVersion: String, biometrics: WatchBiometrics? = nil,
+                      selfStatus: WatchSelfStatus? = nil,
                       now: Date = Date()) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -334,9 +335,13 @@ enum PhonePLI {
         if fix.speed >= 0, fix.course >= 0 {
             detail += "<track course=\"\(number(fix.course))\" speed=\"\(number(fix.speed))\"/>"
         }
-        if let biometrics {
+        if let biometrics, selfStatus == nil {
             detail += biometrics.fresh(reportingInterval: interval, now: now)
                 .pliDetail(uid: identity.uid, now: now, reportingInterval: interval)
+        }
+        if let contribution = selfStatus?.fresh(now: now), !contribution.remarks.isEmpty {
+            detail += "<remarks>\(escape(contribution.remarks))</remarks>"
+            detail += contribution.biometrics(escapedUID: escape(contribution.deviceUid))
         }
         let ce = PhoneReportingPolicy.maximumFixAge >= now.timeIntervalSince(fix.timestamp) ? number(fix.horizontalAccuracy) : "9999999"
         return "<event version=\"2.0\" uid=\"\(escape(identity.uid))\" type=\"\(type)\" time=\"\(time)\" start=\"\(start)\" stale=\"\(stale)\" how=\"m-g\">" +

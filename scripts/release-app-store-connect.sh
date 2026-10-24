@@ -175,7 +175,7 @@ chmod 600 "$api_key_path"
 
 companion_info="$work_dir/Companion-Info.plist"
 swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
   Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
   Shared/DittoPDL.swift scripts/ValidateDittoPDL.swift \

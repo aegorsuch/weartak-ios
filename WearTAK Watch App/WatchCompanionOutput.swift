@@ -1,6 +1,7 @@
 import Combine
 import CoreLocation
 import Foundation
+import OSLog
 import WatchConnectivity
 
 @MainActor
@@ -61,6 +62,15 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     private var alertActive = false
     private var biometrics = WatchBiometrics()
     private var publishedBiometricsAt: Date?
+    private var selfStatusSession: String?
+    private var selfStatusSequence: Int64 = 0
+    private var selfStatusVersion: Int?
+    private var selfStatusSample: WatchSelfStatus.Physio?
+    private var selfStatusSentAt: Date?
+    private var selfStatusSentPPE: WatchSelfStatus.PPE?
+    private var selfStatusSentPhysio: WatchSelfStatus.Physio?
+    private var selfStatusSentOptIn: Bool?
+    private let selfStatusLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "SelfStatus")
     private var handshakeInFlight = false
     private var pending: [UUID: CheckedContinuation<BridgeWire.Message, Error>] = [:]
     private var timeouts: [UUID: Task<Void, Never>] = [:]
@@ -115,7 +125,10 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         identitySubscription = settings.objectWillChange
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { [weak self] _ in
-                Task { @MainActor [weak self] in self?.publishIdentity() }
+                Task { @MainActor [weak self] in
+                    self?.publishIdentity()
+                    self?.publishSelfStatus()
+                }
             }
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.refresh() }
@@ -125,6 +138,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     func setActive(_ active: Bool) {
         let resumed = active && !self.active
         self.active = active
+        if !active { publishSelfStatus() }
         if resumed { mapLastChecked = nil; checkingSince = Date() }
         if !active { checkingSince = nil; invalidate() }
         else { publishIdentity(); refresh() }
@@ -158,6 +172,81 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         guard usesCompanion,
               profileChanged || (publishedBiometricsAt.map({ Date().timeIntervalSince($0) >= 25 }) ?? true) else { return }
         publishIdentity(force: true)
+    }
+
+    func setSelfStatusHeartRate(_ heartRate: Int?, exertion: Int?, measuredAt: Date?) {
+        if let heartRate, (20...250).contains(heartRate), let measuredAt {
+            let timestamp = WatchSelfStatus.timestamp(measuredAt)
+            let fraction = exertion.flatMap { (0...100).contains($0) ? Double($0) / 100 : nil }
+            selfStatusSample = WatchSelfStatus.Physio(hr: heartRate,
+                measuredAt: timestamp, exert: fraction, exertMeasuredAt: fraction == nil ? nil : timestamp)
+        } else {
+            selfStatusSample = nil
+        }
+        publishSelfStatus()
+    }
+
+    private func publishSelfStatus() {
+        let connected = WCSession.isSupported() &&
+            WCSession.default.activationState == .activated &&
+            WCSession.default.isReachable
+        guard connected else {
+            selfStatusSession = nil
+            selfStatusVersion = nil
+            selfStatusSentAt = nil
+            selfStatusSentOptIn = nil
+            return
+        }
+        if selfStatusSession == nil {
+            selfStatusSession = UUID().uuidString
+            selfStatusSequence = 0
+        }
+        guard active, usesCompanion, selfStatusVersion == WatchSelfStatus.supportedVersion,
+              let session = selfStatusSession else { return }
+        let ppe: WatchSelfStatus.PPE?
+        if settings.moppEnabled, settings.hasSavedMOPPStatus {
+            ppe = WatchSelfStatus.PPE(
+                level: settings.moppStatus == .none ? "None" : "MOPP \(settings.moppStatus.rawValue)",
+                savedAt: settings.moppSavedAt.map(WatchSelfStatus.timestamp))
+        } else { ppe = nil }
+        let optedIn = settings.physiologicalMonitoringEnabled && settings.batdokCotEnabled
+        let candidate = WatchSelfStatus(version: 1, session: session, seq: selfStatusSequence,
+            deviceUid: SitxClient.deviceID(), model: "WATCHOS", ppe: ppe,
+            physio: optedIn ? selfStatusSample : nil).fresh()
+        let controlChanged = ppe != selfStatusSentPPE || optedIn != selfStatusSentOptIn ||
+            (candidate.physio == nil && selfStatusSentPhysio != nil)
+        let elapsed = selfStatusSentAt.map { Date().timeIntervalSince($0) } ?? .infinity
+        let newSample = candidate.physio != selfStatusSentPhysio
+        guard controlChanged || (newSample && elapsed >= 15) || elapsed >= 45 else { return }
+        do {
+            guard selfStatusSequence < Int64.max else { throw WatchSelfStatus.Failure.invalid }
+            let data = try BridgeWire.Message(kind: .selfStatus, selfStatusPayload: candidate).encoded()
+            selfStatusSequence += 1
+            selfStatusSentAt = Date()
+            selfStatusSentPPE = ppe
+            selfStatusSentPhysio = candidate.physio
+            selfStatusSentOptIn = optedIn
+            WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
+                Task { @MainActor [weak self] in
+                    guard let self, self.selfStatusSession == session else { return }
+                    do {
+                        let reply = try BridgeWire.Message.decode(data)
+                        guard reply.kind == .acknowledgement, reply.ready == true else {
+                            throw CompanionRefreshFailure.message(reply.detail ?? "Watch status was not accepted.")
+                        }
+                    } catch {
+                        self.selfStatusLogger.error("Self-status rejected: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+            }, errorHandler: { [weak self] error in
+                Task { @MainActor [weak self] in
+                    guard let self, self.selfStatusSession == session else { return }
+                    self.selfStatusLogger.error("Self-status delivery failed: \(error.localizedDescription, privacy: .public)")
+                }
+            })
+        } catch {
+            selfStatusLogger.error("Self-status encoding failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Shares this watch's TAK UID, callsign, team, role and reporting settings so Companion can report
@@ -216,6 +305,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     private func refresh() {
+        publishSelfStatus()
         let reachable = WCSession.isSupported() &&
             WCSession.default.activationState == .activated && WCSession.default.isReachable
         if isPhoneReachable != reachable { isPhoneReachable = reachable }
@@ -322,6 +412,10 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         if let sitxStatus = message.sitxStatus { sitxRelayStatus = sitxStatus }
         if let settings = message.sitxSettings { sitxSettings = settings }
         if let ditto = message.dittoStatus { dittoStatus = ditto }
+        if message.kind == .status {
+            selfStatusVersion = message.selfStatus == WatchSelfStatus.supportedVersion ? message.selfStatus : nil
+            publishSelfStatus()
+        }
         lastConfirmation = Date()
         pauseReason = serverReady ? nil : message.relayPaused
         checkingSince = nil
@@ -762,7 +856,10 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        Task { @MainActor [weak self] in self?.refresh() }
+        Task { @MainActor [weak self] in
+            self?.publishIdentity(force: true)
+            self?.refresh()
+        }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
