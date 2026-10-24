@@ -1,6 +1,10 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Range: %@" : {
+      "comment" : "Bloodhound range already formatted in Metric or Imperial units.",
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Range: %@" } } }
+    },
     "All Chat Rooms" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "All Chat Rooms" } }

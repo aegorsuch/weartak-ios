@@ -1568,7 +1568,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                                                                        fix: alertLocations.lastKnown())
         } else { relayXML = xml }
         if let header = PhonePLI.header(relayXML),
-           header.type == "b-a-o" || header.type.hasPrefix("b-a-o-"),
+           header.type == "b-a-o" || header.type.hasPrefix("b-a-o-") || header.type == "b-a-g",
            case .success(let identity) = watchIdentity {
             if header.type == "b-a-o-can" || header.type.hasPrefix("b-a-o-can-") {
                 activePhoneEmergencies.removeValue(forKey: header.uid)

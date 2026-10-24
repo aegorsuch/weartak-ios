@@ -75,6 +75,55 @@ it is still necessary. WearTAK does not currently include a watch-face
 complication. See Apple's
 [display and Return to Clock guidance](https://support.apple.com/guide/watch/adjust-the-display-settings-apd127ec93ac/watchos).
 
+#### Distance units and Manual Alert
+
+On Apple Watch, open **Settings > Tool Preferences > Display Preferences > Units**.
+On iPhone, open **Display Preferences > Units** in Companion. **Metric** is the
+default; **Imperial** is the alternative. Each device retains its own display
+preference across restarts. All existing tactical distance displays use it:
+watch dashboard/map Bloodhound range, contacts, markers and incoming-point
+details, Bloodhound picker, proximity-radius choices and route navigation;
+Companion route distance and arrival radius use the iPhone preference.
+
+Meters remain the internal/CoT unit. ATAK's default thresholds are fixed:
+Metric shows truncated meters below 2,000 m, then kilometers with two decimal
+places; Imperial shows truncated feet below 5,280 ft, then miles with two decimal
+places. Short radius labels round to the nearest meter/foot, without changing
+the stored meter-backed radius or arrival rules. The watch has no distance
+scale bar or complication to convert. Body measurements and wire metadata
+retain their explicitly defined units.
+
+Manual Alert on the watch uses one single-line row per alert. Tap the bottom
+**+** to enter **Type Custom Alert**, then **Save** to keep the choice without
+sending it. Custom choices are trimmed, case-insensitively deduplicated against
+saved choices and presets, retained across restarts and individually deletable.
+Their send and delete controls have separate 44-point targets; text truncates
+instead of wrapping into another control. Saving or deleting a choice does not
+start/cancel an alert. An active alert can still be cleared after its saved choice
+has been deleted. Companion has no independent Manual Alert composer; it relays
+the watch's alert.
+
+Manual alert kinds match WearOS; priority is **1** for all presets and custom
+alerts:
+
+| Alert | Active CoT kind | Cancel kind |
+| --- | --- | --- |
+| 911 Alert | `b-a-o-tbl` | `b-a-o-can` |
+| Ring The Bell | `b-a-o-pan` | `b-a-o-can` |
+| Geofence Breached | `b-a-g` | `b-a-o-can` |
+| In Contact | `b-a-o-opn` | `b-a-o-can` |
+| Gate Runner, Gunshot, Gunshot Injury, Injury, UAS, Vehicle, custom | `b-a-o` | `b-a-o-can` |
+
+The cancel reuses the active alert UID. Each user activation creates one durable
+start intent and each clear creates one cancel intent; repeated UI callbacks,
+reopening the screen, later watch fixes and phone relay GPS refreshes do not
+generate additional manual starts. With no location, one emergency chat is
+queued immediately and the positional start waits for the first watch fix.
+Offline retries retain the delivery ID; phone relay receipts deduplicate each
+configured output. Transport acceptance does not prove end-to-end recipient
+delivery, and independently configured transports may each carry the alert.
+Automatic/environmental alert position refreshes remain unchanged.
+
 #### Build 12: tester message / What to Test
 
 WearTAK 5.8.0 (12) includes draft Watch and Companion translations in all

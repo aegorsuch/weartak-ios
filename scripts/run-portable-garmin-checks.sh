@@ -7,6 +7,14 @@ trap 'rm -rf "$build_dir"' EXIT
 
 cd "$repo_root"
 
+swiftc -swift-version 5 -parse-as-library Shared/DistanceUnits.swift Tests/DistanceUnitsChecks.swift \
+  -o "$build_dir/distance-units-checks"
+"$build_dir/distance-units-checks"
+
+swiftc -swift-version 5 -parse-as-library Shared/ManualAlerts.swift Shared/OfflineOutbox.swift Tests/ManualAlertChecks.swift \
+  -o "$build_dir/manual-alert-checks"
+"$build_dir/manual-alert-checks"
+
 swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift \

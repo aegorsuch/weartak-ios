@@ -40,6 +40,11 @@ struct CompanionSetupView: View {
         NavigationStack {
             List {
                 TLSApprovalSection(bridge: bridge)
+                Section {
+                    NavigationLink("Display Preferences") {
+                        DisplayPreferencesView()
+                    }
+                }
                 if bridge.watchRoute == .apple {
                     Section {
                         NavigationLink {

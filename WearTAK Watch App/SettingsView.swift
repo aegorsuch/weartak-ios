@@ -1183,6 +1183,9 @@ private struct ToolPreferencesView: View {
 
     var body: some View {
         List {
+            NavigationLink("Display Preferences") {
+                DisplayPreferencesView()
+            }
             NavigationLink("Bloodhound") {
                 BloodhoundPreferencesView(settings: settings)
             }
@@ -1322,6 +1325,7 @@ private struct SensorManagerView: View {
 
 private struct BloodhoundPreferencesView: View {
     @ObservedObject var settings: AppSettings
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
 
     var body: some View {
         List {
@@ -1336,10 +1340,10 @@ private struct BloodhoundPreferencesView: View {
             NavigationLink {
                 ProfileNumberPickerView(
                     title: String(localized: "Bloodhound Proximity Radius", table: "WatchSettings"), selection: $settings.bloodhoundProximityRadius,
-                    values: Array(stride(from: 10, through: 200, by: 10)), valueLabel: { String(localized: "\($0) meters", table: "WatchSettings") }
+                    values: Array(stride(from: 10, through: 200, by: 10)), valueLabel: { distanceUnits.radius(Double($0)) }
                 )
             } label: {
-                LabeledContent(String(localized: "Bloodhound Proximity Radius", table: "WatchSettings"), value: String(localized: "\(settings.bloodhoundProximityRadius) meters", table: "WatchSettings"))
+                LabeledContent(String(localized: "Bloodhound Proximity Radius", table: "WatchSettings"), value: distanceUnits.radius(Double(settings.bloodhoundProximityRadius)))
             }
             NavigationLink {
                 ProfileStringPickerView(

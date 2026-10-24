@@ -33,6 +33,7 @@ struct WatchRouteListView: View {
 
 struct WatchRouteDetailView: View {
     @ObservedObject var model: WatchSessionModel
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     let key: String
     @State private var confirmRemoval = false
     @Environment(\.dismiss) private var dismiss
@@ -46,6 +47,7 @@ struct WatchRouteDetailView: View {
             if let route {
                 Section {
                     Text(route.name).font(.headline)
+                    Text("Arrival radius: \(distanceUnits.radius(RouteFollower.arrivalRadiusMeters(method: route.method))))")
                     Text("\(route.namedPoints.count) named points · \(route.points.count) total")
                         .foregroundStyle(.secondary)
                     if let serverID = UUID(uuidString: route.serverId) {
@@ -107,6 +109,7 @@ struct WatchRouteDetailView: View {
 
 struct WatchRouteProgressView: View {
     @ObservedObject var model: WatchSessionModel
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
 
     var body: some View {
         if let follow = model.routeFollow, !follow.isComplete {
@@ -118,7 +121,7 @@ struct WatchRouteProgressView: View {
                     .font(.caption)
                 if let location = model.routeLocation,
                    let remaining = follow.remainingDistanceMeters(from: location) {
-                    Text("Remaining: \(Int(remaining.rounded())) m").font(.caption2)
+                    Text("Remaining: \(distanceUnits.distance(remaining))").font(.caption2)
                 } else {
                     Text("Remaining distance unavailable").font(.caption2).foregroundStyle(.secondary)
                 }
@@ -146,4 +149,3 @@ private struct WatchRouteFollowControls: View {
         }
     }
 }
-

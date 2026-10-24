@@ -192,6 +192,7 @@ struct ContentView: View {
 }
 
 private struct WatchDashboardView: View {
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var physiology: PhysiologyMonitor
     @ObservedObject var settings: AppSettings
@@ -465,7 +466,7 @@ private struct WatchDashboardView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                         }
-                        Text(reading.map { "\(Int($0.rangeMeters)) m" } ?? "___")
+                        Text(reading.map { distanceUnits.distance($0.rangeMeters) } ?? "___")
                             .font(.system(size: small ? 13 : 15, weight: .semibold))
                             .monospacedDigit()
                             .lineLimit(1)
@@ -912,6 +913,7 @@ private struct EnvironmentView: View {
 }
 
 private struct TacticalMapView: View {
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     var selectingChatUser = false
@@ -1356,9 +1358,7 @@ private struct TacticalMapView: View {
                         if let notice = model.alertNavigationNotice {
                             Text(notice).font(.caption2).foregroundStyle(.yellow)
                         }
-                        Text(reading.rangeMeters < 1000
-                             ? "\(Int(reading.rangeMeters)) m"
-                             : "\((reading.rangeMeters / 1000).formatted(.number.precision(.fractionLength(2)))) km")
+                        Text(distanceUnits.distance(reading.rangeMeters))
                             .font(.headline)
                             .monospacedDigit()
                         Text(reading.isCompassRelative ? String(localized: "To target", table: "WatchMain")
@@ -1835,12 +1835,17 @@ private struct MapContactSelection: Identifiable {
 
 private struct MapContactDetailView: View {
     @ObservedObject var model: WatchSessionModel
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     let uid: String
     private var contact: IncomingMapEntity? { model.incomingEntities.first { $0.id == uid && $0.isUser } }
 
     var body: some View {
         List {
             if let contact {
+                if let location = model.lastLocation {
+                    Text(distanceUnits.distance(location.distance(from: CLLocation(
+                        latitude: contact.latitude, longitude: contact.longitude))))
+                }
                 Text("Lat: \(String(format: "%.5f", contact.latitude))", tableName: "WatchMain")
                 Text("Lon: \(String(format: "%.5f", contact.longitude))", tableName: "WatchMain")
                 Text(MapCoordinateFormatter.mgrs(contact.coordinate) ?? String(localized: "MGRS unavailable", table: "WatchMain"))
@@ -2060,6 +2065,7 @@ private extension ManualAlertType {
         case .ringTheBell: return String(localized: "Ring The Bell", table: "WatchMain")
         case .uas: return rawValue
         case .vehicle: return String(localized: "Vehicle", table: "WatchMain")
+        default: return rawValue
         }
     }
 }
@@ -2201,6 +2207,7 @@ private struct IncomingUserMarker: View {
 private struct BloodhoundView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     @State private var responseError: String?
     @State private var selectedPoint: IncomingMapEntity?
     @State private var detailTarget: BloodhoundPicker.Target?
@@ -2217,11 +2224,7 @@ private struct BloodhoundView: View {
     }
 
     private func distanceLabel(_ meters: Double) -> String {
-        if meters >= 1_000 {
-            let value = (meters / 1_000).formatted(.number.precision(.fractionLength(1)))
-            return String(localized: "\(value) km")
-        }
-        return String(localized: "\(Int(meters.rounded())) m")
+        distanceUnits.distance(meters)
     }
 
     private func subtitle(_ type: String, points: [GarminRoute.Point]) -> String {
@@ -2425,6 +2428,7 @@ private struct BloodhoundView: View {
 
 private struct BloodhoundNavigationView: View {
     @ObservedObject var model: WatchSessionModel
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     @State private var responseError: String?
 
     var body: some View {
@@ -2444,7 +2448,7 @@ private struct BloodhoundNavigationView: View {
                             Text(target.displayTitle)
                                 .font(.caption)
                                 .multilineTextAlignment(.center)
-                            Text("Range: \(Int(reading.rangeMeters)) m", tableName: "WatchMain")
+                            Text("Range: \(distanceUnits.distance(reading.rangeMeters))", tableName: "WatchMain")
                                 .font(.caption2)
                             if !reading.isCompassRelative {
                                 Text("Compass unavailable", tableName: "WatchMain")
@@ -2488,14 +2492,21 @@ private struct BloodhoundNavigationView: View {
 private struct ManualAlertView: View {
     @ObservedObject var model: WatchSessionModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showCustomEntry = false
+    @State private var customText = ""
+    @State private var errorText: String?
+    @State private var submitted = false
 
     var body: some View {
         List {
             if let activeType = model.activeAlertType {
                 LabeledContent(String(localized: "Active Alert", table: "WatchMain"), value: activeType.watchMainLabel)
                 Button(role: .destructive) {
-                    model.cancelEmergencyAlert()
-                    dismiss()
+                    guard !submitted else { return }
+                    if model.cancelEmergencyAlert() {
+                        submitted = true
+                        dismiss()
+                    }
                 } label: {
                     Label(String(localized: "Clear Manual Alert", table: "WatchMain"), systemImage: "xmark.circle.fill")
                 }
@@ -2504,18 +2515,76 @@ private struct ManualAlertView: View {
                     $0.watchMainLabel.localizedStandardCompare($1.watchMainLabel) == .orderedAscending
                 }) { type in
                     Button(type.watchMainLabel) {
-                        model.startEmergencyAlert(type: type)
-                        dismiss()
+                        send(type)
                     }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(minHeight: 44)
                 }
+                ForEach(model.savedManualAlertTypes) { type in
+                    HStack(spacing: 0) {
+                        Button { send(type) } label: {
+                            Text(type.rawValue)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(type.rawValue)
+                        Button(role: .destructive) { model.removeSavedManualAlert(type) } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(Text("Delete saved alert \(type.rawValue)"))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button {
+                    customText = ""
+                    showCustomEntry = true
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .accessibilityLabel(Text("Add custom alert"))
+                .disabled(model.savedManualAlertsError != nil)
             }
-            Button {
-                dismiss()
-            } label: {
-                Label(String(localized: "Back", table: "WatchMain"), systemImage: "arrow.left")
+            if let error = model.savedManualAlertsError {
+                Text(error).font(.caption2).foregroundStyle(.red)
             }
         }
+        .disabled(submitted)
         .navigationTitle(String(localized: "Manual Alert", table: "WatchMain"))
+        .sheet(isPresented: $showCustomEntry) {
+            NavigationStack {
+                List {
+                    TextField("Type Custom Alert", text: $customText)
+                    Button("Save") {
+                        do {
+                            try model.saveManualAlert(customText)
+                            showCustomEntry = false
+                        } catch { errorText = error.localizedDescription }
+                    }
+                    .disabled(customText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Cancel", role: .cancel) { showCustomEntry = false }
+                }
+                .navigationTitle("Custom Alert")
+                .alert("Unable to save alert", isPresented: Binding(
+                    get: { errorText != nil }, set: { if !$0 { errorText = nil } }
+                )) {
+                    Button("OK", role: .cancel) { errorText = nil }
+                } message: { Text(errorText ?? "") }
+            }
+        }
+    }
+
+    private func send(_ type: ManualAlertType) {
+        guard !submitted else { return }
+        if model.startEmergencyAlert(type: type) {
+            submitted = true
+            dismiss()
+        }
     }
 }
 
@@ -2663,6 +2732,7 @@ struct PointListView: View {
 }
 
 private struct PointDetailView: View {
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     @ObservedObject var model: WatchSessionModel
     @Environment(\.dismiss) private var dismiss
     @State private var marker: WatchMarker
@@ -2727,7 +2797,7 @@ private struct PointDetailView: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         if let location = model.lastLocation {
-                            Text(String(format: "%.2f km", location.distance(from: CLLocation(latitude: marker.latitude, longitude: marker.longitude)) / 1000))
+                            Text(distanceUnits.distance(location.distance(from: CLLocation(latitude: marker.latitude, longitude: marker.longitude))))
                                 .font(.caption.bold())
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
@@ -2817,6 +2887,7 @@ private struct PointDetailView: View {
 /// Point Details for received points. Data Sync items get the same edit actions as dropped markers when the
 /// mission role allows; other received points can be bloodhounded or removed from this watch.
 private struct IncomingPointDetailView: View {
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     @ObservedObject var model: WatchSessionModel
     let id: String
     @Environment(\.dismiss) private var dismiss
@@ -2932,7 +3003,7 @@ private struct IncomingPointDetailView: View {
 
                             VStack(alignment: .leading, spacing: 3) {
                                 if let location = model.lastLocation {
-                                    Text(String(format: "%.2f km", location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)) / 1000))
+                                    Text(distanceUnits.distance(location.distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude))))
                                         .font(.caption.bold())
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.7)

@@ -14,21 +14,6 @@ enum ConnectionState: String {
     case failed = "Connection failed"
 }
 
-enum ManualAlertType: String, CaseIterable, Identifiable {
-    case alert911 = "911 Alert"
-    case gateRunner = "Gate Runner"
-    case geofenceBreached = "Geofence Breached"
-    case gunshot = "Gunshot"
-    case gunshotInjury = "Gunshot Injury"
-    case inContact = "In Contact"
-    case injury = "Injury"
-    case ringTheBell = "Ring The Bell"
-    case uas = "UAS"
-    case vehicle = "Vehicle"
-
-    var id: Self { self }
-}
-
 struct WatchMarker: Identifiable, Codable {
     let id: UUID
     var kind: MarkerKind
@@ -218,6 +203,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         var remark: String?
         var alertState: EmergencyState?
         var alertType: String?
+        var manualAlert: Bool?
         var xml: String?
         var route: ContactChatRoute?
         var recipientUID: String?
@@ -324,7 +310,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
         chatInbox.setVisible(conversation, visible: visible)
     }
     @Published private(set) var headingDegrees: Double?
-    @Published private(set) var activeAlertType: ManualAlertType?
+    @Published private var manualAlertSession = ManualAlertSession()
+    var activeAlertType: ManualAlertType? { manualAlertSession.active }
+    @Published private(set) var savedManualAlertTypes: [ManualAlertType] = []
+    @Published private(set) var savedManualAlertsError: String?
+    private var savedManualAlerts: SavedManualAlerts?
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
     @Published private(set) var activeEnvironmentalAlerts: Set<EnvironmentalAlertCategory> = []
     @Published private(set) var automaticAlertDeliveryFailed = false
@@ -433,7 +423,15 @@ final class WatchSessionModel: NSObject, ObservableObject {
             }
         selectedMarkerKind = MarkerKind(rawValue: UserDefaults.standard.string(forKey: "WearTAK.lastMarkerKind") ?? "") ?? .unknown
         if let savedAlert = UserDefaults.standard.string(forKey: "WearTAK.manualAlertType") {
-            activeAlertType = ManualAlertType(rawValue: savedAlert)
+            manualAlertSession = ManualAlertSession(active: ManualAlertType(rawValue: savedAlert))
+        }
+        do {
+            let saved = try SavedManualAlerts(defaults: .standard)
+            savedManualAlerts = saved
+            savedManualAlertTypes = saved.types
+        } catch {
+            savedManualAlertsError = error.localizedDescription
+            chatLogger.error("Saved manual alerts: \(error.localizedDescription, privacy: .public)")
         }
         sitxClient.onReady = { [weak self] in self?.connect() }
         sitxClient.onDisconnected = { [weak self] in
@@ -2049,20 +2047,42 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }
     }
 
-    func startEmergencyAlert(type: ManualAlertType) {
-        guard activeAlertType == nil else { return }
-        guard storeAlert(state: .alert, type: type.rawValue) else { return }
-        activeAlertType = type
+    @discardableResult
+    func startEmergencyAlert(type: ManualAlertType) -> Bool {
+        var next = manualAlertSession
+        guard next.start(type, enqueue: {
+            storeAlert(state: .alert, type: $0.rawValue, manual: true)
+        }) else { return false }
+        manualAlertSession = next
         UserDefaults.standard.set(type.rawValue, forKey: "WearTAK.manualAlertType")
         publishAlertReportingState()
+        return true
     }
 
-    func cancelEmergencyAlert() {
-        guard let type = activeAlertType else { return }
-        guard storeAlert(state: .cancel, type: type.rawValue) else { return }
-        activeAlertType = nil
+    @discardableResult
+    func cancelEmergencyAlert() -> Bool {
+        var next = manualAlertSession
+        guard next.cancel(enqueue: {
+            storeAlert(state: .cancel, type: $0.rawValue, manual: true)
+        }) else { return false }
+        manualAlertSession = next
         UserDefaults.standard.removeObject(forKey: "WearTAK.manualAlertType")
         publishAlertReportingState()
+        return true
+    }
+
+    func saveManualAlert(_ text: String) throws {
+        guard var saved = savedManualAlerts else { throw SavedManualAlerts.Failure.unreadable }
+        try saved.add(text, defaults: .standard)
+        savedManualAlerts = saved
+        savedManualAlertTypes = saved.types
+    }
+
+    func removeSavedManualAlert(_ type: ManualAlertType) {
+        guard var saved = savedManualAlerts else { return }
+        saved.remove(type, defaults: .standard)
+        savedManualAlerts = saved
+        savedManualAlertTypes = saved.types
     }
 
     func updateAutomaticAlert(_ category: AutomaticAlertCategory?) {
@@ -2149,7 +2169,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
         activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
     }
 
-    private func storeAlert(state: EmergencyState, type: String, refreshLocation: Bool = true) -> Bool {
+    private func storeAlert(state: EmergencyState, type: String, refreshLocation: Bool = true,
+                            manual: Bool = false) -> Bool {
         if state == .alert, refreshLocation { requestLocation() }
         if state == .cancel { locationUnavailableAlerts.remove(type) }
         if state == .alert, lastLocation == nil, !locationUnavailableAlerts.contains(type) {
@@ -2169,7 +2190,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             ? String(localized: "Cancel alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
             : String(localized: "Alert stored and will be sent when connected and/or location is updated", table: "WatchStatus")
         return storeOffline(OfflineOperation(kind: .alert, scope: offlineScope, alertState: state,
-                                             alertType: type),
+                                             alertType: type, manualAlert: manual),
                             key: "alert-\(type)", notice: notice)
     }
 
@@ -2218,7 +2239,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     if operation.xml == nil, operation.kind == .alert,
                        let state = operation.alertState, let type = operation.alertType,
                        sitxClient.hasReadyOutput {
-                        operation.xml = sitxClient.emergencyXML(state: state, type: type)
+                        if operation.manualAlert == true, state == .alert, lastLocation == nil { continue }
+                        operation.xml = sitxClient.emergencyXML(state: state, type: type,
+                                                               manual: operation.manualAlert == true)
                         try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
                     }
                     guard let xml = operation.xml else { continue }
@@ -2289,7 +2312,6 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         if hasActiveEmergency,
            lastAlertPositionAt.map({ location.timestamp.timeIntervalSince($0) >= 5 }) ?? true {
             lastAlertPositionAt = location.timestamp
-            if let type = activeAlertType { storeAlert(state: .alert, type: type.rawValue, refreshLocation: false) }
             if let type = activeAutomaticAlert { storeAlert(state: .alert, type: type.rawValue, refreshLocation: false) }
             for type in activeEnvironmentalAlerts { storeAlert(state: .alert, type: type.rawValue, refreshLocation: false) }
         }
