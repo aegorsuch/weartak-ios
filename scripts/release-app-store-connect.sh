@@ -192,9 +192,16 @@ fi
 artifact_dir="$(mktemp -d "$CI_PROJECT_DIR/build/app-store-connect-output.XXXXXX")"
 cp -R "$archive_path" "$artifact_dir/WearTAK-iOS-$marketing_version-p$CI_PIPELINE_IID.xcarchive"
 cp "${ipas[0]}" "$artifact_dir/WearTAK-iOS-$marketing_version-p$CI_PIPELINE_IID.ipa"
+(
+  cd "$artifact_dir"
+  shasum -a 256 "WearTAK-iOS-$marketing_version-p$CI_PIPELINE_IID.ipa" \
+    > "WearTAK-iOS-$marketing_version-p$CI_PIPELINE_IID.ipa.sha256"
+)
 
 xcrun altool --upload-app \
   --type ios \
   --file "${ipas[0]}" \
   --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
   --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+printf 'TestFlight upload accepted: WearTAK-iOS-%s-p%s; Apple processing and availability are not confirmed by this upload job.\n' \
+  "$marketing_version" "$CI_PIPELINE_IID"

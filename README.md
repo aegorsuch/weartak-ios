@@ -159,7 +159,8 @@ The App Store Connect API key needs permission to upload builds for the WearTAK
 app. The release tag supplies the marketing version; the GitLab pipeline IID
 supplies the build number, so each upload gets a new build number. Ensure that
 IID is greater than the latest build already uploaded to App Store Connect.
-Signed artifacts use `WearTAK-iOS-<version>-p<build>.ipa` (and matching `.xcarchive`).
+Signed artifacts use `WearTAK-iOS-<version>-p<build>.ipa` (and matching `.xcarchive`),
+with an adjacent `.ipa.sha256` checksum.
 The canonical version tag remains `v<version>` and App Store Connect receives a
 numeric `CFBundleVersion` equal to the pipeline IID; `p` is a human-facing artifact/
 release-name separator, not part of Apple's numeric build identifier.
