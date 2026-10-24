@@ -11,7 +11,9 @@ enum SavedChatMessageChecks {
             otherDevice.removePersistentDomain(forName: otherName)
         }
         let builtIns = TAKChatMessage.quickMessages
-        precondition(builtIns == ["Roger", "Negative", "Objective Sighted", "In Position"])
+        precondition(builtIns == ["In Position", "Negative", "Objective Sighted", "Roger"])
+        precondition(TAKChatMessage.quickMessages(including: ["Zulu", "alpha"]) ==
+            ["alpha", "In Position", "Negative", "Objective Sighted", "Roger", "Zulu"])
         var saved = try SavedChatMessages(defaults: defaults)
         precondition(saved.messages.isEmpty)
         let text = try saved.add("  Returning to base  ", defaults: defaults)

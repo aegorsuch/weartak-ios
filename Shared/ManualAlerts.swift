@@ -23,9 +23,15 @@ struct ManualAlertType: RawRepresentable, Equatable, Hashable, Identifiable, Cas
     static let uas = Self("UAS")
     static let vehicle = Self("Vehicle")
     static let allCases: [Self] = [
-        .alert911, .gateRunner, .geofenceBreached, .gunshot, .gunshotInjury,
+        .alert911, .gateRunner, .geofenceBreached, .gunshot,
         .inContact, .injury, .ringTheBell, .uas, .vehicle,
     ]
+
+    static func pickerTypes(custom: [Self], label: (Self) -> String = { $0.rawValue }) -> [Self] {
+        (allCases + custom).sorted {
+            label($0).localizedStandardCompare(label($1)) == .orderedAscending
+        }
+    }
 
     var cotType: String {
         switch self {
