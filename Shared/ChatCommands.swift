@@ -31,6 +31,7 @@ enum ChatCommandParser {
         let name = String(rest[..<nameEnd]).lowercased()
         guard matches(namePattern, name) else { return .malformed("invalid command name") }
         let provisioning = name == "usep12" || name == "setpdl"
+        let acceptsPositional = provisioning || name == "toggleditto"
         guard provisioning || body.utf8.count <= maximumLength else { return .malformed("too long") }
 
         var arguments: [String: String] = [:]
@@ -40,7 +41,7 @@ enum ChatCommandParser {
             while index < rest.endIndex, rest[index].isWhitespace { index += 1 }
             guard index < rest.endIndex else { break }
             // The credential is the first positional token, including base64 padding in a PDL.
-            if provisioning, positional.isEmpty {
+            if acceptsPositional, positional.isEmpty {
                 let end = rest[index...].firstIndex(where: \.isWhitespace) ?? rest.endIndex
                 let token = String(rest[index..<end])
                 guard !token.isEmpty else { return .malformed("missing credential") }

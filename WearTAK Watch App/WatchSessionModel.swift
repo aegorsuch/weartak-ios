@@ -1365,6 +1365,34 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 }
             }
             return
+        case .setDittoEnabled(let enabled):
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if !enabled, route == .companion(DittoCoTDocument.sourceID) {
+                    do {
+                        let xml = try TAKChatMessage.outgoing(senderUID: ownUID,
+                            senderCallSign: SitxCoT.pliCallSign(settings.callSign, uid: ownUID),
+                            recipientUID: message.senderUID, recipientCallSign: message.senderCallSign,
+                            text: "Disabling Ditto. This acknowledgement does not confirm recipient delivery. Re-enable through another route or the UI.")
+                        try await companionClient.sendDittoEvent(xml, id: UUID())
+                    } catch {
+                        chatLogger.error("Ditto-off acknowledgement was attempted but not confirmed.")
+                    }
+                    settings.dittoEnabled = false
+                    await companionClient.updateDittoConfiguration()
+                } else {
+                    settings.dittoEnabled = enabled
+                    await companionClient.updateDittoConfiguration()
+                    do {
+                        try await sendContactChat(uid: message.senderUID, route: route,
+                            text: enabled ? "Ditto enabled in settings; check runtime status on iPhone." : "Ditto disabled in settings.",
+                            allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                    } catch {
+                        chatLogger.error("Ditto command acknowledgement could not be sent.")
+                    }
+                }
+            }
+            return
         }
         if chatInbox.record(message, conversation: key, ownUID: ownUID) {
             WKInterfaceDevice.current().play(.notification)

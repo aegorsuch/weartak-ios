@@ -1478,6 +1478,12 @@ IDs receive a not-changed reply; no server is implicitly selected.
 The selectable Server ID is shown in that server's iPhone settings.
 Optional `password="..."` overrides
 the conventional `atakatak` default; `password=""` supports an unencrypted P12.
+`#weartakcommandtoggleditto on` and `#weartakcommandtoggleditto off` accept
+exactly one positional lowercase state, never a blind toggle or additional
+arguments. They preserve the selected identity and use the existing saved
+setting/runtime lifecycle. A Ditto-origin `off` attempts a direct room
+acknowledgment before disabling transport, without claiming recipient delivery.
+Once disabled, `on` requires another active route or the UI.
 No remote command creates servers, changes trust anchors, or disables TLS hostname
 verification. Both the watch network lock and phone administrator lock are honored.
 

@@ -222,7 +222,11 @@ final class DittoPeerRuntime {
                 guard ingress.accept(doc, ownUID: uid, localPeer: instance.presence.graph.localPeer.peerKey) else { continue }
                 onEvent?(doc.xml)
             } catch {
-                logger.error("Rejected Ditto \(collection, privacy: .public) document: \(error.localizedDescription, privacy: .public)")
+                if let text = raw["msg"] as? String, TAKChatMessage.isProvisioningCommand(text) {
+                    logger.error("Rejected Ditto provisioning chat document.")
+                } else {
+                    logger.error("Rejected Ditto \(collection, privacy: .public) document: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
@@ -242,6 +246,9 @@ final class DittoPeerRuntime {
 
     func publishEvent(_ xml: String, uid: String, callsign: String) async -> Bool {
         guard let instance, instance.sync.isActive else { return false }
+        let provisioning = TAKChatMessage.parse(xml, ownUID: uid).map {
+            TAKChatMessage.isProvisioningCommand($0.text)
+        } ?? false
         do {
             let (collection, document) = try DittoCoTDocument.make(xml: xml,
                 peer: instance.presence.graph.localPeer.peerKey, author: uid, callsign: callsign)
@@ -258,7 +265,11 @@ final class DittoPeerRuntime {
             }
             return true
         } catch {
-            logger.error("Ditto publication failed: \(error.localizedDescription, privacy: .public)")
+            if provisioning {
+                logger.error("Ditto provisioning publication failed.")
+            } else {
+                logger.error("Ditto publication failed: \(error.localizedDescription, privacy: .public)")
+            }
             return false
         }
     }

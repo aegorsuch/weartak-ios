@@ -5,6 +5,7 @@ enum WatchChatCommandOutcome: Equatable {
     case consumed
     case reply(String)
     case phoneProvisioning
+    case setDittoEnabled(Bool)
 }
 
 @MainActor
@@ -36,6 +37,7 @@ final class WatchChatCommandRuntime {
             }
         }
 
+        @MainActor
         func apply(to settings: AppSettings) {
             switch self {
             case .callSign(let value): settings.callSign = value
@@ -102,6 +104,14 @@ final class WatchChatCommandRuntime {
         case .malformed(let reason):
             return .reply("Command rejected: \(reason)")
         case .parsed(let command):
+            if command.name == "toggleditto" {
+                guard !settings.networkPreferencesLocked else { return .reply("Command rejected: network settings are locked.") }
+                guard command.arguments.isEmpty, command.positional.count == 1,
+                      ["on", "off"].contains(command.positional[0]) else {
+                    return .reply("Use toggleditto on or toggleditto off; nothing changed.")
+                }
+                return .setDittoEnabled(command.positional[0] == "on")
+            }
             if command.name == "usep12" {
                 guard !settings.networkPreferencesLocked else { return .reply("Command rejected: network settings are locked.") }
                 do { _ = try ChatP12Request(command) }

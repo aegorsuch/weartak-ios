@@ -84,6 +84,21 @@ struct WatchChatCommandRuntimeChecks {
         precondition(runtime.handle(message("#weartakcommandsetcallsign callsign=Updated"), ownUID: "watch",
             settings: settings, now: now) == .reply("Updated callsign."))
         precondition(settings.callSign == "Updated")
+        for (argument, enabled) in [("on", true), ("off", false)] {
+            let request = message("#weartakcommandtoggleditto \(argument)")
+            precondition(runtime.handle(request, ownUID: "watch", settings: settings, now: now) == .setDittoEnabled(enabled))
+            precondition(runtime.handle(request, ownUID: "watch", settings: settings, now: now) == .consumed)
+            precondition(runtime.handle(message("#weartakcommandtoggleditto \(argument)"),
+                ownUID: "watch", settings: settings, now: now) == .setDittoEnabled(enabled))
+            precondition(settings.dittoIdentitySource == .custom && settings.storedPDL == "fixture==")
+        }
+        for arguments in ["", "toggle", "ON", "on extra=yes", "off on"] {
+            guard case .reply = runtime.handle(message("#weartakcommandtoggleditto \(arguments)"),
+                ownUID: "watch", settings: settings, now: now) else { fatalError("Invalid Ditto state accepted") }
+        }
+        settings.networkPreferencesLocked = true
+        guard case .reply = runtime.handle(message("#weartakcommandtoggleditto on"),
+            ownUID: "watch", settings: settings, now: now) else { fatalError("Locked Ditto mutation accepted") }
         print("PASS: direct-only command authorization, cross-route dedup, credential redaction, locks and positional PDL")
     }
 }
