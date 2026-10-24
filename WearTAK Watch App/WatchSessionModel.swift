@@ -1460,7 +1460,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
             isUser: payload.emergencyState == nil && (metadata.isUser == true || SitxCoT.isUser(type: payload.type)),
             sourceTransport: sourceTransport, missionName: previous?.missionName,
             alertCategory: payload.alertCategory, isAlert: payload.emergencyState == .alert,
-            hasChatEndpoint: payload.hasChatEndpoint == true || previous?.hasChatEndpoint == true,
+            hasChatEndpoint: (sourceServerID == DittoCoTDocument.sourceID && payload.isUser == true) ||
+                payload.hasChatEndpoint == true || previous?.hasChatEndpoint == true,
             circleRadius: payload.circleRadius
         )
         let isNew: Bool
