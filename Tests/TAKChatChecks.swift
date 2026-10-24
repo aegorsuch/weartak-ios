@@ -212,10 +212,10 @@ struct TAKChatChecks {
         precondition(inbox.unreadCount == 1 && inbox.conversations == [first])
         precondition(!inbox.record(incoming(1), conversation: first, ownUID: "watch"))
         precondition(inbox.unreadCount == 1)
-        precondition(inbox.record(incoming(1), conversation: second, ownUID: "watch"))
-        precondition(inbox.unreadCount == 2 && inbox.messages.count == 2)
+        precondition(!inbox.record(incoming(1), conversation: second, ownUID: "watch"))
+        precondition(inbox.unreadCount == 1 && inbox.messages.count == 1)
         inbox.setVisible(first, visible: true)
-        precondition(inbox.unreadCount == 1 && inbox.unreadCounts[first] == nil)
+        precondition(inbox.unreadCount == 0 && inbox.unreadCounts[first] == nil)
         precondition(!inbox.record(incoming(2), conversation: first, ownUID: "watch"))
         // A disappearing older screen must not clear the currently visible conversation.
         inbox.setVisible(second, visible: false)
