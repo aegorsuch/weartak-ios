@@ -27,6 +27,12 @@ struct BloodhoundPickerChecks {
         let edit = source.components(separatedBy: "func updateMarker(")[1]
             .components(separatedBy: "func moveMarker(")[0]
         precondition(!edit.contains("trimmingTrailingWhitespace") && edit.contains("marker.remark = remark"))
+        let client = try String(contentsOfFile: "WearTAK Watch App/SitxClient.swift", encoding: .utf8)
+        let payload = client.components(separatedBy: "func deleteMarkerXML(uid: String) -> String {")[1]
+            .components(separatedBy: "func sendEmergencyAlert(")[0]
+        precondition(payload.contains("relation=\\\"none\\\" type=\\\"none\\\"") &&
+            payload.contains("<__forcedelete/>") && payload.contains("SitxCoT.escape(uid)"))
+        precondition(payload.contains("type: \"t-x-d-d\"") && payload.contains("uid: uid + \"-delete\""))
         typealias Target = BloodhoundPicker.Target
         let markerID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let targets: [Target] = [.route("server\nroute"), .route("other\nroute"),

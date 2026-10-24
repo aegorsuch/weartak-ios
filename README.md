@@ -580,7 +580,10 @@ leading whitespace, legacy/edit titles and remarks are not rewritten.
 Deleting a pin created on this watch (including picker Delete, Remove All and
 Clear All Markers) reuses the existing scoped offline deletion queue and TAK
 `t-x-d-d` linked-UID/forcedelete request. This is best effort: transport acceptance
-does not prove another peer deleted it. Received points, users and routes never
+does not prove another peer deleted it. The first deletion link uses the exact
+target UID and documented ATAK `relation="none" type="none"`; the latter is
+required by ATAK's delete importer.
+Received points, users and routes never
 enter that own-pin deletion path. No Ditto deletion document is invented:
 the existing Ditto schema has no supported pin-delete contract, so these
 requests use the existing TAK relay routes.
