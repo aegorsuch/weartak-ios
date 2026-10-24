@@ -44,6 +44,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     private var missionRequestInFlight = false
     private var lastMissionRemovalError: String?
     private var lastMissionSync: Date?
+    private var missionGate = DataSyncRequestGate()
+    private var dataSyncSubscription: AnyCancellable?
     private var sessionID: UUID?
 
     private let settings: AppSettings
@@ -98,6 +100,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     init(settings: AppSettings) {
         self.settings = settings
         super.init()
+        dataSyncSubscription = settings.$dataSyncEnabled.dropFirst().sink { [weak self] _ in
+            guard let self else { return }
+            self.missionGate.invalidate()
+            self.lastMissionSync = nil
+        }
         if WCSession.isSupported() {
             WCSession.default.delegate = self
             WCSession.default.activate()
@@ -565,13 +572,20 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
 
     /// Quietly reloads subscribed missions (adds, moves and removals) at most once a minute.
     func syncMissions(hasSubscriptions: Bool = UserDefaults.standard.bool(forKey: WatchSessionModel.missionSubscriptionsFlagKey)) async {
-        guard hasSubscriptions, lastMissionSync.map({ Date().timeIntervalSince($0) >= 60 }) ?? true else { return }
+        guard settings.dataSyncEnabled, hasSubscriptions,
+              lastMissionSync.map({ Date().timeIntervalSince($0) >= 60 }) ?? true else { return }
         await missionRequest(BridgeWire.Message(kind: .missions, clientUID: SitxClient.deviceID(), missionSync: true), quiet: true)
     }
 
     /// Returns an error description when the request could not run or failed; nil on success.
     @discardableResult
     private func missionRequest(_ message: BridgeWire.Message, quiet: Bool = false) async -> String? {
+        guard settings.dataSyncEnabled else {
+            let error = "Data Sync is disabled. Enable it in Plugins."
+            if !quiet { missionError = error }
+            return error
+        }
+        let generation = missionGate.revision
         var message = message
         if let coordinate = currentCoordinate?() {
             message.latitude = coordinate.latitude
@@ -598,8 +612,14 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             guard reply.kind == .missions, var servers = reply.missionServers else {
                 throw CompanionRefreshFailure.message(reply.detail ?? "Update both WearTAK apps to use Data Sync.")
             }
+            guard missionGate.accepts(generation, enabled: settings.dataSyncEnabled) else {
+                throw CompanionRefreshFailure.message("Data Sync changed during the request. Refresh when enabled.")
+            }
+            await pageMissionItems(into: &servers, generation: generation)
+            guard missionGate.accepts(generation, enabled: settings.dataSyncEnabled) else {
+                throw CompanionRefreshFailure.message("Data Sync changed during the request. Refresh when enabled.")
+            }
             applySession(reply)
-            await pageMissionItems(into: &servers)
             lastMissionSync = Date()
             let previous = Dictionary(uniqueKeysWithValues: missionServers.map { ($0.id, $0) })
             missionServers = servers.map { server in
@@ -621,7 +641,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     /// Fetches mission items that did not fit in the mission reply, one message-sized page at a time.
-    private func pageMissionItems(into servers: inout [TAKMissionServer]) async {
+    private func pageMissionItems(into servers: inout [TAKMissionServer], generation: Int) async {
         for s in servers.indices where servers[s].isLoaded {
             for m in servers[s].missions.indices {
                 guard var items = servers[s].missions[m].items, let total = servers[s].missions[m].itemTotal,
@@ -629,6 +649,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
                 var page = BridgeWire.Message(kind: .missions, serverID: servers[s].id)
                 page.missionName = servers[s].missions[m].name
                 while items.count < total {
+                    guard missionGate.accepts(generation, enabled: settings.dataSyncEnabled) else { return }
                     page.id = UUID()
                     page.missionItemOffset = items.count
                     guard let reply = try? await request(page, timeoutSeconds: 20),

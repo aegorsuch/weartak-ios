@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Data Sync is disabled. Cached subscriptions are retained." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Data Sync is disabled. Cached subscriptions are retained." } } }
+    },
     "Alerts" : {
       "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Alerts" } } }
     },

@@ -1460,6 +1460,30 @@ green square; unknown or pending is a yellow quatrefoil. Types that aren't
 2525D symbols (for example `b-m-p-*` spot markers) remain yellow pins. Each server row shows how many missions are
 subscribed or its current state; Refresh reloads the list.
 
+DataSync's plugin row has its sync icon, a settings target, and a separate enable
+switch. Opening settings never changes enablement. Enablement defaults to on to
+preserve existing behavior. Turning it off stops new automatic/manual mission
+requests, paging, subscriptions and item edits/deletes from the watch; cached
+mission items and server subscriptions are retained. Re-enabling allows the
+existing refresh/sync lifecycle to resume. Late replies from before an off/on
+change cannot replace the cache. A request already sent may still complete on
+the server; this is not remote cancellation or unsubscribe. The switch does not
+disable the TAK transport or ordinary incoming CoT.
+
+### Manual MOPP status
+
+Open Settings → Tool Preferences → Plugins → **MOPP**, marked with an original
+protective-mask icon. **PPE Status** shows the saved manual choice. Choose
+**None**, **MOPP 0**, **MOPP 1**, **MOPP 2**, **MOPP 3**, or **MOPP 4**; a blue
+checkmark marks the candidate. **Save Status** commits it locally, while Back
+without saving discards the candidate. Reopening selects the saved choice.
+None/unset is distinct from MOPP 0; unknown saved values resolve to None.
+
+This is a manually entered status on this watch only, not a commanded level,
+CBR detector, PPE/compliance assessment, filter timer, or network report. There
+is no Send button or delivery banner. Companion has no independent plugin
+catalogue or MOPP display; it does not invent a second local status.
+
 The Everywhere Comms, GoTenna and Somewear Labs entries in Plugins are disabled
 placeholders labeled “Unfunded Request”; they do not enable or open a feature.
 Sensor Manager is also labeled “Unfunded Request” and has a saved enable/disable

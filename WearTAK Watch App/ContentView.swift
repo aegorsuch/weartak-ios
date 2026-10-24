@@ -1593,6 +1593,11 @@ struct DataSyncMenuView: View {
 
     var body: some View {
         List {
+            if !settings.dataSyncEnabled {
+                Text("Data Sync is disabled. Cached subscriptions are retained.", tableName: "WatchMain")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if settings.relayProvider != .companion || !client.isReady {
                 Text("Connect to a TAK Server to use Data Sync.", tableName: "WatchMain")
                     .foregroundStyle(.secondary)
@@ -1601,7 +1606,7 @@ struct DataSyncMenuView: View {
                     $0.name.localizedStandardCompare($1.name) == .orderedAscending
                 }) { server in
                     NavigationLink {
-                        DataSyncServerView(client: client, serverID: server.id)
+                        DataSyncServerView(client: client, settings: settings, serverID: server.id)
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(verbatim: server.name)
@@ -1628,10 +1633,12 @@ struct DataSyncMenuView: View {
             } label: {
                 Label(String(localized: "Refresh", table: "WatchMain"), systemImage: "arrow.clockwise")
             }
-            .disabled(!client.isReady || client.missionsLoading)
+            .disabled(!settings.dataSyncEnabled || !client.isReady || client.missionsLoading)
         }
         .navigationTitle("DataSync")
-        .task { await client.refreshMissions() }
+        .task(id: settings.dataSyncEnabled) {
+            if settings.dataSyncEnabled { await client.refreshMissions() }
+        }
     }
 
     private func summary(_ server: TAKMissionServer) -> String {
@@ -1642,6 +1649,7 @@ struct DataSyncMenuView: View {
 
 private struct DataSyncServerView: View {
     @ObservedObject var client: WatchCompanionOutput
+    @ObservedObject var settings: AppSettings
     let serverID: UUID
 
     private var server: TAKMissionServer? {
@@ -1668,7 +1676,7 @@ private struct DataSyncServerView: View {
                                     .lineLimit(3)
                             }
                         }
-                        .disabled(!client.isReady || client.missionsLoading || !server.isLoaded ||
+                        .disabled(!settings.dataSyncEnabled || !client.isReady || client.missionsLoading || !server.isLoaded ||
                                   (mission.passwordProtected && !mission.subscribed))
                     }
                     if server.missions.isEmpty && !client.missionsLoading {
@@ -1694,10 +1702,12 @@ private struct DataSyncServerView: View {
             } label: {
                 Label(String(localized: "Refresh", table: "WatchMain"), systemImage: "arrow.clockwise")
             }
-            .disabled(!client.isReady || client.missionsLoading)
+            .disabled(!settings.dataSyncEnabled || !client.isReady || client.missionsLoading)
         }
         .navigationTitle(String(localized: "Missions", table: "WatchMain"))
-        .task { await client.refreshMissions(serverID: serverID) }
+        .task(id: settings.dataSyncEnabled) {
+            if settings.dataSyncEnabled { await client.refreshMissions(serverID: serverID) }
+        }
     }
 
     private func detail(_ mission: TAKMission) -> String {

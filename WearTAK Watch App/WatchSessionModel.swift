@@ -1661,6 +1661,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     /// restores the server's copy if the server rejected the update.
     func editMissionItem(id: String, title: String? = nil, remark: String? = nil, kind: MarkerKind? = nil,
                          coordinate: CLLocationCoordinate2D? = nil) async throws {
+        guard settings.dataSyncEnabled else {
+            throw ContactChatFailure.message("Data Sync is disabled. Enable it in Plugins.")
+        }
         guard let detail = missionItemDetail(id: id) else {
             throw ContactChatFailure.message("This DataSync item is no longer available.")
         }
@@ -1702,6 +1705,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     /// Removes a Data Sync item from its mission on the server (for every subscriber) and from this watch.
     func deleteMissionItem(id: String) async throws {
+        guard settings.dataSyncEnabled else {
+            throw ContactChatFailure.message("Data Sync is disabled. Enable it in Plugins.")
+        }
         guard let detail = missionItemDetail(id: id) else {
             throw ContactChatFailure.message("This DataSync item is no longer available.")
         }

@@ -9,6 +9,7 @@ struct PluginCatalogChecks {
             "Ditto",
             "Everywhere Comms",
             "GoTenna",
+            "MOPP",
             "Sensor Manager",
             "Somewear Labs"
         ])
@@ -33,6 +34,7 @@ struct PluginCatalogChecks {
         let sensorManager = WatchPluginEntry.current.first { $0.id == "sensor-manager" }
         precondition(sensorManager?.content == .sensorManager)
         precondition(sensorManager?.subtitle == "Unfunded Request")
+        precondition(WatchPluginEntry.current.first { $0.id == "mopp" }?.content == .mopp)
         print("PASS: plugin catalog ordering and placeholder labels")
     }
 }
