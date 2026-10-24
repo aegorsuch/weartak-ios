@@ -124,6 +124,24 @@ configured output. Transport acceptance does not prove end-to-end recipient
 delivery, and independently configured transports may each carry the alert.
 Automatic/environmental alert position refreshes remain unchanged.
 
+#### Saved custom chat replies
+
+Watch conversations (direct, group and All Chat Rooms) retain the built-in
+**Quick Messages** and allow saved custom replies. Tap the bottom **+**, enter
+**Type Custom Message**, then **Save**; saving never sends or replaces the
+current draft. Both built-in and saved rows select text into the existing
+composer; **Send** (or its submit action) sends through the usual GeoChat path.
+Quick-message rows stay on one line, with a separate delete control for each
+custom reply. Built-ins cannot be deleted.
+
+Custom replies are trimmed, nonblank, single-line text of up to 128 characters
+and 2,000 UTF-8 bytes. Duplicates of built-ins or saved replies are ignored
+case-insensitively. The watch retains its list across restarts, shared across
+its conversations, separately from alert choices; it is not synced to another
+device. Deleting a saved reply does not delete past chats or the current draft.
+Corrupt saved data is reported and is not overwritten. Companion has no
+independent chat composer or quick-reply presets to extend.
+
 #### Build 12: tester message / What to Test
 
 WearTAK 5.8.0 (12) includes draft Watch and Companion translations in all

@@ -1,6 +1,27 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Type Custom Message" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Type Custom Message" } } }
+    },
+    "Custom Message" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Custom Message" } } }
+    },
+    "Add custom message" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Add custom message" } } }
+    },
+    "Delete saved message %@" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete saved message %@" } } }
+    },
+    "Unable to save message" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Unable to save message" } } }
+    },
+    "Enter a single-line message of 1 to 128 characters (up to 2,000 UTF-8 bytes)." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a single-line message of 1 to 128 characters (up to 2,000 UTF-8 bytes)." } } }
+    },
+    "Saved messages could not be loaded. Existing data has not been overwritten." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved messages could not be loaded. Existing data has not been overwritten." } } }
+    },
     "Display Preferences" : {
       "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Display Preferences" } } }
     },

@@ -45,6 +45,7 @@ swiftc -swift-version 5 -parse-as-library \
   Shared/TAKMissionModels.swift \
   Shared/TAKChat.swift \
   Shared/GarminDeliveryLedger.swift \
+  Tests/SavedChatMessageChecks.swift \
   Tests/GarminRelayProtocolTests.swift \
   -o "$build_dir/garmin-relay-checks"
 "$build_dir/garmin-relay-checks"

@@ -3,6 +3,7 @@ import Foundation
 @main
 struct GarminRelayProtocolTests {
     static func main() throws {
+        try SavedChatMessageChecks.run()
         func envelope(_ type: String, _ payload: [String: Any]) throws -> GarminEnvelope {
             let data = try JSONSerialization.data(withJSONObject: GarminEnvelope(type, payload).object)
             return try GarminEnvelope(object: JSONSerialization.jsonObject(with: data))

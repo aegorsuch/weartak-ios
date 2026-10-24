@@ -315,6 +315,9 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var savedManualAlertTypes: [ManualAlertType] = []
     @Published private(set) var savedManualAlertsError: String?
     private var savedManualAlerts: SavedManualAlerts?
+    @Published private(set) var savedChatMessages: [String] = []
+    @Published private(set) var savedChatMessagesError: String?
+    private var savedChatMessageStore: SavedChatMessages?
     @Published private(set) var activeAutomaticAlert: AutomaticAlertCategory?
     @Published private(set) var activeEnvironmentalAlerts: Set<EnvironmentalAlertCategory> = []
     @Published private(set) var automaticAlertDeliveryFailed = false
@@ -432,6 +435,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
         } catch {
             savedManualAlertsError = error.localizedDescription
             chatLogger.error("Saved manual alerts: \(error.localizedDescription, privacy: .public)")
+        }
+        do {
+            let saved = try SavedChatMessages(defaults: .standard)
+            savedChatMessageStore = saved
+            savedChatMessages = saved.messages
+        } catch {
+            savedChatMessagesError = error.localizedDescription
+            chatLogger.error("Saved chat messages: \(error.localizedDescription, privacy: .public)")
         }
         sitxClient.onReady = { [weak self] in self?.connect() }
         sitxClient.onDisconnected = { [weak self] in
@@ -2083,6 +2094,20 @@ final class WatchSessionModel: NSObject, ObservableObject {
         saved.remove(type, defaults: .standard)
         savedManualAlerts = saved
         savedManualAlertTypes = saved.types
+    }
+
+    func saveChatMessage(_ text: String) throws {
+        guard var saved = savedChatMessageStore else { throw SavedChatMessages.Failure.unreadable }
+        try saved.add(text, defaults: .standard)
+        savedChatMessageStore = saved
+        savedChatMessages = saved.messages
+    }
+
+    func removeSavedChatMessage(_ text: String) throws {
+        guard var saved = savedChatMessageStore else { throw SavedChatMessages.Failure.unreadable }
+        saved.remove(text, defaults: .standard)
+        savedChatMessageStore = saved
+        savedChatMessages = saved.messages
     }
 
     func updateAutomaticAlert(_ category: AutomaticAlertCategory?) {

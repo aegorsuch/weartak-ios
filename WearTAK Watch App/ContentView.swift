@@ -1885,6 +1885,9 @@ private struct ContactChatView: View {
     @State private var error: String?
     @State private var sent = false
     @State private var pdlSaved = false
+    @State private var showCustomEntry = false
+    @State private var customText = ""
+    @State private var customError: String?
     @Environment(\.scenePhase) private var scenePhase
     private var conversation: ContactConversation { ContactConversation(uid: uid, route: route, isGroup: isGroup) }
 
@@ -1922,20 +1925,84 @@ private struct ContactChatView: View {
             Section(String(localized: "Quick Messages", table: "WatchMain")) {
                 ForEach(TAKChatMessage.quickMessages, id: \.self) { message in
                     Button(message) {
-                        text = message
-                        error = nil
-                        sent = false
+                        selectQuickMessage(message)
                     }
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(minHeight: 44)
                     .disabled(sending)
                 }
+                ForEach(model.savedChatMessages, id: \.self) { message in
+                    HStack(spacing: 0) {
+                        Button { selectQuickMessage(message) } label: {
+                            Text(message)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(message)
+                        Button(role: .destructive) {
+                            do { try model.removeSavedChatMessage(message) }
+                            catch { self.error = error.localizedDescription }
+                        } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(Text("Delete saved message \(message)"))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(sending)
+                }
+                if let error = model.savedChatMessagesError {
+                    Text(error).font(.caption2).foregroundStyle(.red)
+                }
+                Button {
+                    customText = ""
+                    customError = nil
+                    showCustomEntry = true
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .accessibilityLabel(Text("Add custom message"))
+                .disabled(sending || model.savedChatMessagesError != nil)
             }
         }
         .navigationTitle(model.contactMessages[conversation] == nil ? title : model.chatTitle(for: conversation))
+        .sheet(isPresented: $showCustomEntry) {
+            NavigationStack {
+                List {
+                    TextField("Type Custom Message", text: $customText)
+                    Button("Save") {
+                        do {
+                            try model.saveChatMessage(customText)
+                            showCustomEntry = false
+                        } catch { customError = error.localizedDescription }
+                    }
+                    .disabled(customText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Cancel", role: .cancel) { showCustomEntry = false }
+                }
+                .navigationTitle("Custom Message")
+                .alert("Unable to save message", isPresented: Binding(
+                    get: { customError != nil }, set: { if !$0 { customError = nil } }
+                )) {
+                    Button("OK", role: .cancel) { customError = nil }
+                } message: { Text(customError ?? "") }
+            }
+        }
         .onAppear { model.setConversationVisible(conversation, visible: scenePhase == .active) }
         .onDisappear { model.setConversationVisible(conversation, visible: false) }
         .onChange(of: scenePhase) { _, phase in
             model.setConversationVisible(conversation, visible: phase == .active)
         }
+    }
+
+    private func selectQuickMessage(_ message: String) {
+        text = message
+        error = nil
+        sent = false
     }
 
     private func sendMessage() {

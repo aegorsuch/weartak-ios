@@ -128,6 +128,59 @@ struct TAKChatMessage: Identifiable, Equatable {
     }
 }
 
+struct SavedChatMessages {
+    static let storageKey = "WearTAK.savedChatMessages"
+    private(set) var messages: [String]
+
+    enum Failure: LocalizedError {
+        case invalidText, unreadable
+        var errorDescription: String? {
+            switch self {
+            case .invalidText: return String(localized: "Enter a single-line message of 1 to 128 characters (up to 2,000 UTF-8 bytes).")
+            case .unreadable: return String(localized: "Saved messages could not be loaded. Existing data has not been overwritten.")
+            }
+        }
+    }
+
+    init(defaults: UserDefaults) throws {
+        guard let stored = defaults.object(forKey: Self.storageKey) else { messages = []; return }
+        guard let values = stored as? [String] else { throw Failure.unreadable }
+        messages = []
+        for value in values {
+            guard let text = Self.validated(value) else { throw Failure.unreadable }
+            if existing(text) == nil { messages.append(text) }
+        }
+    }
+
+    @discardableResult
+    mutating func add(_ value: String, defaults: UserDefaults) throws -> String {
+        guard let text = Self.validated(value) else { throw Failure.invalidText }
+        if let duplicate = existing(text) { return duplicate }
+        messages.append(text)
+        defaults.set(messages, forKey: Self.storageKey)
+        return text
+    }
+
+    mutating func remove(_ text: String, defaults: UserDefaults) {
+        messages.removeAll { $0 == text }
+        defaults.set(messages, forKey: Self.storageKey)
+    }
+
+    private func existing(_ text: String) -> String? {
+        (TAKChatMessage.quickMessages + messages).first {
+            $0.caseInsensitiveCompare(text) == .orderedSame
+        }
+    }
+
+    private static func validated(_ value: String) -> String? {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text.count <= 128, text.utf8.count <= TAKChatMessage.maximumTextBytes,
+              !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) ||
+                  CharacterSet.newlines.contains($0) }) else { return nil }
+        return text
+    }
+}
+
 enum TAKChatPickerEntry<Conversation: Hashable>: Hashable {
     case allChatRooms, selectUser, conversation(Conversation)
 }
