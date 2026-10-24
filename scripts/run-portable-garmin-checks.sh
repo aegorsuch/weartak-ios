@@ -52,6 +52,11 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/route-follower-checks"
 
 swiftc -swift-version 5 -parse-as-library \
+  Shared/GarminRoutes.swift Shared/RouteFollower.swift Shared/RouteNavigation.swift Shared/WatchRoutes.swift \
+  Tests/RouteNavigationChecks.swift -o "$build_dir/route-navigation-checks"
+"$build_dir/route-navigation-checks"
+
+swiftc -swift-version 5 -parse-as-library \
   Shared/GarminRoutes.swift Tests/GarminRouteChecks.swift \
   -o "$build_dir/garmin-route-checks"
 "$build_dir/garmin-route-checks"

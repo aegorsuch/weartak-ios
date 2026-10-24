@@ -145,6 +145,12 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var garminWrites = Set<UUID>()
     private var garminReceivesInFlight = 0
     private var garminRoutes = GarminRouteStore()
+    @Published private(set) var navigationRoutes: [GarminRoute] = []
+    @Published private(set) var routeNavigationState: RouteNavigationState?
+    @Published private(set) var routeNavigationError: String?
+    @Published private(set) var navigationLocation: GarminRoute.Point?
+    private var navigationFixDate: Date?
+    private var routeNavigation = RouteNavigationReplica()
     private var routePackageInFlight = Set<UUID>()
     private var routePackageAttempts: [UUID: Date] = [:]
     private var routePackageError: String?
@@ -187,6 +193,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 routePackageError = "Saved routes could not be loaded: \(error.localizedDescription)"
                 chatLogger.error("Saved routes could not be loaded: \(error.localizedDescription, privacy: .public)")
             }
+            navigationRoutes = garminRoutes.routes
+            if let data = defaults.data(forKey: RouteNavigationState.storageKey) { receiveRouteNavigation(data) }
         }
         dittoRuntime.onStatusChange = { [weak self] status in
             guard let self else { return }
@@ -230,6 +238,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         reporter.onAuthorizationChange = { [weak self] in self?.publishState() }
         reporter.onError = { [weak self] message in
             self?.phoneReporting.detail = message
+            if self?.routeNavigationState?.phase == .active { self?.routeNavigationError = message }
             self?.reportingLogger.error("Phone GPS: \(message, privacy: .public)")
         }
         active = UIApplication.shared.applicationState == .active
@@ -277,6 +286,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
 
     func selectWatchRoute(_ route: WatchRoute) {
         guard route != watchRoute else { return }
+        stopRouteNavigation()
         watchRoute = route
         defaults.set(route.rawValue, forKey: Self.watchRouteKey)
         garmin?.stop()
@@ -299,6 +309,81 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             refreshWatchIdentity()
         }
         publishState()
+    }
+
+    var routeLocation: GarminRoute.Point? {
+        guard let date = navigationFixDate, abs(date.timeIntervalSinceNow) < 120 else { return nil }
+        return navigationLocation
+    }
+
+    func requestRouteLocation() {
+        if reporter.authorization == .notDetermined { reporter.requestWhenInUse() }
+        else if !reporter.requestFreshLocation() && routeLocation == nil {
+            routeNavigationError = "Waiting for a current location. Allow Location access in iPhone Settings."
+        }
+    }
+
+    func startRouteNavigation(_ route: GarminRoute, start: RouteFollower.Start) {
+        guard watchRoute == .apple else {
+            routeNavigationError = "Select Apple Watch to share route navigation."
+            return
+        }
+        do {
+            guard let current = navigationRoutes.first(where: { $0.id == route.id }) else {
+                throw RouteNavigationState.Failure.invalid
+            }
+            var candidate = routeNavigation
+            try candidate.start(route: current, start: start, location: routeLocation, origin: "phone")
+            try commitRouteNavigation(candidate)
+            requestRouteLocation()
+        } catch { routeNavigationError = "Route start failed: \(error.localizedDescription)" }
+    }
+
+    func stopRouteNavigation() {
+        var candidate = routeNavigation
+        guard candidate.stop(origin: "phone") else { return }
+        do { try commitRouteNavigation(candidate) }
+        catch { routeNavigationError = "Route stop failed: \(error.localizedDescription)" }
+    }
+
+    private func receiveRouteNavigation(_ data: Data) {
+        guard watchRoute == .apple else { return }
+        do {
+            let state = try RouteNavigationState.decode(data)
+            var candidate = routeNavigation
+            if try candidate.receive(state) { try commitRouteNavigation(candidate) }
+            else if let current = routeNavigation.state, current != state { publishRouteNavigation() }
+        } catch { routeNavigationError = "Route sync failed: \(error.localizedDescription)" }
+    }
+
+    private func commitRouteNavigation(_ candidate: RouteNavigationReplica) throws {
+        guard let state = candidate.state else { return }
+        let data = try state.encoded()
+        defaults.set(data, forKey: RouteNavigationState.storageKey)
+        routeNavigation = candidate
+        routeNavigationState = state
+        routeNavigationError = nil
+        reporter.setNavigationActive(state.phase == .active, appActive: active)
+        publishRouteNavigation()
+    }
+
+    private func publishRouteNavigation() {
+        guard watchRoute == .apple, let state = routeNavigationState,
+              WCSession.default.activationState == .activated else { return }
+        do {
+            let data = try state.encoded()
+            var context = WCSession.default.applicationContext
+            context[RouteNavigationState.contextKey] = data
+            try WCSession.default.updateApplicationContext(context)
+            if WCSession.default.isReachable {
+                WCSession.default.sendMessage([RouteNavigationState.contextKey: data], replyHandler: nil,
+                    errorHandler: { [weak self] error in
+                        Task { @MainActor in
+                            self?.routeNavigationError = "Route sync queued for reconnection: \(error.localizedDescription)"
+                        }
+                    })
+            }
+        } catch { routeNavigationError = "Route sync failed: \(error.localizedDescription)" }
     }
 
     private func startGarmin() {
@@ -675,7 +760,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let data = try JSONEncoder().encode(candidate)
         defaults.set(data, forKey: Self.garminRoutesStorageKey)
         garminRoutes = candidate
+        navigationRoutes = candidate.routes
         guard previous != garminRoutes.routes else { return }
+        if let state = routeNavigationState, state.phase == .active,
+           previous.contains(where: { $0.id == state.route.id }),
+           !candidate.routes.contains(where: { $0.id == state.route.id && $0.points == state.route.points && $0.method == state.route.method }) {
+            stopRouteNavigation()
+        }
         if watchRoute == .apple { publishAppleRoutes() }
         guard garminRouteVersion == GarminRoute.version, watchRoute == .garmin, garminReady else { return }
         var messages: [GarminEnvelope] = []
@@ -876,6 +967,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         guard !evaluatingReporting else { return }
         evaluatingReporting = true
         defer { evaluatingReporting = false }
+        reporter.setNavigationActive(routeNavigationState?.phase == .active, appActive: active)
         let wasRunning = reporter.isRunning
         if case .success(let identity) = watchIdentity {
             do { _ = try identity.validated() }
@@ -963,6 +1055,17 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func reportPhoneFix(_ fix: PhoneLocationFix, allowLastKnown: Bool = false) {
+        if !allowLastKnown, fix.horizontalAccuracy >= 0, fix.horizontalAccuracy.isFinite,
+           fix.latitude.isFinite, fix.longitude.isFinite, (-90...90).contains(fix.latitude),
+           (-180...180).contains(fix.longitude), abs(fix.timestamp.timeIntervalSinceNow) < 120 {
+            navigationLocation = GarminRoute.Point(lat: fix.latitude, lon: fix.longitude)
+            navigationFixDate = fix.timestamp
+            var candidate = routeNavigation
+            if let location = navigationLocation, watchRoute == .apple, candidate.advance(at: location, origin: "phone") {
+                do { try commitRouteNavigation(candidate) }
+                catch { routeNavigationError = "Route progress failed: \(error.localizedDescription)" }
+            }
+        }
         let previous = alertLocations.lastKnown()
         alertLocations.receive(fix)
         if let valid = alertLocations.lastKnown(), valid != previous {
@@ -1604,6 +1707,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         do {
             context[SitxSettingsSnapshot.contextKey] = try JSONEncoder().encode(sitx.settingsSnapshot)
             context[DittoBridgeStatus.contextKey] = try JSONEncoder().encode(dittoStatus)
+            if let state = routeNavigationState { context[RouteNavigationState.contextKey] = try state.encoded() }
             try session.updateApplicationContext(context)
             watchSetupError = nil
         } catch {
@@ -1739,6 +1843,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         Task { @MainActor [weak self] in
             guard self?.watchRoute == .apple else { return }
             self?.refreshWatchIdentity()
+            if let data = session.receivedApplicationContext[RouteNavigationState.contextKey] as? Data {
+                self?.receiveRouteNavigation(data)
+            }
+            self?.publishRouteNavigation()
         }
     }
 
@@ -1750,16 +1858,25 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        guard let value = applicationContext[WatchReportingIdentity.contextKey] else { return }
-        let data = value as? Data ?? Data()
+        let data = applicationContext[WatchReportingIdentity.contextKey] as? Data
+        let navigation = applicationContext[RouteNavigationState.contextKey] as? Data
         Task { @MainActor [weak self] in
             guard self?.watchRoute == .apple else { return }
-            self?.refreshWatchIdentity(contextValue: data)
+            if let data { self?.refreshWatchIdentity(contextValue: data) }
+            if let navigation { self?.receiveRouteNavigation(navigation) }
         }
     }
 
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        guard let data = message[RouteNavigationState.contextKey] as? Data else { return }
+        Task { @MainActor [weak self] in self?.receiveRouteNavigation(data) }
+    }
+
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        Task { @MainActor [weak self] in self?.publishState() }
+        Task { @MainActor [weak self] in
+            self?.publishState()
+            self?.publishRouteNavigation()
+        }
     }
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {

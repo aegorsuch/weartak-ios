@@ -26,7 +26,10 @@ struct WatchRoutes: Codable {
     }
 
     mutating func remove(_ route: GarminRoute) {
-        let key = Self.key(route)
-        routes.removeAll { Self.key($0) == key }
+        routes.removeAll { $0.uid == route.uid }
+    }
+
+    mutating func removeAll() {
+        routes.removeAll()
     }
 }

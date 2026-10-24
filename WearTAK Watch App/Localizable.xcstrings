@@ -1,6 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Remove %@ from this watch" : {
+      "comment" : "Accessible local deletion action in the Bloodhound picker.",
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove %@ from this watch" } } }
+    },
+    "Remove from this watch?" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove from this watch?" } } }
+    },
+    "Remove all routes and points from this watch?" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove all routes and points from this watch?" } } }
+    },
+    "Routes, markers, contacts and ordinary incoming points are removed locally. Active alerts stay available. Server data is not deleted." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Routes, markers, contacts and ordinary incoming points are removed locally. Active alerts stay available. Server data is not deleted." } } }
+    },
+    "Only this watch's copy is removed. Shared route navigation to this target stops on both devices. Server data is not deleted." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Only this watch's copy is removed. Shared route navigation to this target stops on both devices. Server data is not deleted." } } }
+    },
     "Show details" : {
       "comment" : "Local Bloodhound route following and dual-action watch picker.",
       "localizations" : {

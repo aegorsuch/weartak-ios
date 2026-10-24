@@ -2,12 +2,20 @@ import Foundation
 
 /// Local, ordered vertex navigation. Never filters or renumbers unnamed geometry.
 struct RouteFollower: Equatable {
-    static let arrivalRadiusMeters = 20.0
+    static func arrivalRadiusMeters(method: String?) -> Double {
+        switch method?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "walking", "walk", "swimming", "swim": return 10
+        case "watercraft": return 100
+        case "flying": return 1_000
+        default: return 20
+        }
+    }
 
     enum Start { case beginning, nearest }
 
     let routeID: String
     let points: [GarminRoute.Point]
+    let arrivalRadiusMeters: Double
     private(set) var targetIndex: Int
     var isComplete: Bool { targetIndex == points.count }
 
@@ -22,7 +30,16 @@ struct RouteFollower: Equatable {
         }
         routeID = route.id
         points = route.points
+        arrivalRadiusMeters = Self.arrivalRadiusMeters(method: route.method)
         targetIndex = index
+    }
+
+    init?(route: GarminRoute, targetIndex: Int) {
+        guard !route.points.isEmpty, (0...route.points.count).contains(targetIndex) else { return nil }
+        routeID = route.id
+        points = route.points
+        arrivalRadiusMeters = Self.arrivalRadiusMeters(method: route.method)
+        self.targetIndex = targetIndex
     }
 
     static func nearestIndex(in points: [GarminRoute.Point], to location: GarminRoute.Point) -> Int? {
@@ -39,7 +56,7 @@ struct RouteFollower: Equatable {
 
     mutating func advance(at location: GarminRoute.Point) {
         guard Self.usable(location) else { return }
-        while !isComplete && Self.distanceMeters(from: location, to: points[targetIndex]) <= Self.arrivalRadiusMeters {
+        while !isComplete && Self.distanceMeters(from: location, to: points[targetIndex]) <= arrivalRadiusMeters {
             targetIndex += 1
         }
     }

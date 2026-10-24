@@ -65,7 +65,7 @@ struct RoutePackageChecks {
         var local = WatchRoutes()
         try local.replace(routes + [other])
         local.remove(routes[0])
-        precondition(local.routes == [other])
+        precondition(local.routes.isEmpty, "Remove all local source copies of the same route UID")
         try local.replace(routes + [other])
         precondition(local.routes == routes + [other])
         local = try JSONDecoder().decode(WatchRoutes.self, from: JSONEncoder().encode(local))

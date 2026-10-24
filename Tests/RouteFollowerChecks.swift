@@ -19,7 +19,7 @@ struct RouteFollowerChecks {
         var beginning = RouteFollower(route: value, start: .beginning, location: nil)!
         precondition(beginning.targetIndex == 0 && beginning.points == geometry)
         precondition(beginning.routeID == value.id && !beginning.isComplete)
-        precondition(RouteFollower.arrivalRadiusMeters == 20)
+        precondition(RouteFollower.arrivalRadiusMeters(method: nil) == 20)
         precondition(RouteFollower(route: value, start: .nearest, location: nil) == nil)
         precondition(RouteFollower(route: value, start: .nearest, location: point(.nan)) == nil)
         precondition(RouteFollower(route: route([]), start: .beginning, location: nil) == nil)
@@ -80,6 +80,21 @@ struct RouteFollowerChecks {
         precondition(single.isComplete)
         let otherServer = RouteFollower(route: route(geometry, server: "other"), start: .beginning, location: nil)!
         precondition(otherServer.routeID != beginning.routeID)
+        for (method, radius) in [("Walking", 10.0), ("Swimming", 10), ("Driving", 20),
+                                 ("Watercraft", 100), ("Flying", 1_000), ("Unknown", 20)] {
+            var methodRoute = route([point(0), point(0.1)])
+            methodRoute.method = method
+            var follower = RouteFollower(route: methodRoute, start: .beginning, location: nil)!
+            precondition(follower.arrivalRadiusMeters == radius)
+            follower.advance(at: point(-(radius + 0.01) * metersToDegrees))
+            precondition(follower.targetIndex == 0, "\(method) must not arrive outside its radius")
+            follower.advance(at: point(-(radius - 0.01) * metersToDegrees))
+            precondition(follower.targetIndex == 1, "\(method) must arrive inside its radius")
+            let restored = RouteFollower(route: methodRoute, targetIndex: 1)!
+            precondition(restored.targetIndex == 1 && restored.arrivalRadiusMeters == radius)
+        }
+        precondition(RouteFollower(route: value, targetIndex: -1) == nil)
+        precondition(RouteFollower(route: value, targetIndex: 4) == nil)
         print("PASS: route start modes, original indices, nearest vertex, ordered/dense arrival, completion, remaining distance")
     }
 }

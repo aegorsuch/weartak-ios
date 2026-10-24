@@ -91,7 +91,7 @@ Traditional Chinese**.
   should translate, clipped text, and right-to-left layout issues.
 - Check that filtering map roles and teams still hides/shows the intended users.
   Custom server text and TAK protocol abbreviations may remain unchanged.
-- Test Bloodhound Remove All: it hides listed points only on this watch;
+- Test Bloodhound Remove All: it hides routes, saved markers, contacts and ordinary points only on this watch;
   server points and Data Sync map items should remain.
 - Test a large Data Sync mission: up to 999 loaded items, 99 nearest drawn, and
   the mission still joined after restarting both apps.
@@ -650,10 +650,11 @@ route details with original geometry indices; unnamed vertices are not removed.
 **Bloodhound** lists routes, saved markers, contacts and incoming points as
 single rows with a type glyph, name and distance subtitle (metres/kilometres).
 Route subtitles include the total geometry point count and nearest-vertex
-range. The row body preserves its detail/point-action behavior. The two separate
-round controls are **crosshair** (grey: open the map centered on the target;
+range. The row body preserves its detail/point-action behavior. A single
+right-side column of compact icons provides **crosshair** (open the map centered on the target;
 fit the complete geometry for a route, including date-line crossings) and
-**hound** (green: start local Bloodhound immediately). A route's hound opens an
+**hound** (green: start Bloodhound immediately), and **trash** (confirmed local removal).
+A route's hound opens an
 explicit chooser with a green **Start nearest** button, **Start from beginning**
 and **Cancel**. Cancelling or previewing the map never changes the active target.
 The active row has an amber background/outline and a red **stop** control with
@@ -661,7 +662,7 @@ a white square. Its route subtitle shows **Pt X of N · distance left**; point,
 marker and contact subtitles retain their distance. The picker stays visible
 while navigating; **Open navigation** opens the existing compass/range UI.
 Buttons have independent 44-point hit areas and accessible action names.
-Picker starts/stops are local only and do not send automatic GeoChat replies;
+Picker starts/stops do not send automatic GeoChat replies; route navigation is shared with the paired iPhone.
 explicit **RGR**/**nPos** detail actions retain their existing network behavior.
 
 Select **Start from beginning** (index 0) or **Start nearest** (nearest vertex,
@@ -671,18 +672,41 @@ Following visits every remaining vertex in received order, including unnamed
 points, in the existing Bloodhound compass screen. **Point X of N** is 1-based;
 **Remaining** includes distance to the current target plus the remaining route
 legs. Each valid location fix advances through consecutive targets within the
-named `RouteFollower.arrivalRadiusMeters` constant (**20 m**). Reaching the last
+route method's ATAK arrival radius: **10 m walking/swimming, 20 m driving
+(also the missing/unknown-method fallback), 100 m watercraft, 1,000 m flying**.
+The parser retains the route's `link_attr method` metadata. Reaching the last
 point shows **Route complete** and clears the target. Use **Stop route** to cancel.
 Route following requests continuous location while the watch app is active;
-background GPS/navigation is not guaranteed. Following is local, in-memory state,
-not restored after process termination, and never sends GeoChat or mission edits.
+background GPS/navigation is not guaranteed. Navigation sessions persist across process
+termination and never send GeoChat or mission edits.
 Selecting any other Bloodhound target, replacing route geometry, or removing the
 route stops following. Ordinary individual route-point Bloodhound is unchanged.
 
-**Remove from This Watch** requires confirmation and removes only the current
-server+UID copy from Apple Watch, without sending a server, mission, Companion
-or Garmin deletion. It is not a permanent dismissal: a later resend, Data Sync
+**Remove from This Watch** already existed in route details and is also available
+from the picker. It requires confirmation and removes all local source copies of
+that route UID, without sending a server, mission, Companion-store or Garmin deletion.
+If active, the shared navigation session stops on both Apple devices.
+**Remove All** also clears routes, saved markers, contacts and ordinary received points;
+emergency alerts retain their explicit local dismiss/lifecycle controls.
+Removal is not a permanent route dismissal: a later resend, Data Sync
 or snapshot refresh may restore the route, as the confirmation explains.
+
+Companion's **Routes** screen (Apple Watch selected) provides nearest/beginning
+starts, raw-point progress, remaining distance, stop and completion. Starting on
+either device carries full bounded route geometry to the other; a fresh valid
+location on either may advance the shared ordered target. There is no passing,
+bearing or timeout shortcut: only consecutive vertices inside the method radius
+are consumed, including unnamed geometry. These are watch-style vertex arrivals,
+not a claim of ATAK's checkpoint/cue routing or user-overridden arrival settings.
+Phone navigation uses its existing location manager independently of TAK PLI
+reporting permissions/identity, without bypassing iOS authorization.
+Paired-device state uses versioned WatchConnectivity application context plus
+reachable live messages; identity/vitals/setup context keys are preserved.
+Logical session clocks deterministically resolve simultaneous starts, progress
+cannot regress, and persisted stop/completion tombstones reject delayed active
+updates after reconnection. A newer explicit start begins a new session.
+This Apple protocol does not change Garmin's separate relay protocol or implement
+Android bonding/ATAK plugin controls in iOS. Individual-point Bloodhound remains local.
 
 ### Route-only TAK Data Packages (prepared; native acceptance pending)
 
@@ -717,27 +741,30 @@ subscribed mission routes reuse the same parser/store.
 
 `scripts/run-portable-garmin-checks.sh` includes package fixtures for stored and
 raw-deflate ZIPs, CRC/hash/size/path failures, manifest instructions, route
-geometry, protocol snapshots, source-scoped local removal/replay behavior,
-`BloodhoundPickerChecks` (map/start/stop action isolation, typed/source-scoped
+geometry, protocol snapshots, local UID removal/replay behavior,
+`BloodhoundPickerChecks` (map/start/stop/delete action isolation, typed/source-scoped
 identities, active-target compass icons, route start policy and fitted map bounds), and `RouteFollowerChecks`
-(start modes, dense-point advancement, completion and remaining route distance).
-These changes were prepared on Windows without Swift/Xcode. Run the script on
-macOS and build both native targets before acceptance; the script does not
-claim simulator or physical-device validation.
+(start modes, method-radius boundaries, dense-point advancement, completion and remaining route distance).
+`RouteNavigationChecks` covers phone/watch starts, bidirectional progression and
+stop/completion, persistence, stale/out-of-order replay, simultaneous starts/stops,
+invalid state rejection, route method round trips and clearing local routes.
+The canonical macOS verify pipeline runs the script and builds Companion with
+its embedded watch app; the portable checks do not claim physical-device validation.
 
 Starting a whole route from the Bloodhound chooser or Routes details returns
 to the watch dashboard, closing nested route screens and preview sheets.
-The dashboard compass shows a small route glyph for an active route point or
-the existing ATAK Bloodhound icon for any other target; neither is shown when
-there is no active target. This is watch-side navigation; Companion does not
-have an equivalent route-following dashboard. No runtime app-launch identifier
+The dashboard compass keeps the small route glyph for an active route point.
+The redundant Bloodhound icon is hidden for other active targets; the directional
+compass, target name and range remain available. Companion's Routes screen shows
+the shared navigation state rather than adding a watch-shaped dashboard. No runtime app-launch identifier
 is needed, and persistent Keychain service names are deliberately unchanged.
 
 Hardware acceptance remains: ATAK → TAK server → iPhone → Apple Watch import,
 disconnected refresh/replay, route-line hit selection with overlapping map
 items, named point Bloodhound/compass/haptics, both whole-route start modes,
-20 m dense-point advancement, completion/stop/other-target switching, unavailable
-GPS, all four picker row types, independent crosshair/hound/detail hit targets,
+method-radius dense-point advancement, two-way starts/progress/stop/completion,
+offline reconnect and restart, other-target switching, unavailable
+GPS, all four picker row types, independent crosshair/hound/trash/detail hit targets,
 amber/red active states, route chooser cancel, date-line map fit, VoiceOver/Dynamic
 Type and smallest-screen readability, confirmed local removal and
 later replay, wrong hash/size/TLS/redirect rejection, and verifying

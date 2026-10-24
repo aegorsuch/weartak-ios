@@ -35,6 +35,7 @@ struct GarminRoute: Codable, Equatable, Identifiable {
     var missionName: String?
     var senderUid: String?
     let points: [Point]
+    var method: String? = nil
     var id: String { serverId + "\n" + uid }
     var namedPoints: [(index: Int, point: Point, name: String)] {
         points.enumerated().compactMap { index, point in
@@ -49,6 +50,7 @@ struct GarminRoute: Codable, Equatable, Identifiable {
         ]
         if let missionName { value["missionName"] = missionName }
         if let senderUid { value["senderUid"] = senderUid }
+        if let method { value["method"] = method }
         return value
     }
 
@@ -66,6 +68,7 @@ struct GarminRoute: Codable, Equatable, Identifiable {
               Self.validText(name, maximum: 64),
               missionName.map({ Self.validText($0, maximum: 128) }) ?? true,
               senderUid.map({ Self.validText($0, maximum: 128) }) ?? true,
+              method.map({ Self.validText($0, maximum: 64) }) ?? true,
               (2...Self.maximumPoints).contains(points.count),
               points.allSatisfy({
                   $0.lat.isFinite && $0.lon.isFinite && (-90...90).contains($0.lat) &&
@@ -221,6 +224,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
     private var attributes: [String: String]?
     private var name: String?
     private var senderUid: String?
+    private var method: String?
     private var points: [GarminRoute.Point] = []
     private var removalUID: String?
     private var invalidGeometry = false
@@ -239,6 +243,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
             eventDepth = depth
             name = nil
             senderUid = nil
+            method = nil
             points = []
             removalUID = nil
             invalidGeometry = false
@@ -252,6 +257,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
         }
         guard type == "b-m-r" || type.hasPrefix("b-m-r-") else { return }
         if elementName == "contact" { name = values["callsign"] }
+        if elementName == "link_attr" { method = values["method"] }
         if elementName == "link", values["relation"] == "p-p" { senderUid = values["uid"] }
         if elementName == "link", values["relation"] == "c", values["point"] == nil {
             invalidGeometry = true
@@ -280,7 +286,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
         } else if type == "b-m-r" || type.hasPrefix("b-m-r-") {
             guard !invalidGeometry, let uid = attributes["uid"] else { fail(parser, .invalid); return }
             let route = GarminRoute(serverId: serverId, uid: uid, name: name ?? "Route",
-                                    missionName: missionName, senderUid: senderUid, points: points)
+                                    missionName: missionName, senderUid: senderUid, points: points, method: method)
             do {
                 _ = try route.validated()
                 events.append(.route(route))
