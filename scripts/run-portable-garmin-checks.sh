@@ -85,7 +85,7 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/garmin-relay-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/GarminRoutes.swift Shared/RouteFollower.swift Shared/BloodhoundPicker.swift \
+  Shared/GarminRoutes.swift Shared/RouteFollower.swift Shared/BloodhoundPicker.swift Shared/WatchPinTitle.swift \
   Tests/BloodhoundPickerChecks.swift -o "$build_dir/bloodhound-picker-checks"
 "$build_dir/bloodhound-picker-checks"
 

@@ -2,7 +2,31 @@ import Foundation
 
 @main
 struct BloodhoundPickerChecks {
-    static func main() {
+    static func main() throws {
+        precondition(WatchPinTitle.trimmingTrailingWhitespace("Pin \t\r\n") == "Pin")
+        precondition(WatchPinTitle.trimmingTrailingWhitespace("  Pin \u{2003}\u{00A0}") == "  Pin")
+        precondition(WatchPinTitle.trimmingTrailingWhitespace(" \t") == "")
+        precondition(WatchPinTitle.trimmingTrailingWhitespace("Pin \u{1F9ED}") == "Pin \u{1F9ED}")
+        let source = try String(contentsOfFile: "WearTAK Watch App/WatchSessionModel.swift", encoding: .utf8)
+        let removal = source.components(separatedBy: "func removePickerTarget(")[1]
+            .components(separatedBy: "func removeAllPickerTargets(")[0]
+        precondition(removal.contains("case .marker(let id):\n            deleteMarker(id: id)"))
+        precondition(removal.contains("case .point(let id): removeIncomingPoint(id)"))
+        let clear = source.components(separatedBy: "func removeAllPickerTargets() {")[1]
+            .components(separatedBy: "var routeLocation:")[0]
+        precondition(clear.contains("for marker in markers { removePickerTarget(.marker(marker.id)) }"))
+        precondition(clear.contains("removePickerTarget(.contact(contact.id))") &&
+            clear.contains("removePickerTarget(.point(point.id))"))
+        let delete = source.components(separatedBy: "func deleteMarker(id: UUID) {")[1]
+            .components(separatedBy: "func clearAllPoints()")[0]
+        precondition(delete.contains("markers.firstIndex(where: { $0.id == id })"))
+        precondition(delete.contains("OfflineOperation(kind: .delete") && delete.contains("deleteMarkerXML(uid: id.uuidString)"))
+        let creation = source.components(separatedBy: "func storeMarker(")[1]
+            .components(separatedBy: "func updateMarker(")[0]
+        precondition(creation.contains("let title = WatchPinTitle.trimmingTrailingWhitespace(title)"))
+        let edit = source.components(separatedBy: "func updateMarker(")[1]
+            .components(separatedBy: "func moveMarker(")[0]
+        precondition(!edit.contains("trimmingTrailingWhitespace") && edit.contains("marker.remark = remark"))
         typealias Target = BloodhoundPicker.Target
         let markerID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let targets: [Target] = [.route("server\nroute"), .route("other\nroute"),
@@ -23,7 +47,7 @@ struct BloodhoundPickerChecks {
                 precondition(BloodhoundPicker.command(for: .showOnMap, target: target, active: active) == .showOnMap(target),
                              "Map preview must never start or stop navigation, even for the active row")
                 precondition(BloodhoundPicker.command(for: .remove, target: target, active: active) == .remove(target),
-                             "Delete must select local removal, never toggle navigation or transmit server deletion")
+                             "Delete must select removal without toggling navigation; only locally created pins request remote deletion")
                 let expected: BloodhoundPicker.Command
                 if active == target { expected = .stop }
                 else if case .route(let id) = target { expected = .chooseRoute(id) }

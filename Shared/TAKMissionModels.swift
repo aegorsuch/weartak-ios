@@ -52,6 +52,12 @@ enum TAKMissionAPI {
     /// Items parsed from one mission before the nearest `maximumItemsPerMission` are kept.
     static let maximumParsedItems = 5_000
 
+    /// TAK 5.8 omits public ANON missions unless the list asks for default-role visibility.
+    static func takServerQuery(path: String, method: String, query: [URLQueryItem]) -> [URLQueryItem] {
+        guard path == "/missions", method == "GET" else { return query }
+        return query.filter { $0.name != "defaultRole" } + [URLQueryItem(name: "defaultRole", value: "true")]
+    }
+
     /// True for an HTTP 404 from TAK Server or Sit(x): the mission no longer exists.
     static func isNotFound(_ error: Error) -> Bool {
         error.localizedDescription.contains("HTTP 404")

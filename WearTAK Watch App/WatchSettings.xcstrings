@@ -16,8 +16,8 @@
     "Enable DataSync" : {
       "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Enable DataSync" } } }
     },
-    "Manual status saved on this watch only. Not a command, sensor reading, or network transmission." : {
-      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Manual status saved on this watch only. Not a command, sensor reading, or network transmission." } } }
+    "Manual saved status. When enabled and connected to a supported Companion, included in outgoing watch-identity position remarks. Not a command or sensor reading." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Manual saved status. When enabled and connected to a supported Companion, included in outgoing watch-identity position remarks. Not a command or sensor reading." } } }
     },
     "Linked Account" : {
       "localizations" : {

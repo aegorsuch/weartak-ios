@@ -828,6 +828,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @discardableResult
     func storeMarker(at coordinate: CLLocationCoordinate2D?, kind: MarkerKind, title: String, remark: String,
                      atOwnPosition: Bool = true) -> Bool {
+        let title = WatchPinTitle.trimmingTrailingWhitespace(title)
         if atOwnPosition { requestLocation() }
         if let coordinate, !CLLocationCoordinate2DIsValid(coordinate) {
             offlineNotice = String(localized: "Invalid marker coordinates.", table: "WatchStatus")
@@ -950,8 +951,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         case .route(let id):
             if let route = watchRoutes.routes.first(where: { $0.id == id }) { removeRouteFromWatch(route) }
         case .marker(let id):
-            markers.removeAll { $0.id == id }
-            saveMarkers()
+            deleteMarker(id: id)
         case .contact(let id):
             removeIncomingPoint(id)
             incomingEntities.removeAll { $0.id == id && $0.isUser }

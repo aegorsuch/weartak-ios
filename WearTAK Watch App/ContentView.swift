@@ -2481,18 +2481,28 @@ private struct BloodhoundView: View {
                 model.removeAllPickerTargets()
             }
         } message: {
-            Text("Routes, markers, contacts and ordinary incoming points are removed locally. Active alerts stay available. Server data is not deleted.")
+            Text("Routes, contacts and received points are removed locally. Deletion requests are sent for pins created on this watch; peers may ignore them. Active alerts stay available.")
         }
         .confirmationDialog("Remove from this watch?", isPresented: Binding(
             get: { targetToRemove != nil }, set: { if !$0 { targetToRemove = nil } }
         ), titleVisibility: .visible, presenting: targetToRemove) { target in
-            Button("Remove from This Watch", role: .destructive) {
+            Button(role: .destructive) {
                 model.removePickerTarget(target)
                 targetToRemove = nil
+            } label: {
+                if case .marker = target {
+                    Text("Delete Marker", tableName: "WatchMain")
+                } else {
+                    Text("Remove from This Watch")
+                }
             }
             Button(String(localized: "Cancel", table: "WatchMain"), role: .cancel) { targetToRemove = nil }
-        } message: { _ in
-            Text("Only this watch's copy is removed. Shared route navigation to this target stops on both devices. Server data is not deleted.")
+        } message: { target in
+            if case .marker = target {
+                Text("Deletes this watch-created pin locally and requests remote deletion when connected. Peers may ignore the request.")
+            } else {
+                Text("Only this watch's copy is removed. Shared route navigation to this target stops on both devices. Server data is not deleted.")
+            }
         }
         .onAppear {
             model.markIncomingPointsSeen()
@@ -2794,6 +2804,8 @@ struct PointListView: View {
                 model.clearAllPoints()
                 expandedMarkerID = nil
             }
+        } message: {
+            Text("Deletes pins created on this watch and requests remote deletion when connected. Peers may ignore the requests.")
         }
         .confirmationDialog(String(localized: "Delete marker?", table: "WatchMain"), isPresented: $confirmDelete) {
             Button(String(localized: "Delete Marker", table: "WatchMain"), role: .destructive) {
@@ -2803,6 +2815,8 @@ struct PointListView: View {
                     expandedMarkerID = nil
                 }
             }
+        } message: {
+            Text("Deletes this watch-created pin locally and requests remote deletion when connected. Peers may ignore the request.")
         }
         .onAppear {
             #if DEBUG
