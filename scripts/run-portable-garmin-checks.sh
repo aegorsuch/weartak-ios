@@ -140,6 +140,12 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/map-checks"
 
 swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Tests/DataSyncChecks.swift \
+  -o "$build_dir/mission-checks"
+"$build_dir/mission-checks"
+
+swiftc -swift-version 5 -parse-as-library \
   Shared/GarminDeliveryLedger.swift Tests/GarminDeliveryLedgerTests.swift \
   -o "$build_dir/garmin-ledger-checks"
 "$build_dir/garmin-ledger-checks"
