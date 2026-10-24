@@ -20,7 +20,9 @@ enum DittoChatDocument {
         guard let body = raw["msg"] as? String,
               !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               body.utf8.count <= TAKChatMessage.maximumTextBytes,
-              !body.unicodeScalars.contains(where: { $0.value < 32 && $0 != "\n" && $0 != "\t" }),
+              !body.unicodeScalars.contains(where: {
+                  CharacterSet.controlCharacters.contains($0) && $0 != "\n" && $0 != "\t"
+              }),
               raw["AuthorId"] == nil || raw["AuthorId"] as? String == sender else {
             throw DittoCoTDocument.Failure.invalid
         }

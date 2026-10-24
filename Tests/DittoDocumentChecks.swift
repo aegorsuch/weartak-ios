@@ -93,6 +93,15 @@ enum DittoDocumentChecks {
             if recipient != "group-1" {
                 let nativeDecoded = try DittoChatDocument.decode(native, ownUID: "other", now: now)
                 precondition(TAKChatMessage.parse(nativeDecoded.xml, ownUID: "other")?.text == parsed.text)
+                var multiline = native
+                multiline["msg"] = "First line\nSecond\tline"
+                let multilineReceived = try DittoChatDocument.decode(multiline, ownUID: "other", now: now)
+                precondition(TAKChatMessage.parse(multilineReceived.xml, ownUID: "other")?.text == "First line\nSecond\tline")
+                multiline["msg"] = "Invalid\u{7f}control"
+                do {
+                    _ = try DittoChatDocument.decode(multiline, ownUID: "other", now: now)
+                    preconditionFailure("Native chat control character accepted")
+                } catch DittoCoTDocument.Failure.invalid {}
             } else {
                 do {
                     _ = try DittoChatDocument.decode(native, ownUID: "other", now: now)
