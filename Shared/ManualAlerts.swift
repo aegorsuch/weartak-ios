@@ -36,6 +36,7 @@ struct ManualAlertType: RawRepresentable, Equatable, Hashable, Identifiable, Cas
         default: return "b-a-o"
         }
     }
+    var emergencyName: String { self == .geofenceBreached ? "Geo-fence Breached" : rawValue }
     static let cancelCoTType = "b-a-o-can"
     static let priority = 1
 }

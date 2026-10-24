@@ -24,6 +24,8 @@ struct ManualAlertChecks {
         }
         let escaped = try saved.add("A&B <help> \"now\"", defaults: defaults)
         precondition(escaped.rawValue == "A&B <help> \"now\"")
+        precondition(ManualAlertType.geofenceBreached.emergencyName == "Geo-fence Breached")
+        precondition(custom.emergencyName == custom.rawValue)
         saved.remove(custom, defaults: defaults)
         let afterDelete = try SavedManualAlerts(defaults: defaults)
         precondition(afterDelete.types == [escaped])

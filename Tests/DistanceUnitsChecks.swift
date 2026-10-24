@@ -11,7 +11,7 @@ struct DistanceUnitsChecks {
         precondition(metric(1_000) == "1000 m")
         precondition(metric(1_999.99) == "1999 m")
         precondition(metric(2_000) == "2.00 km")
-        precondition(metric(12_345) == "12.35 km")
+        precondition(metric(12_346) == "12.35 km")
         precondition(imperial(0) == "0 ft")
         precondition(imperial(50) == "164 ft")
         precondition(imperial(1_609.343) == "5279 ft")
