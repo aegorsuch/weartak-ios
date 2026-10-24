@@ -78,6 +78,11 @@ struct RouteNavigationChecks {
         invalid = start
         invalid.version = 2
         expectInvalid { _ = try invalid.validated() }
+        invalid = start
+        invalid.arrivedIndices = [0, 0]
+        expectInvalid { _ = try invalid.validated() }
+        invalid.arrivedIndices = [route.points.count]
+        expectInvalid { _ = try invalid.validated() }
         expectInvalid { _ = try RouteNavigationState.decode(Data(repeating: 0, count: 16_001)) }
         expectInvalid { _ = try RouteNavigationState.decode(Data("{}".utf8)) }
         var noGPS = RouteNavigationReplica()
@@ -86,13 +91,15 @@ struct RouteNavigationChecks {
 
         let xml = """
         <event uid="route" type="b-m-r"><detail><contact callsign="Walking"/>
-        <link_attr method="Walking"/><link relation="c" point="0,0" callsign="Start"/>
-        <link relation="c" point="0.001,0"/><link relation="c" point="0.002,0" callsign="End"/>
+        <link_attr method="Walking"/><link relation="c" point="0,0" callsign="Start" type="b-m-p-w"/>
+        <link relation="c" point="0.001,0"/><link relation="c" point="0.002,0" callsign="End" type="b-m-p-w"/>
         </detail></event>
         """
         let events = try GarminRouteCoT.parse(Data(xml.utf8), serverId: "server")
         guard case .route(let parsed) = events.first else { preconditionFailure("Route method not parsed") }
         precondition(parsed.method == "Walking" && parsed.points.count == 3 && parsed.namedPoints.count == 2)
+        precondition(parsed.points[0].isCheckpoint && !parsed.points[1].isCheckpoint && parsed.points[2].isCheckpoint,
+                     "Missing CoT link type must parse as control, not a checkpoint")
         let roundTrip = try JSONDecoder().decode(GarminRoute.self, from: JSONEncoder().encode(parsed))
         precondition(roundTrip.method == "Walking")
         var oldRoute = parsed
@@ -100,6 +107,19 @@ struct RouteNavigationChecks {
         let oldData = try JSONEncoder().encode(oldRoute)
         let oldDecoded = try JSONDecoder().decode(GarminRoute.self, from: oldData)
         precondition(oldDecoded.method == nil)
+
+        let degrees = 180 / (Double.pi * 6_371_000)
+        let latchedRoute = GarminRoute(serverId: "server", uid: "latched", name: "Latched arrival",
+            points: [.init(lat: 0, lon: 0), .init(lat: 100 * degrees, lon: 0), .init(lat: 300 * degrees, lon: 0)],
+            method: "Walking")
+        var arrivalPhone = RouteNavigationReplica(), crossingWatch = RouteNavigationReplica()
+        try arrivalPhone.start(route: latchedRoute, start: .beginning, location: .init(lat: 0, lon: 0), origin: "phone")
+        precondition(arrivalPhone.state?.targetIndex == 1)
+        precondition(arrivalPhone.advance(at: .init(lat: 85 * degrees, lon: 0), accuracyMeters: 6, origin: "phone"))
+        precondition(arrivalPhone.state?.targetIndex == 1 && arrivalPhone.state?.arrivedIndices.contains(1) == true)
+        _ = try crossingWatch.receive(RouteNavigationState.decode(arrivalPhone.state!.encoded()))
+        precondition(crossingWatch.advance(at: .init(lat: 130 * degrees, lon: 0), origin: "watch"))
+        precondition(crossingWatch.state?.targetIndex == 2, "Arrival latch must survive sync/persistence before a later crossing")
 
         var routes = WatchRoutes()
         var copy = route

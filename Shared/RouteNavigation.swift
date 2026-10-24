@@ -16,12 +16,16 @@ struct RouteNavigationState: Codable, Equatable {
     let route: GarminRoute
     var targetIndex: Int
     var phase: Phase
+    var arrivedIndices: [Int] = []
 
     func validated() throws -> Self {
         _ = try route.validated()
         guard version == 1, startClock > 0, clock >= startClock, clock < Int.max - 1,
               ["phone", "watch"].contains(startOrigin), ["phone", "watch"].contains(origin),
               (0...route.points.count).contains(targetIndex),
+              targetIndex == route.points.count || route.navigationIndices.contains(targetIndex),
+              arrivedIndices == Array(Set(arrivedIndices)).sorted(),
+              arrivedIndices.allSatisfy({ route.points.indices.contains($0) && route.points[$0].isCheckpoint }),
               phase != .active || targetIndex < route.points.count,
               phase != .completed || targetIndex == route.points.count else { throw Failure.invalid }
         return self
@@ -52,15 +56,15 @@ struct RouteNavigationReplica {
 
     @discardableResult
     mutating func receive(_ incoming: RouteNavigationState) throws -> Bool {
-        let incoming = try incoming.validated()
+        var incoming = try incoming.validated()
         if let current = state {
             if incoming.sessionID == current.sessionID {
                 guard incoming.route == current.route, incoming.startClock == current.startClock,
                       incoming.startOrigin == current.startOrigin else { throw RouteNavigationState.Failure.invalid }
                 if current.phase != .active && incoming.phase == .active { return false }
                 if current.phase == .active && incoming.phase == .active {
-                    if incoming.targetIndex < current.targetIndex { return false }
-                    if incoming.targetIndex == current.targetIndex && !Self.newer(incoming, than: current) { return false }
+                    incoming.targetIndex = max(current.targetIndex, incoming.targetIndex)
+                    incoming.arrivedIndices = Array(Set(current.arrivedIndices + incoming.arrivedIndices)).sorted()
                 } else if current.phase != .active && incoming.phase != .active && !Self.newer(incoming, than: current) {
                     return false
                 }
@@ -70,36 +74,39 @@ struct RouteNavigationReplica {
                 guard incomingStart > currentStart else { return false }
             }
         }
-        guard state != incoming else { return false }
         var merged = incoming
         if let current = state, current.sessionID == incoming.sessionID, Self.newer(current, than: incoming) {
             merged.clock = current.clock
             merged.origin = current.origin
         }
+        guard state != merged else { return false }
         state = merged
         return true
     }
 
     mutating func start(route: GarminRoute, start: RouteFollower.Start,
-                        location: GarminRoute.Point?, origin: String) throws {
+                        location: GarminRoute.Point?, accuracyMeters: Double = 0, origin: String) throws {
         _ = try route.validated()
         guard var follower = RouteFollower(route: route, start: start, location: location) else {
             throw RouteNavigationState.Failure.invalid
         }
-        if let location { follower.advance(at: location) }
+        if let location { follower.advance(at: location, accuracyMeters: accuracyMeters) }
         let clock = (state?.clock ?? 0) + 1
         state = try RouteNavigationState(sessionID: UUID(), startClock: clock, startOrigin: origin,
             clock: clock, origin: origin, route: route, targetIndex: follower.targetIndex,
-            phase: follower.isComplete ? .completed : .active).validated()
+            phase: follower.isComplete ? .completed : .active,
+            arrivedIndices: follower.arrivedIndices.sorted()).validated()
     }
 
     @discardableResult
-    mutating func advance(at location: GarminRoute.Point, origin: String) -> Bool {
+    mutating func advance(at location: GarminRoute.Point, accuracyMeters: Double = 0, origin: String) -> Bool {
         guard var current = state, current.phase == .active,
-              var follower = RouteFollower(route: current.route, targetIndex: current.targetIndex) else { return false }
-        follower.advance(at: location)
-        guard follower.targetIndex != current.targetIndex else { return false }
+              var follower = RouteFollower(route: current.route, targetIndex: current.targetIndex,
+                                           arrivedIndices: Set(current.arrivedIndices)) else { return false }
+        follower.advance(at: location, accuracyMeters: accuracyMeters)
+        guard follower.targetIndex != current.targetIndex || follower.arrivedIndices != Set(current.arrivedIndices) else { return false }
         current.targetIndex = follower.targetIndex
+        current.arrivedIndices = follower.arrivedIndices.sorted()
         current.phase = follower.isComplete ? .completed : .active
         current.clock += 1
         current.origin = origin

@@ -959,7 +959,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 throw RouteNavigationState.Failure.invalid
             }
             var candidate = routeNavigation
-            try candidate.start(route: current, start: start, location: routeLocation, origin: "watch")
+            try candidate.start(route: current, start: start, location: routeLocation,
+                                accuracyMeters: lastLocation?.horizontalAccuracy ?? 0, origin: "watch")
             try commitRouteNavigation(candidate)
         } catch {
             routeError = "Route start failed: \(error.localizedDescription)"
@@ -1010,7 +1011,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private func advanceRouteFollowing(at location: GarminRoute.Point) {
         guard routeFollow != nil else { return }
         var candidate = routeNavigation
-        guard candidate.advance(at: location, origin: "watch") else { return }
+        guard candidate.advance(at: location, accuracyMeters: lastLocation?.horizontalAccuracy ?? 0, origin: "watch") else { return }
         do { try commitRouteNavigation(candidate) }
         catch { routeError = "Route progress failed: \(error.localizedDescription)" }
     }
@@ -1048,7 +1049,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
             let starting = previous?.sessionID != state.sessionID || previous?.phase != .active
             bloodhoundProximityNotified = false
             routeCompletionMessage = nil
-            routeFollow = RouteFollower(route: state.route, targetIndex: state.targetIndex)
+            routeFollow = RouteFollower(route: state.route, targetIndex: state.targetIndex,
+                                        arrivedIndices: Set(state.arrivedIndices))
             routeBloodhoundKey = state.route.id
             routeBloodhoundIndex = state.targetIndex
             if starting {

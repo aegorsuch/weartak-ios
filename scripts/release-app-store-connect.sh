@@ -190,8 +190,8 @@ if [[ ${#ipas[@]} -ne 1 || ! -f "${ipas[0]}" ]]; then
 fi
 
 artifact_dir="$(mktemp -d "$CI_PROJECT_DIR/build/app-store-connect-output.XXXXXX")"
-cp -R "$archive_path" "$artifact_dir/WearTAK-$marketing_version-$CI_PIPELINE_IID.xcarchive"
-cp "${ipas[0]}" "$artifact_dir/WearTAK-$marketing_version-$CI_PIPELINE_IID.ipa"
+cp -R "$archive_path" "$artifact_dir/WearTAK-iOS-$marketing_version-p$CI_PIPELINE_IID.xcarchive"
+cp "${ipas[0]}" "$artifact_dir/WearTAK-iOS-$marketing_version-p$CI_PIPELINE_IID.ipa"
 
 xcrun altool --upload-app \
   --type ios \

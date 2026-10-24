@@ -150,6 +150,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     @Published private(set) var routeNavigationError: String?
     @Published private(set) var navigationLocation: GarminRoute.Point?
     private var navigationFixDate: Date?
+    private var navigationAccuracyMeters = 0.0
     private var routeNavigation = RouteNavigationReplica()
     private var routePackageInFlight = Set<UUID>()
     private var routePackageAttempts: [UUID: Date] = [:]
@@ -333,7 +334,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 throw RouteNavigationState.Failure.invalid
             }
             var candidate = routeNavigation
-            try candidate.start(route: current, start: start, location: routeLocation, origin: "phone")
+            try candidate.start(route: current, start: start, location: routeLocation,
+                                accuracyMeters: navigationAccuracyMeters, origin: "phone")
             try commitRouteNavigation(candidate)
             requestRouteLocation()
         } catch { routeNavigationError = "Route start failed: \(error.localizedDescription)" }
@@ -1060,8 +1062,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
            (-180...180).contains(fix.longitude), abs(fix.timestamp.timeIntervalSinceNow) < 120 {
             navigationLocation = GarminRoute.Point(lat: fix.latitude, lon: fix.longitude)
             navigationFixDate = fix.timestamp
+            navigationAccuracyMeters = fix.horizontalAccuracy
             var candidate = routeNavigation
-            if let location = navigationLocation, watchRoute == .apple, candidate.advance(at: location, origin: "phone") {
+            if let location = navigationLocation, watchRoute == .apple,
+               candidate.advance(at: location, accuracyMeters: fix.horizontalAccuracy, origin: "phone") {
                 do { try commitRouteNavigation(candidate) }
                 catch { routeNavigationError = "Route progress failed: \(error.localizedDescription)" }
             }

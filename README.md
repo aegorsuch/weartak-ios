@@ -159,6 +159,10 @@ The App Store Connect API key needs permission to upload builds for the WearTAK
 app. The release tag supplies the marketing version; the GitLab pipeline IID
 supplies the build number, so each upload gets a new build number. Ensure that
 IID is greater than the latest build already uploaded to App Store Connect.
+Signed artifacts use `WearTAK-iOS-<version>-p<build>.ipa` (and matching `.xcarchive`).
+The canonical version tag remains `v<version>` and App Store Connect receives a
+numeric `CFBundleVersion` equal to the pipeline IID; `p` is a human-facing artifact/
+release-name separator, not part of Apple's numeric build identifier.
 
 ### Developers: build from source onto a watch
 
@@ -663,19 +667,29 @@ marker and contact subtitles retain their distance. The picker stays visible
 while navigating; **Open navigation** opens the existing compass/range UI.
 Buttons have independent 44-point hit areas and accessible action names.
 Picker starts/stops do not send automatic GeoChat replies; route navigation is shared with the paired iPhone.
-explicit **RGR**/**nPos** detail actions retain their existing network behavior.
+Explicit **RGR**/**nPos** detail actions retain their existing network behavior.
 
-Select **Start from beginning** (index 0) or **Start nearest** (nearest vertex,
-not nearest line segment). Nearest is disabled with an explanation until there
+Select **Start from beginning** (first checkpoint) or **Start nearest** (next
+checkpoint at/after the closest along-route segment projection). Nearest is disabled with an explanation until there
 is a valid watch fix less than two minutes old; it never falls back to beginning.
-Following visits every remaining vertex in received order, including unnamed
-points, in the existing Bloodhound compass screen. **Point X of N** is 1-based;
+The full raw geometry is preserved, including unnamed controls. CoT link type
+`b-m-p-w` is a checkpoint; `b-m-p-c`, unknown and missing link types are controls.
+Checkpoints are navigation objectives, with the final raw vertex always the fallback
+destination (also for routes containing only controls). Legacy/model-created points
+without stored type metadata retain their checkpoint default.
+**Point X of N** shows the original, 1-based raw index in the Bloodhound compass;
 **Remaining** includes distance to the current target plus the remaining route
-legs. Each valid location fix advances through consecutive targets within the
+geometry legs. Each valid fix remembers checkpoint arrival within the
 route method's ATAK arrival radius: **10 m walking/swimming, 20 m driving
-(also the missing/unknown-method fallback), 100 m watercraft, 1,000 m flying**.
-The parser retains the route's `link_attr method` metadata. Reaching the last
-point shows **Route complete** and clears the target. Use **Stop route** to cancel.
+(10 m missing/unknown-method fallback), 100 m watercraft, 1,000 m flying**, plus
+finite nonnegative GNSS horizontal accuracy (invalid CE contributes zero; no silent cap).
+A nonfinal objective advances only after it has arrived and the current projected
+along-route position reaches/passes that checkpoint. Entering its bubble alone
+does not skip it; remembered arrival may precede crossing on a later fix.
+Arrival at the final raw vertex completes immediately, even if an earlier objective
+was not visited. Dense/co-located checkpoints may advance together only after
+crossing; projection ties choose the first segment. The parser retains `link_attr method`.
+Completion shows **Route complete** and clears the target. Use **Stop route** to cancel.
 Route following requests continuous location while the watch app is active;
 background GPS/navigation is not guaranteed. Navigation sessions persist across process
 termination and never send GeoChat or mission edits.
@@ -694,10 +708,13 @@ or snapshot refresh may restore the route, as the confirmation explains.
 Companion's **Routes** screen (Apple Watch selected) provides nearest/beginning
 starts, raw-point progress, remaining distance, stop and completion. Starting on
 either device carries full bounded route geometry to the other; a fresh valid
-location on either may advance the shared ordered target. There is no passing,
-bearing or timeout shortcut: only consecutive vertices inside the method radius
-are consumed, including unnamed geometry. These are watch-style vertex arrivals,
-not a claim of ATAK's checkpoint/cue routing or user-overridden arrival settings.
+location on either may advance the shared checkpoint target. Remembered arrivals
+are persisted and merged across devices along with progress. This matches the
+WearOS standalone approximation of ATAK: equirectangular nearest-segment projection
+with Haversine leg lengths, checkpoint/control metadata, method radius plus CE,
+checkpoint crossing and final-arrival completion. It does not reproduce native
+ATAK off-route/engine-dirty reselection, navigation cues, direction/bearing logic
+or per-user arrival preference overrides; iOS has no bonded ATAK navigation engine.
 Phone navigation uses its existing location manager independently of TAK PLI
 reporting permissions/identity, without bypassing iOS authorization.
 Paired-device state uses versioned WatchConnectivity application context plus
@@ -746,7 +763,7 @@ geometry, protocol snapshots, local UID removal/replay behavior,
 identities, active-target compass icons, route start policy and fitted map bounds), and `RouteFollowerChecks`
 (start modes, method-radius boundaries, dense-point advancement, completion and remaining route distance).
 `RouteNavigationChecks` covers phone/watch starts, bidirectional progression and
-stop/completion, persistence, stale/out-of-order replay, simultaneous starts/stops,
+stop/completion, persisted cross-device arrival latches, stale/out-of-order replay, simultaneous starts/stops,
 invalid state rejection, route method round trips and clearing local routes.
 The canonical macOS verify pipeline runs the script and builds Companion with
 its embedded watch app; the portable checks do not claim physical-device validation.

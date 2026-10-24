@@ -29,7 +29,7 @@ app_store_connect_upload:
     - bash scripts/release-app-store-connect.sh
   artifacts:
     when: always
-    name: "WearTAK-$CI_COMMIT_TAG-app-store-connect"
+    name: "WearTAK-iOS-$CI_COMMIT_TAG-p$CI_PIPELINE_IID"
     expire_in: 30 days
     paths:
       - build/app-store-connect-output.*/WearTAK*.ipa

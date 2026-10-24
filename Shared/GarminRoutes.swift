@@ -15,6 +15,9 @@ struct GarminRoute: Codable, Equatable, Identifiable {
         let lat: Double
         let lon: Double
         var name: String?
+        var type: String? = nil
+
+        var isCheckpoint: Bool { type == nil || type == "b-m-p-w" }
 
         var routeListName: String? {
             guard let name else { return nil }
@@ -25,6 +28,7 @@ struct GarminRoute: Codable, Equatable, Identifiable {
         var payload: [String: Any] {
             var value: [String: Any] = ["lat": lat, "lon": lon]
             if let name { value["name"] = name }
+            if let type { value["type"] = type }
             return value
         }
     }
@@ -37,6 +41,8 @@ struct GarminRoute: Codable, Equatable, Identifiable {
     let points: [Point]
     var method: String? = nil
     var id: String { serverId + "\n" + uid }
+    var checkpointIndices: [Int] { points.indices.filter { points[$0].isCheckpoint } }
+    var navigationIndices: [Int] { points.indices.filter { points[$0].isCheckpoint || $0 == points.count - 1 } }
     var namedPoints: [(index: Int, point: Point, name: String)] {
         points.enumerated().compactMap { index, point in
             point.routeListName.map { (index: index, point: point, name: $0) }
@@ -73,6 +79,7 @@ struct GarminRoute: Codable, Equatable, Identifiable {
               points.allSatisfy({
                   $0.lat.isFinite && $0.lon.isFinite && (-90...90).contains($0.lat) &&
                       (-180...180).contains($0.lon) &&
+                      ($0.type.map { Self.validText($0, maximum: 64) } ?? true) &&
                       ($0.name.map { Self.validText($0, maximum: 64) } ?? true)
               }) else { throw Failure.invalid }
         let data = try JSONSerialization.data(withJSONObject: ["msgType": "route", "payload": payload])
@@ -271,7 +278,8 @@ private final class RouteParser: NSObject, XMLParserDelegate {
                 invalidGeometry = true
                 return
             }
-            points.append(GarminRoute.Point(lat: lat, lon: lon, name: values["callsign"] ?? values["name"]))
+            points.append(GarminRoute.Point(lat: lat, lon: lon, name: values["callsign"] ?? values["name"],
+                                            type: values["type"] ?? "b-m-p-c"))
         }
     }
 
