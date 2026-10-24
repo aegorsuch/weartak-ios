@@ -58,8 +58,16 @@ struct DittoCoTDocument {
               !removed.boolValue, doc["visible"] as? Bool != false, doc["f"] as? Bool != false else {
             throw Failure.invalid
         }
-        let uid = try text("d"), peer = try text("a"), type = try text("w")
-        guard try text("_id") == uid, Self.collection(for: type) == collection else { throw Failure.invalid }
+        let uid = try text("_id"), sender = try text("d"), peer = try text("a"), type = try text("w")
+        guard Self.collection(for: type) == collection else { throw Failure.invalid }
+        let explicitAuthor = try doc["AuthorId"].map { _ in try text("AuthorId") }
+        if collection == "track" || collection == "chat" {
+            guard sender == uid else { throw Failure.invalid }
+        } else if sender != uid, let explicitAuthor {
+            guard explicitAuthor == sender else { throw Failure.invalid }
+        }
+        // Official tactical documents use d for the sender; older WearTAK documents used the event UID.
+        let author = explicitAuthor ?? (sender != uid || collection == "track" ? sender : nil)
         let time = try date("b"), start = try date("n"), stale = try date("o")
         let lat = try number("j"), lon = try number("l")
         guard time <= now.addingTimeInterval(300), stale >= time,
@@ -73,7 +81,7 @@ struct DittoCoTDocument {
         <event version="\(escape(try text("g")))" uid="\(escape(uid))" type="\(escape(type))" time="\(formatter.string(from: time))" start="\(formatter.string(from: start))" stale="\(formatter.string(from: stale))" how="\(escape(try text("p")))" access="\(escape(try text("q")))"><point lat="\(lat)" lon="\(lon)" hae="\(try number("i"))" ce="\(try number("h"))" le="\(try number("k"))"/>\(detail)</event>
         """
         guard xml.utf8.count <= 55_000 else { throw Failure.invalid }
-        return Self(uid: uid, peer: peer, author: try doc["AuthorId"].map { _ in try text("AuthorId") },
+        return Self(uid: uid, peer: peer, author: author,
                     time: time, stale: stale, xml: xml)
     }
 
@@ -91,7 +99,7 @@ struct DittoCoTDocument {
         }
         var doc: [String: Any] = [
             "_id": uid, "_r": false, "_v": 2, "a": peer, "b": milliseconds(time),
-            "d": uid, "e": collection == "alert" ? "\(fields.callsign ?? callsign)-Alert" : fields.callsign ?? callsign,
+            "d": author, "e": collection == "alert" ? "\(fields.callsign ?? callsign)-Alert" : fields.callsign ?? callsign,
             "authorCs": callsign, "AuthorId": author, "authorType": type, "visible": true,
             "g": fields.event["version"] ?? "2.0", "n": milliseconds(start), "o": milliseconds(stale),
             "p": fields.event["how"] ?? "m-g", "q": fields.event["access"] ?? "Undefined",

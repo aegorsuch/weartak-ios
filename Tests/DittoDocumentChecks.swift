@@ -13,6 +13,7 @@ enum DittoDocumentChecks {
         let (collection, document) = try DittoCoTDocument.make(xml: xml, peer: "peer", author: "remote", callsign: "Remote")
         precondition(collection == "mapitem" && document["_id"] as? String == "marker")
         precondition(document["a"] as? String == "peer" && document["AuthorId"] as? String == "remote")
+        precondition(document["d"] as? String == "remote")
         precondition(document["c"] as? String == "A&B" && document["r"] as? String == "<detail>\(detail)</detail>")
         let decoded = try DittoCoTDocument.decode(document, collection: collection, now: now)
         let header = CoTMapHeader.parse(decoded.xml)!
@@ -29,7 +30,7 @@ enum DittoDocumentChecks {
         precondition(!ingress.accept(decoded, ownUID: "other", localPeer: "local"))
 
         for (key, bad) in [("_v", true as Any), ("j", true), ("j", Double.nan), ("l", 181),
-                           ("_id", "wrong"), ("b", -1), ("b", 1.5), ("b", (now.timeIntervalSince1970 + 301) * 1_000),
+                           ("_id", ""), ("d", ""), ("AuthorId", "wrong"), ("b", -1), ("b", 1.5), ("b", (now.timeIntervalSince1970 + 301) * 1_000),
                            ("_r", true), ("_r", 0), ("r", "<detail><event/></detail>"),
                            ("r", "<detail><detail/></detail>"), ("r", "<!DOCTYPE x><detail/>"),
                            ("r", "<detail><!ENTITY x 'evil'></detail>"), ("r", String(repeating: "x", count: 50_001))] {
@@ -55,6 +56,7 @@ enum DittoDocumentChecks {
             let (c, doc) = try DittoCoTDocument.make(xml: event(type, detail + emergency, uid: "remote-alert-Test"),
                                                    peer: "peer", author: "remote", callsign: "Remote")
             precondition(c == "alert" && doc["c"] == nil && doc["f"] == nil)
+            precondition(doc["_id"] as? String == "remote-alert-Test" && doc["d"] as? String == "remote")
             let received = try DittoCoTDocument.decode(doc, collection: c, now: now)
             precondition(CoTMapHeader.parse(received.xml)?.isEmergency == true)
         }
@@ -62,6 +64,38 @@ enum DittoDocumentChecks {
         let (track, trackDoc) = try DittoCoTDocument.make(xml: pli, peer: "peer", author: "remote", callsign: "Remote")
         precondition(track == "track")
         _ = try DittoCoTDocument.decode(trackDoc, collection: track, now: now)
+        for (c, doc) in [(collection, document),
+            try DittoCoTDocument.make(xml: event("b-a-o", detail, uid: "remote-alert"),
+                                     peer: "peer", author: "remote", callsign: "Remote")] {
+            let eventUID = doc["_id"] as! String
+            var native = doc
+            native.removeValue(forKey: "AuthorId")
+            let received = try DittoCoTDocument.decode(native, collection: c, now: now)
+            precondition(received.uid == eventUID && received.author == "remote")
+            precondition(CoTMapHeader.parse(received.xml)?.uid == eventUID)
+            var nativeIngress = DittoIngress()
+            precondition(!nativeIngress.accept(received, ownUID: "remote", localPeer: "different-peer"))
+            precondition(nativeIngress.accept(received, ownUID: "other", localPeer: "different-peer"))
+            precondition(!nativeIngress.accept(received, ownUID: "other", localPeer: "different-peer"))
+            var legacy = doc
+            legacy["d"] = eventUID
+            let old = try DittoCoTDocument.decode(legacy, collection: c, now: now)
+            precondition(old.uid == received.uid && old.author == received.author)
+            precondition(!nativeIngress.accept(old, ownUID: "other", localPeer: "different-peer"),
+                         "Legacy/native variants of one event must share the replay key")
+            var second = native
+            second["_id"] = eventUID + "-second"
+            let another = try DittoCoTDocument.decode(second, collection: c, now: now)
+            precondition(another.uid != received.uid && another.author == received.author)
+            precondition(nativeIngress.accept(another, ownUID: "other", localPeer: "different-peer"),
+                         "Different markers from one sender must not collapse to a sender UID")
+        }
+        var invalidTrack = trackDoc
+        invalidTrack["d"] = "other-sender"
+        do {
+            _ = try DittoCoTDocument.decode(invalidTrack, collection: track, now: now)
+            preconditionFailure("Track identity mismatch accepted")
+        } catch DittoCoTDocument.Failure.invalid {}
 
         for (recipient, group, members) in [("other", false, [String]()),
             (TAKChatMessage.allChatRoomsUID, true, []), ("group-1", true, ["other", "third"])] {
