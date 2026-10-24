@@ -155,6 +155,7 @@ if [[ "$(uname -s)" == Darwin ]]; then
     Shared/CoTMapSymbol.swift Shared/TAKMulticast.swift Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift \
     Shared/TAKChat.swift Shared/SitxShared.swift Shared/PhoneLocationReporting.swift Shared/CoTFieldSafety.swift \
     Shared/UserMetrics.swift Shared/DittoPDL.swift Shared/DashboardMetric.swift Shared/ManualAlerts.swift \
+    Shared/MOPPStatus.swift Shared/SecurePDLStore.swift Shared/ChatCommands.swift \
     Tests/SitxProtocolChecks.swift -o "$build_dir/sitx-protocol-checks"
   "$build_dir/sitx-protocol-checks"
 fi
