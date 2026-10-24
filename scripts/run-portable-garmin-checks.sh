@@ -140,7 +140,8 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/map-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/TAKMissionModels.swift Tests/DataSyncChecks.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Tests/DataSyncChecks.swift \
   -o "$build_dir/mission-checks"
 "$build_dir/mission-checks"
 
