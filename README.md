@@ -1496,7 +1496,14 @@ from the received conversation. Built-in/custom quick replies work unchanged.
 `chat` uses the native Ditto ATAK Edge Sync 1.1.1 schema: `_id` is the GeoChat
 message ID, `d` the sender UID, `e` callsign, `msg` plain text, `room` title,
 `roomId` conversation UID, `parent` contact-group parent, `authorType` sender CoT
-type and `authorLoc` the latitude/longitude/altitude string. `_c` is a native
+type and `authorLoc` the latitude/longitude/altitude string.
+`authorLoc` also accepts ATAK's six-field GeoPoint form
+`latitude,longitude,altitude,ALTREF,CE,LE` and additional trailing fields.
+Latitude/longitude must be finite and in range. Missing/non-finite altitude and
+errors become CoT unknown values; non-HAE altitude is not mislabeled as HAE.
+Finite nonnegative CE/LE are retained, and explicit WearTAK envelope values
+continue to take precedence.
+`_c` is a native
 legacy PN counter (created with `APPLY _c PN_INCREMENT BY`), not a numeric
 register or the newer settable counter. The common peer/schema/lifecycle/time fields
 remain. Optional WearTAK `eventUid`/detail/envelope extensions preserve original
