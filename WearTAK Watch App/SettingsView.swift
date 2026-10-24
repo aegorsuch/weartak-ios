@@ -110,6 +110,9 @@ private struct DevicePreferencesView: View {
     var body: some View {
         List {
             Section {
+                PhysiologicalControlsView(settings: settings)
+            }
+            Section {
                 NavigationLink {
                     MyCallsignView(settings: settings)
                 } label: {
@@ -172,7 +175,6 @@ private struct DevicePreferencesView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Toggle(String(localized: "Physiological Monitoring", table: "WatchSettings"), isOn: $settings.physiologicalMonitoringEnabled)
                 Toggle("BATDOK", isOn: $settings.batdokCotEnabled)
             }
         }
@@ -993,12 +995,38 @@ private struct AlertingPreferencesView: View {
     }
 }
 
+struct PhysiologicalControlsView: View {
+    @ObservedObject var settings: AppSettings
+    var editThresholds: (() -> Void)? = nil
+
+    var body: some View {
+        Toggle(String(localized: "Physiological Monitoring", table: "WatchSettings"),
+            isOn: $settings.physiologicalMonitoringEnabled)
+            .accessibilityIdentifier("physiological-monitoring-enabled")
+        HStack(spacing: 8) {
+            Toggle(String(localized: "Physiological Alerts", table: "WatchSettings"),
+                isOn: $settings.physiologicalAlertsEnabled)
+                .accessibilityIdentifier("physiological-alerts-enabled")
+            if let editThresholds {
+                Button(action: editThresholds) {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(String(localized: "Edit alert thresholds", table: "WatchMain"))
+                .accessibilityIdentifier("physiological-alert-thresholds")
+            }
+        }
+    }
+}
+
 struct PhysiologicalAlertsView: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
         List {
-            Toggle(String(localized: "Physiological Alerts", table: "WatchSettings"), isOn: $settings.physiologicalAlertsEnabled)
+            PhysiologicalControlsView(settings: settings)
             NavigationLink(String(localized: "Resting Heart Rate Alerts", table: "WatchSettings")) {
                 RestingHeartRateAlertsView(settings: settings)
             }

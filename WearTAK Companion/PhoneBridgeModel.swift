@@ -119,6 +119,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var phoneInterval = PhoneReportingPolicy.minimumInterval
     private var phoneSendInFlight = false
     private var phoneDittoTrackInFlight = false
+    private var outboundReadiness = OutboundRouteReadiness()
+    private var connectivityAnnouncementPending = false
+    private var dittoAnnouncementRevision = 0
     private var lastPhoneDittoTrackAt: Date?
     private var evaluatingReporting = false
     private var requestedWhenInUse = false
@@ -230,7 +233,6 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         sitx.onState = { [weak self] state in
             guard let self else { return }
             let id = SitxRelayConfig.serverID
-            let wasConnected = self.serverStates[id]?.connected == true
             if self.garminSitxRouteConfig != self.sitx.config {
                 self.garminSitxRouteConfig = self.sitx.config
                 self.sourceGenerations[id, default: 0] += 1
@@ -242,7 +244,6 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 self.saveMapCache()
             }
             self.publishState()
-            if state.connected, !wasConnected, let fix = self.latestPhoneFix { self.reportPhoneFix(fix) }
         }
         sitx.onCoT = { [weak self] xml in self?.forward(xml, sourceID: SitxRelayConfig.serverID) }
         reporter.onFix = { [weak self] fix in self?.reportPhoneFix(fix) }
@@ -883,13 +884,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 session = CompanionServerSession()
                 session.onState = { [weak self] state in
                     guard let self else { return }
-                    let wasConnected = self.serverStates[server.id]?.connected == true
                     self.serverStates[server.id] = state
                     self.publishState()
-                    // A stationary phone may not produce another fix, so report the cached one on (re)connect.
-                    if state.connected, !wasConnected, let fix = self.latestPhoneFix {
-                        self.reportPhoneFix(fix)
-                    }
                 }
                 session.onCoT = { [weak self] xml in self?.forward(xml, sourceID: server.id) }
                 session.onTLSMismatch = { [weak self] isAPI in
@@ -1070,16 +1066,36 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         guard watchRoute == .apple, dittoRuntime.status.state == .syncing, !phoneDittoTrackInFlight,
               lastPhoneDittoTrackAt.map({ Date().timeIntervalSince($0) >= interval }) ?? true else { return }
         phoneDittoTrackInFlight = true
+        let revision = dittoAnnouncementRevision
         Task {
-            defer { self.phoneDittoTrackInFlight = false }
-            if await self.dittoRuntime.publishTrack(pliXML: xml) { self.lastPhoneDittoTrackAt = Date() }
+            defer {
+                self.phoneDittoTrackInFlight = false
+                if revision != self.dittoAnnouncementRevision, let fix = self.latestPhoneFix {
+                    self.lastPhoneReportAt = nil
+                    self.reportPhoneFix(fix)
+                }
+            }
+            if await self.dittoRuntime.publishTrack(pliXML: xml), revision == self.dittoAnnouncementRevision {
+                self.lastPhoneDittoTrackAt = Date()
+            }
         }
     }
 
-    private func requestSelfPosition() {
+    private func requestSelfPosition(allowLastKnown: Bool = true) {
         if reporter.requestFreshLocation() { selfPositionRequestedAt = Date() }
         lastPhoneReportAt = nil
-        if let fix = alertLocations.lastKnown() { reportPhoneFix(fix, allowLastKnown: true) }
+        if allowLastKnown, let fix = alertLocations.lastKnown() { reportPhoneFix(fix, allowLastKnown: true) }
+        else if let fix = latestPhoneFix { reportPhoneFix(fix) }
+    }
+
+    private func refreshOutboundAnnouncements() {
+        var routes = Set(readyOutputs().keys.map(\.uuidString))
+        if watchRoute == .apple, dittoStatus.state == .syncing { routes.insert("ditto") }
+        guard outboundReadiness.update(routes) else { return }
+        connectivityAnnouncementPending = true
+        dittoAnnouncementRevision += 1
+        lastPhoneDittoTrackAt = nil
+        requestSelfPosition(allowLastKnown: false)
     }
 
     private func reportPhoneFix(_ fix: PhoneLocationFix, allowLastKnown: Bool = false) {
@@ -1130,7 +1146,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let contribution = watchSelfStatus.current()
         let sharedStatus = contribution?.remarks ?? ""
         if sharedStatus != lastSharedSelfStatus { lastPhoneReportAt = nil }
+        if connectivityAnnouncementPending { lastPhoneReportAt = nil }
         guard !phoneSendInFlight, PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt, interval: interval) else { return }
+        connectivityAnnouncementPending = false
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let xml = PhonePLI.event(identity: identity, fix: fix, interval: interval, appVersion: version,
                                  osVersion: "iOS \(UIDevice.current.systemVersion)",
@@ -1146,7 +1164,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         Task {
             defer {
                 self.phoneSendInFlight = false
-                if case .success(let current) = self.watchIdentity,
+                if self.connectivityAnnouncementPending, let fix = self.latestPhoneFix {
+                    self.reportPhoneFix(fix)
+                } else if case .success(let current) = self.watchIdentity,
                    !current.hasSameSettings(as: identity),
                    let fix = self.latestPhoneFix {
                     self.reportPhoneFix(fix)
@@ -1836,6 +1856,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         evaluateReporting()
         configured = serverStates.values.contains { $0.configured }
         connected = canRelay && serverStates.values.contains { $0.connected }
+        refreshOutboundAnnouncements()
         if mapCache.retainEmergencySources(connectedAlertSourceIDs) { saveMapCache() }
         status = !canRelay ? String(localized: "Waiting for watch refresh", table: "PhoneBridgeStatus")
             : connected ? String(localized: "Connected", table: "PhoneBridgeStatus")

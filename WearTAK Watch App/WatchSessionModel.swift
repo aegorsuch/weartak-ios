@@ -359,6 +359,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var bloodhoundProximityNotified = false
     private var isUpdatingHeading = false
     private var lastPLISentAt: Date?
+    private var dittoReadiness = OutboundRouteReadiness()
+    private var dittoAnnouncementRevision = 0
     private var sourceGenerations: [UUID: Int] = [:]
     private var mapDeletions = CoTMapDeletionHistory()
     private var locationRefresh = SelfLocationRefreshPolicy()
@@ -501,6 +503,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         }.store(in: &sitxRelaySubscriptions)
         companionClient.onStateChange = { [weak self] in
             guard let self else { return }
+            self.refreshDittoAnnouncement()
             self.companionServerConfigured = self.companionClient.configured
             self.sitxClient.isPhoneReachable = self.companionClient.isReady
             if self.sitxClient.hasReadyOutput { self.connect() }
@@ -2459,16 +2462,34 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         settings.dittoEnabled && companionClient.dittoStatus?.state == .syncing && !companionClient.phoneLocationEnabled
     }
 
+    private func refreshDittoAnnouncement() {
+        let routes: Set<String> = needsWatchDittoTrack && companionClient.isPhoneReachable ? ["ditto"] : []
+        guard dittoReadiness.update(routes) else { return }
+        dittoAnnouncementRevision += 1
+        lastDittoTrackAt = nil
+        guard isAppActive else { return }
+        requestLocation()
+        if let location = lastLocation { publishDittoTrackIfDue(for: location) }
+    }
+
     private func publishDittoTrackIfDue(for location: CLLocation) {
         guard isAppActive, !isPublishingDittoTrack, needsWatchDittoTrack, location.horizontalAccuracy >= 0,
-              abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
+              (-5...120).contains(Date().timeIntervalSince(location.timestamp)) else { return }
         let interval = pliReportingInterval(for: location)
         guard lastDittoTrackAt.map({ Date().timeIntervalSince($0) >= interval }) ?? true else { return }
         let xml = sitxClient.pliXML(coordinate: location.coordinate, reportingInterval: interval)
+        let revision = dittoAnnouncementRevision
         isPublishingDittoTrack = true
         Task {
-            defer { isPublishingDittoTrack = false }
-            if await companionClient.sendDittoTrack(xml) { lastDittoTrackAt = Date() }
+            defer {
+                isPublishingDittoTrack = false
+                if revision != dittoAnnouncementRevision, let location = lastLocation {
+                    publishDittoTrackIfDue(for: location)
+                }
+            }
+            if await companionClient.sendDittoTrack(xml), revision == dittoAnnouncementRevision {
+                lastDittoTrackAt = Date()
+            }
         }
     }
 
