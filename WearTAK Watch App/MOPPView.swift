@@ -44,7 +44,7 @@ struct MOPPView: View {
                 .disabled(!settings.moppEnabled || (selection == settings.moppStatus && settings.moppSavedAt != nil))
                 .accessibilityIdentifier("mopp-save-status")
             } footer: {
-                Text("Manual saved status. Shared with a connected supported Companion when enabled; not a command or sensor reading.",
+                Text("Manual saved status. When enabled and connected to a supported Companion, included in outgoing watch-identity position remarks. Not a command or sensor reading.",
                     tableName: "WatchSettings")
             }
         }

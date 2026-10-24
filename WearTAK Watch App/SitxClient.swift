@@ -526,7 +526,7 @@ final class SitxClient: ObservableObject, TAKTransport {
     }
 
     func deleteMarkerXML(uid: String) -> String {
-        let detail = "<link uid=\"\(SitxCoT.escape(uid))\" relation=\"p-p\"/><__forcedelete/>"
+        let detail = "<link uid=\"\(SitxCoT.escape(uid))\" relation=\"none\" type=\"none\"/><__forcedelete/>"
         return SitxCoT.event(uid: uid + "-delete", type: "t-x-d-d", coordinate: currentLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
                             detail: detail, lifetime: 86_400)
     }

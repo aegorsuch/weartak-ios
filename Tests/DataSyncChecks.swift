@@ -3,6 +3,20 @@ import Foundation
 @main
 struct DataSyncChecks {
     static func main() throws {
+        let uid = URLQueryItem(name: "uid", value: "watch")
+        let visible = TAKMissionAPI.takServerQuery(path: "/missions", method: "GET",
+            query: [uid, URLQueryItem(name: "defaultRole", value: "false")])
+        precondition(visible == [uid, URLQueryItem(name: "defaultRole", value: "true")])
+        precondition(TAKMissionAPI.takServerQuery(path: "/missions", method: "GET", query: [])
+            == [URLQueryItem(name: "defaultRole", value: "true")])
+        for (path, method) in [("/missions/Team", "GET"), ("/missions", "PUT"),
+                               ("/missions/Team/contents", "DELETE"), ("/missions/Team/subscription", "PUT")] {
+            precondition(TAKMissionAPI.takServerQuery(path: path, method: method, query: [uid]) == [uid])
+        }
+        let tak = try String(contentsOfFile: "WearTAK Companion/TAKChannelClient.swift", encoding: .utf8)
+        let sitx = try String(contentsOfFile: "WearTAK Companion/CompanionSitxSession.swift", encoding: .utf8)
+        precondition(tak.contains("TAKMissionAPI.takServerQuery(path: path, method: method, query: query)"))
+        precondition(!sitx.contains("takServerQuery") && !sitx.contains("defaultRole"))
         let list = try TAKMissionAPI.parseList(Data("""
         {"version":"3","type":"Mission","data":[
           {"name":"Zulu","tool":"public","uids":[{"data":"a"},{"data":"b"}],"description":"  Main op  "},

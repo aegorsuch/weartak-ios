@@ -168,8 +168,9 @@ Traditional Chinese**.
   should translate, clipped text, and right-to-left layout issues.
 - Check that filtering map roles and teams still hides/shows the intended users.
   Custom server text and TAK protocol abbreviations may remain unchanged.
-- Test Bloodhound Remove All: it hides routes, saved markers, contacts and ordinary points only on this watch;
-  server points and Data Sync map items should remain.
+- Test Bloodhound Remove All: routes, contacts and received points are local-only removals.
+  Own watch-created pins also queue best-effort remote deletion requests; peers may ignore them.
+  Never use someone else's points or real network test targets for deletion testing.
 - Test a large Data Sync mission: up to 999 loaded items, 99 nearest drawn, and
   the mission still joined after restarting both apps.
 - For locked-phone TAK relay testing, allow Companion Location **Always** with
@@ -574,6 +575,18 @@ Tap a row to reveal the three-dot button for the existing point editor and
 the trash button for deleting that point. Clear All Markers removes all saved
 points after confirmation. Incoming network entities remain on the map and
 are not included in these local-marker deletion actions.
+New pin titles lose trailing whitespace before storage or a pending GPS request;
+leading whitespace, legacy/edit titles and remarks are not rewritten.
+Deleting a pin created on this watch (including picker Delete, Remove All and
+Clear All Markers) reuses the existing scoped offline deletion queue and TAK
+`t-x-d-d` linked-UID/forcedelete request. This is best effort: transport acceptance
+does not prove another peer deleted it. The first deletion link uses the exact
+target UID and documented ATAK `relation="none" type="none"`; the latter is
+required by ATAK's delete importer.
+Received points, users and routes never
+enter that own-pin deletion path. No Ditto deletion document is invented:
+the existing Ditto schema has no supported pin-delete contract, so these
+requests use the existing TAK relay routes.
 
 Map long-press starts with Unknown and then uses the most recently dropped or
 changed marker type, remembered across launches. It immediately drops a point
@@ -826,7 +839,8 @@ Route subtitles include the total geometry point count and nearest-vertex
 range. The row body preserves its detail/point-action behavior. A single
 right-side column of compact icons provides **crosshair** (open the map centered on the target;
 fit the complete geometry for a route, including date-line crossings) and
-**hound** (green: start Bloodhound immediately), and **trash** (confirmed local removal).
+**hound** (green: start Bloodhound immediately), and **trash** (confirmed removal;
+own watch-created pins also request remote deletion, received items remain local-only).
 A route's hound opens an
 explicit chooser with a green **Start nearest** button, **Start from beginning**
 and **Cancel**. Cancelling or previewing the map never changes the active target.
@@ -1566,6 +1580,8 @@ editing and Save without erasing or hiding the saved status.
 This is a manually entered saved status, not a commanded level, CBR detector,
 PPE/compliance assessment or filter timer. When enabled, it is shared with a
 connected compatible Companion using SELF_STATUS v1 as described above.
+The MOPP help text identifies this as outgoing **watch-identity** position remarks,
+not an independent phone-UID marker, and makes no claim that a peer received it.
 There is no Send button or delivery banner. Companion has no independent plugin
 catalogue or MOPP display; it does not invent a second local status.
 
@@ -1745,7 +1761,7 @@ including WearOS's 4.14.6 SDK. This is vendor-supported protocol compatibility,
 not a claim that physical-device interoperability has been tested here.
 
 Companion performs the requests on the watch's behalf. TAK Server uses the
-client certificate on HTTPS port `8443` (`GET /Marti/api/missions`,
+client certificate on HTTPS port `8443` (`GET /Marti/api/missions?defaultRole=true`,
 `PUT`/`DELETE /Marti/api/missions/<name>/subscription?uid=<watch UID>`,
 `GET /Marti/api/missions/<name>/cot`). Sit(x) uses the same mission API under
 `/api/v1` with the Sit(x) token. Subscriptions use the watch UID, so the server

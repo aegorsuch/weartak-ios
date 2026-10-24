@@ -638,6 +638,8 @@ struct SitxProtocolChecks {
         let deletion = try fields(client.pendingEvents[marker.id.uuidString]!)
         precondition(deletion.attributes["event"]?.first?["type"] == "t-x-d-d")
         precondition(deletion.attributes["link"]?.first?["uid"] == marker.id.uuidString)
+        precondition(deletion.attributes["link"]?.first?["relation"] == "none")
+        precondition(deletion.attributes["link"]?.first?["type"] == "none")
         precondition(deletion.attributes["__forcedelete"] != nil)
         let defaultMarkerTitles: [String?] = [nil, ""]
         for title in defaultMarkerTitles {

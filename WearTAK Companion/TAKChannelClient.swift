@@ -66,7 +66,8 @@ final class TAKChannelClient {
 
     /// Data Sync (Mission API) request; `path` is relative to `/Marti/api` and already percent-encoded.
     func missionRequest(path: String, method: String = "GET", query: [URLQueryItem] = []) async throws -> Data {
-        try await execute(path: "/Marti/api" + path, method: method, query: query, label: "Data Sync API",
+        try await execute(path: "/Marti/api" + path, method: method,
+                          query: TAKMissionAPI.takServerQuery(path: path, method: method, query: query), label: "Data Sync API",
                           maximumBytes: 4_194_304, encodedPath: true)
     }
 
