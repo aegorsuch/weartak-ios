@@ -117,6 +117,10 @@ final class XMLFields: NSObject, XMLParserDelegate {
 struct SitxProtocolChecks {
     @MainActor
     static func main() async throws {
+        if CommandLine.arguments.contains("--own-pin-deletion") {
+            try await checkOwnPinDeletion()
+            return
+        }
         DispatchQueue.global().asyncAfter(deadline: .now() + 30) {
             fatalError("Sit(x) protocol checks timed out")
         }
@@ -822,6 +826,55 @@ struct SitxProtocolChecks {
             }
         }
         print("PASS: device authorization recovers from connection loss, displays retry status, and stops on expiry/cancellation")
+    }
+
+    @MainActor
+    static func checkOwnPinDeletion() async throws {
+        let suite = "WearTAK.OwnPinDeletionChecks.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.sitxEnabled = false
+        let tokens = MemoryTokens()
+        tokens.values = [:]
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockSitxHTTP.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let client = SitxClient(settings: settings, session: session, defaults: defaults, tokenStore: tokens)
+        let output = FixtureCoTOutput()
+        client.companionOutput = output
+        let id = UUID()
+        let marker = WatchMarker(id: id, kind: .neutral, latitude: 38.1, longitude: -77.1,
+            title: "Own fixture", remark: "Unchanged remark ")
+        try await client.sendMarker(marker)
+        try await client.deleteMarker(uid: id.uuidString)
+        precondition(output.messages.count == 2)
+        let sentMarker = try fields(output.messages[0])
+        precondition(sentMarker.attributes["event"]?.first?["uid"] == id.uuidString)
+        for (uid, location) in [(id.uuidString, Optional<CLLocation>.none),
+                                ("own&\"<target>", CLLocation(latitude: 38.1, longitude: -77.1))] {
+            client.currentLocation = location
+            let xml = client.deleteMarkerXML(uid: uid)
+            let payload = try fields(xml)
+            let event = payload.attributes["event"]!.first!
+            let link = payload.attributes["link"]!.first!
+            precondition(event["type"] == "t-x-d-d" && event["uid"] != uid)
+            precondition(payload.attributes["link"]?.count == 1 && link["uid"] == uid)
+            precondition(link["relation"] == "none" && link["type"] == "none")
+            precondition(payload.attributes["__forcedelete"]?.count == 1)
+            let point = payload.attributes["point"]!.first!
+            precondition(Double(point["lat"]!) == (location?.coordinate.latitude ?? 0))
+            precondition(Double(point["lon"]!) == (location?.coordinate.longitude ?? 0))
+            let time = TAKMissionAPI.date(event["time"])!
+            precondition(TAKMissionAPI.date(event["start"]) == time)
+            precondition(TAKMissionAPI.date(event["stale"])!.timeIntervalSince(time) == 86_400)
+        }
+        let sentDelete = try fields(output.messages[1])
+        precondition(sentDelete.attributes["event"]?.first?["type"] == "t-x-d-d")
+        precondition(sentDelete.attributes["link"]?.first?["uid"] == id.uuidString)
+        precondition(tokens.values.isEmpty)
+        print("PASS: actual own-pin serializer and fixture-only delivery; exact/escaped UID, ATAK link fields, forcedelete, point fallback and 24h timestamps")
     }
 
     static func fields(_ xml: String) throws -> XMLFields {

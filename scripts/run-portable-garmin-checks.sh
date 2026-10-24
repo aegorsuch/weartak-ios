@@ -157,7 +157,7 @@ if [[ "$(uname -s)" == Darwin ]]; then
     Shared/UserMetrics.swift Shared/DittoPDL.swift Shared/DashboardMetric.swift Shared/ManualAlerts.swift \
     Shared/MOPPStatus.swift Shared/SecurePDLStore.swift Shared/ChatCommands.swift \
     Tests/SitxProtocolChecks.swift -o "$build_dir/sitx-protocol-checks"
-  "$build_dir/sitx-protocol-checks"
+  "$build_dir/sitx-protocol-checks" --own-pin-deletion
 fi
 
 swiftc -swift-version 5 -parse-as-library \
