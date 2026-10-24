@@ -9,6 +9,7 @@ struct BloodhoundPickerRow: View {
     let showDetail: () -> Void
     let showMap: () -> Void
     let navigate: () -> Void
+    let remove: () -> Void
 
     private let amber = Color(red: 1, green: 0.7, blue: 0)
     private let green = Color(red: 0.12, green: 0.37, blue: 0.16)
@@ -31,39 +32,46 @@ struct BloodhoundPickerRow: View {
                 .contentShape(Rectangle())
             }
             .accessibilityHint(Text("Show details"))
-            Button(action: showMap) {
-                Image("ATAKCrosshair").resizable().scaledToFit()
-                    .frame(width: 23, height: 23)
-                    .frame(width: 34, height: 34)
-                    .background(Color(white: 0.22), in: Circle())
+            VStack(spacing: 0) {
+                Button(action: showMap) {
+                    Image("ATAKCrosshair").resizable().scaledToFit()
+                        .frame(width: 18, height: 18)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .disabled(!available)
+                .accessibilityLabel(Text("Show \(title) on map"))
+                Button(action: navigate) {
+                    Group {
+                        if active {
+                            Image(systemName: "stop.fill").font(.caption)
+                        } else {
+                            Image("ATAKBloodhound").resizable().scaledToFit().frame(width: 18, height: 18)
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                    .background(active ? red : green, in: Circle())
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
-            }
-            .disabled(!available)
-            .accessibilityLabel(Text("Show \(title) on map"))
-            Button(action: navigate) {
-                Group {
-                    if active {
-                        Image(systemName: "stop.fill").font(.system(size: 13, weight: .bold))
-                    } else {
-                        Image("ATAKBloodhound").resizable().scaledToFit().padding(5)
-                    }
                 }
-                .frame(width: 34, height: 34)
-                .background(active ? red : green, in: Circle())
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+                .disabled(!active && !available)
+                .accessibilityLabel(active ? Text(String(localized: "Stop Bloodhound", table: "WatchMain")) : Text("Bloodhound to \(title)"))
+                Button(role: .destructive, action: remove) {
+                    Image(systemName: "trash").font(.caption)
+                        .foregroundStyle(.red)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text("Remove \(title) from this watch"))
             }
-            .disabled(!active && !available)
-            .accessibilityLabel(active ? Text(String(localized: "Stop Bloodhound", table: "WatchMain")) : Text("Bloodhound to \(title)"))
         }
         .buttonStyle(.plain)
         .foregroundStyle(.white)
         .padding(.leading, 8)
         .padding(.trailing, 2)
         .padding(.vertical, 4)
-        .background(active ? Color(red: 0.23, green: 0.16, blue: 0) : Color(white: 0.13), in: RoundedRectangle(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(active ? amber : .clear, lineWidth: 1.5))
+        .background(active ? Color(red: 0.23, green: 0.16, blue: 0) : Color(white: 0.13), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(active ? amber : .clear, lineWidth: 1.5))
         .accessibilityElement(children: .contain)
     }
 }

@@ -15,6 +15,9 @@ struct GarminRoute: Codable, Equatable, Identifiable {
         let lat: Double
         let lon: Double
         var name: String?
+        var type: String? = nil
+
+        var isCheckpoint: Bool { type == nil || type == "b-m-p-w" }
 
         var routeListName: String? {
             guard let name else { return nil }
@@ -25,6 +28,7 @@ struct GarminRoute: Codable, Equatable, Identifiable {
         var payload: [String: Any] {
             var value: [String: Any] = ["lat": lat, "lon": lon]
             if let name { value["name"] = name }
+            if let type { value["type"] = type }
             return value
         }
     }
@@ -35,7 +39,10 @@ struct GarminRoute: Codable, Equatable, Identifiable {
     var missionName: String?
     var senderUid: String?
     let points: [Point]
+    var method: String? = nil
     var id: String { serverId + "\n" + uid }
+    var checkpointIndices: [Int] { points.indices.filter { points[$0].isCheckpoint } }
+    var navigationIndices: [Int] { points.indices.filter { points[$0].isCheckpoint || $0 == points.count - 1 } }
     var namedPoints: [(index: Int, point: Point, name: String)] {
         points.enumerated().compactMap { index, point in
             point.routeListName.map { (index: index, point: point, name: $0) }
@@ -49,6 +56,7 @@ struct GarminRoute: Codable, Equatable, Identifiable {
         ]
         if let missionName { value["missionName"] = missionName }
         if let senderUid { value["senderUid"] = senderUid }
+        if let method { value["method"] = method }
         return value
     }
 
@@ -66,10 +74,12 @@ struct GarminRoute: Codable, Equatable, Identifiable {
               Self.validText(name, maximum: 64),
               missionName.map({ Self.validText($0, maximum: 128) }) ?? true,
               senderUid.map({ Self.validText($0, maximum: 128) }) ?? true,
+              method.map({ Self.validText($0, maximum: 64) }) ?? true,
               (2...Self.maximumPoints).contains(points.count),
               points.allSatisfy({
                   $0.lat.isFinite && $0.lon.isFinite && (-90...90).contains($0.lat) &&
                       (-180...180).contains($0.lon) &&
+                      ($0.type.map { Self.validText($0, maximum: 64) } ?? true) &&
                       ($0.name.map { Self.validText($0, maximum: 64) } ?? true)
               }) else { throw Failure.invalid }
         let data = try JSONSerialization.data(withJSONObject: ["msgType": "route", "payload": payload])
@@ -221,6 +231,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
     private var attributes: [String: String]?
     private var name: String?
     private var senderUid: String?
+    private var method: String?
     private var points: [GarminRoute.Point] = []
     private var removalUID: String?
     private var invalidGeometry = false
@@ -239,6 +250,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
             eventDepth = depth
             name = nil
             senderUid = nil
+            method = nil
             points = []
             removalUID = nil
             invalidGeometry = false
@@ -252,6 +264,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
         }
         guard type == "b-m-r" || type.hasPrefix("b-m-r-") else { return }
         if elementName == "contact" { name = values["callsign"] }
+        if elementName == "link_attr" { method = values["method"] }
         if elementName == "link", values["relation"] == "p-p" { senderUid = values["uid"] }
         if elementName == "link", values["relation"] == "c", values["point"] == nil {
             invalidGeometry = true
@@ -265,7 +278,8 @@ private final class RouteParser: NSObject, XMLParserDelegate {
                 invalidGeometry = true
                 return
             }
-            points.append(GarminRoute.Point(lat: lat, lon: lon, name: values["callsign"] ?? values["name"]))
+            points.append(GarminRoute.Point(lat: lat, lon: lon, name: values["callsign"] ?? values["name"],
+                                            type: values["type"] ?? "b-m-p-c"))
         }
     }
 
@@ -280,7 +294,7 @@ private final class RouteParser: NSObject, XMLParserDelegate {
         } else if type == "b-m-r" || type.hasPrefix("b-m-r-") {
             guard !invalidGeometry, let uid = attributes["uid"] else { fail(parser, .invalid); return }
             let route = GarminRoute(serverId: serverId, uid: uid, name: name ?? "Route",
-                                    missionName: missionName, senderUid: senderUid, points: points)
+                                    missionName: missionName, senderUid: senderUid, points: points, method: method)
             do {
                 _ = try route.validated()
                 events.append(.route(route))

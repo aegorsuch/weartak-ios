@@ -8,21 +8,22 @@ enum BloodhoundPicker {
         var id: Self { self }
     }
 
-    enum Action { case showOnMap, bloodhound }
+    enum Action { case showOnMap, bloodhound, remove }
     enum Indicator: Equatable { case route, bloodhound }
     enum Command: Equatable {
-        case showOnMap(Target), start(Target), chooseRoute(String), stop
+        case showOnMap(Target), start(Target), chooseRoute(String), remove(Target), stop
     }
 
     static func indicator(for target: Target?) -> Indicator? {
         guard let target else { return nil }
         if case .route = target { return .route }
-        return .bloodhound
+        return nil
     }
 
     static func command(for action: Action, target: Target, active: Target?) -> Command {
         switch action {
         case .showOnMap: return .showOnMap(target)
+        case .remove: return .remove(target)
         case .bloodhound:
             if target == active { return .stop }
             if case .route(let id) = target { return .chooseRoute(id) }

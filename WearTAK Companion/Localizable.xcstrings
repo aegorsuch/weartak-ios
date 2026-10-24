@@ -1,0 +1,57 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Routes" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Routes" } } }
+    },
+    "Route" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Route" } } }
+    },
+    "Navigation" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Navigation" } } }
+    },
+    "Start nearest" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Start nearest" } } }
+    },
+    "Start from beginning" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Start from beginning" } } }
+    },
+    "Stop route" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Stop route" } } }
+    },
+    "Route complete" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Route complete" } } }
+    },
+    "Route stopped" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Route stopped" } } }
+    },
+    "Point %lld of %lld" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Point %1$lld of %2$lld" } } }
+    },
+    "%@: Point %lld of %lld" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@: Point %2$lld of %3$lld" } } }
+    },
+    "Remaining: %lld m" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remaining: %lld m" } } }
+    },
+    "Remaining distance unavailable" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remaining distance unavailable" } } }
+    },
+    "Arrival radius: %lld m" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Arrival radius: %lld m" } } }
+    },
+    "%lld named points · %lld total" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$lld named points · %2$lld total" } } }
+    },
+    "Start nearest requires a current location. Enable location and try again." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Start nearest requires a current location. Enable location and try again." } } }
+    },
+    "No routes. Send a route Data Package from ATAK through your configured TAK server." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No routes. Send a route Data Package from ATAK through your configured TAK server." } } }
+    },
+    "Start, progress, stop and completion are shared with your paired Apple Watch. Changes made offline sync when the devices reconnect." : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Start, progress, stop and completion are shared with your paired Apple Watch. Changes made offline sync when the devices reconnect." } } }
+    }
+  },
+  "version" : "1.0"
+}

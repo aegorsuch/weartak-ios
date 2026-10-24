@@ -40,6 +40,19 @@ struct CompanionSetupView: View {
         NavigationStack {
             List {
                 TLSApprovalSection(bridge: bridge)
+                if bridge.watchRoute == .apple {
+                    Section {
+                        NavigationLink {
+                            PhoneRouteListView(bridge: bridge)
+                        } label: {
+                            Label("Routes", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        }
+                        if let state = bridge.routeNavigationState, state.phase == .active {
+                            Text("\(state.route.name): Point \(state.targetIndex + 1) of \(state.route.points.count)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Section {
                     LabeledContent(
                         String(localized: "Reporting status", table: "PhoneLocationReporting"),

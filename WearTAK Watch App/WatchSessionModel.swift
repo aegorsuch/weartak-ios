@@ -241,6 +241,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     @Published private(set) var routeBloodhoundIndex: Int?
     @Published private(set) var routeStartRevision = 0
     @Published private(set) var routeFollow: RouteFollower?
+    private var routeNavigation = RouteNavigationReplica()
     @Published private(set) var routeCompletionMessage: String?
     private static let routesStorageKey = "WearTAK.watchRoutes"
     var incomingUserTeams: [MapUserGroup] {
@@ -407,6 +408,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
             if let routes { self.updateWatchRoutes { try $0.replace(routes) } }
             if let error { self.routeError = error }
         }
+        companionClient.onRouteNavigation = { [weak self] data in self?.receiveRouteNavigation(data) }
+        if let data = UserDefaults.standard.data(forKey: RouteNavigationState.storageKey) {
+            receiveRouteNavigation(data)
+        }
+        companionClient.restoreRouteNavigation()
         do {
             offlineOutbox = try OfflineOutbox()
             expireOfflineEvents()
@@ -790,7 +796,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     var usableMarkerCoordinate: CLLocationCoordinate2D? {
-        guard let location = lastLocation, location.horizontalAccuracy >= 0,
+        guard let location = lastLocation, location.horizontalAccuracy >= 0, location.horizontalAccuracy.isFinite,
               abs(location.timestamp.timeIntervalSinceNow) < 120 else { return nil }
         return location.coordinate
     }
@@ -898,10 +904,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
             let data = try JSONEncoder().encode(candidate)
             guard data.count <= 100_000 else { throw GarminRoute.Failure.capacity }
             UserDefaults.standard.set(data, forKey: Self.routesStorageKey)
-            if let key = routeBloodhoundKey,
-               candidate.routes.first(where: { WatchRoutes.key($0) == key })?.points !=
-                watchRoutes.routes.first(where: { WatchRoutes.key($0) == key })?.points {
-                clearRouteBloodhound()
+            if let key = routeBloodhoundKey {
+                let current = watchRoutes.routes.first { $0.id == key }
+                let next = candidate.routes.first { $0.id == key }
+                if next?.points != current?.points || next?.method != current?.method {
+                    clearRouteBloodhound()
+                }
             }
             watchRoutes = candidate
             routeError = nil
@@ -910,6 +918,31 @@ final class WatchSessionModel: NSObject, ObservableObject {
 
     func removeRouteFromWatch(_ route: GarminRoute) {
         updateWatchRoutes { $0.remove(route) }
+    }
+
+    func removePickerTarget(_ target: BloodhoundPicker.Target) {
+        if activeBloodhoundPickerTarget == target { stopBloodhoundLocally() }
+        switch target {
+        case .route(let id):
+            if let route = watchRoutes.routes.first(where: { $0.id == id }) { removeRouteFromWatch(route) }
+        case .marker(let id):
+            markers.removeAll { $0.id == id }
+            saveMarkers()
+        case .contact(let id):
+            removeIncomingPoint(id)
+            incomingEntities.removeAll { $0.id == id && $0.isUser }
+        case .point(let id): removeIncomingPoint(id)
+        }
+    }
+
+    func removeAllPickerTargets() {
+        // Active emergency alerts retain their explicit lifecycle/dismiss action.
+        if routeBloodhoundKey != nil { clearRouteBloodhound() }
+        updateWatchRoutes { $0.removeAll() }
+        for marker in markers { removePickerTarget(.marker(marker.id)) }
+        for contact in incomingEntities.filter(\.isUser) { removePickerTarget(.contact(contact.id)) }
+        for point in bloodhoundOrderPoints.filter({ !$0.isAlert }) { removePickerTarget(.point(point.id)) }
+        if routeNavigation.state?.phase == .completed { routeCompletionMessage = nil }
     }
 
     /// Only a recent, valid watch fix may choose the nearest vertex or advance a route.
@@ -921,21 +954,17 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func startRouteFollowing(_ route: GarminRoute, start: RouteFollower.Start) {
-        guard let current = watchRoutes.routes.first(where: { $0.id == route.id }),
-              let follow = RouteFollower(route: current, start: start, location: routeLocation) else { return }
-        clearRouteBloodhound()
-        bloodhoundTargetID = nil
-        bloodhoundContactID = nil
-        bloodhoundMapItemID = nil
-        routeFollow = follow
-        routeBloodhoundKey = current.id
-        routeBloodhoundIndex = follow.targetIndex
-        if let location = routeLocation { advanceRouteFollowing(at: location) }
-        if routeFollow != nil {
-            requestLocation()
-            startLiveLocation()
+        do {
+            guard let current = watchRoutes.routes.first(where: { $0.id == route.id }) else {
+                throw RouteNavigationState.Failure.invalid
+            }
+            var candidate = routeNavigation
+            try candidate.start(route: current, start: start, location: routeLocation,
+                                accuracyMeters: lastLocation?.horizontalAccuracy ?? 0, origin: "watch")
+            try commitRouteNavigation(candidate)
+        } catch {
+            routeError = "Route start failed: \(error.localizedDescription)"
         }
-        routeStartRevision &+= 1
     }
 
     var activeBloodhoundPickerTarget: BloodhoundPicker.Target? {
@@ -980,18 +1009,65 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private func advanceRouteFollowing(at location: GarminRoute.Point) {
-        guard var follow = routeFollow else { return }
-        follow.advance(at: location)
-        if follow.isComplete {
-            let name = watchRoutes.routes.first(where: { $0.id == follow.routeID })?.name ?? ""
-            clearRouteBloodhound()
-            routeCompletionMessage = String(localized: "Route complete: \(name)")
-            WKInterfaceDevice.current().play(.success)
-        } else {
-            if routeBloodhoundIndex != follow.targetIndex { bloodhoundProximityNotified = false }
-            routeFollow = follow
-            routeBloodhoundIndex = follow.targetIndex
+        guard routeFollow != nil else { return }
+        var candidate = routeNavigation
+        guard candidate.advance(at: location, accuracyMeters: lastLocation?.horizontalAccuracy ?? 0, origin: "watch") else { return }
+        do { try commitRouteNavigation(candidate) }
+        catch { routeError = "Route progress failed: \(error.localizedDescription)" }
+    }
+
+    private func receiveRouteNavigation(_ data: Data) {
+        do {
+            let state = try RouteNavigationState.decode(data)
+            var candidate = routeNavigation
+            if try candidate.receive(state) { try commitRouteNavigation(candidate) }
+            else if let current = routeNavigation.state, current != state {
+                companionClient.publishRouteNavigation(try current.encoded())
+            }
+        } catch { routeError = "Route sync failed: \(error.localizedDescription)" }
+    }
+
+    private func commitRouteNavigation(_ candidate: RouteNavigationReplica) throws {
+        guard let state = candidate.state else { return }
+        let data = try state.encoded()
+        let previous = routeNavigation.state
+        if state.phase == .active {
+            var routes = watchRoutes
+            try routes.receive([.route(state.route)], serverID: state.route.serverId)
+            let routeData = try JSONEncoder().encode(routes)
+            UserDefaults.standard.set(routeData, forKey: Self.routesStorageKey)
+            watchRoutes = routes
         }
+        UserDefaults.standard.set(data, forKey: RouteNavigationState.storageKey)
+        routeNavigation = candidate
+        if state.phase == .active || (state.phase == .completed && previous?.sessionID != state.sessionID) {
+            bloodhoundTargetID = nil
+            bloodhoundContactID = nil
+            bloodhoundMapItemID = nil
+        }
+        if state.phase == .active {
+            let starting = previous?.sessionID != state.sessionID || previous?.phase != .active
+            bloodhoundProximityNotified = false
+            routeCompletionMessage = nil
+            routeFollow = RouteFollower(route: state.route, targetIndex: state.targetIndex,
+                                        arrivedIndices: Set(state.arrivedIndices))
+            routeBloodhoundKey = state.route.id
+            routeBloodhoundIndex = state.targetIndex
+            if starting {
+                routeStartRevision &+= 1
+                requestLocation()
+                startLiveLocation()
+            }
+        } else {
+            clearRouteBloodhound(syncStop: false)
+            if state.phase == .completed {
+                routeCompletionMessage = String(localized: "Route complete: \(state.route.name)")
+                if previous?.phase != .completed || previous?.sessionID != state.sessionID {
+                    WKInterfaceDevice.current().play(.success)
+                }
+            }
+        }
+        companionClient.publishRouteNavigation(data)
     }
 
     func toggleRouteBloodhound(_ route: GarminRoute, index: Int) {
@@ -1007,7 +1083,14 @@ final class WatchSessionModel: NSObject, ObservableObject {
         if !stopping { requestLocation() }
     }
 
-    private func clearRouteBloodhound() {
+    private func clearRouteBloodhound(syncStop: Bool = true) {
+        if syncStop {
+            var candidate = routeNavigation
+            if candidate.stop(origin: "watch") {
+                do { try commitRouteNavigation(candidate) }
+                catch { routeError = "Route stop failed: \(error.localizedDescription)"; return }
+            }
+        }
         routeFollow = nil
         routeBloodhoundKey = nil
         routeBloodhoundIndex = nil

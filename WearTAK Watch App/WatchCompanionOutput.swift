@@ -32,6 +32,9 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     var onBridgeRestart: (() -> Void)?
     var onMapSnapshot: (([CompanionMapEvent], [UUID]) -> Void)?
     var onRoutes: (([GarminRoute]?, String?) -> Void)?
+    var onRouteNavigation: ((Data) -> Void)?
+    @Published private(set) var routeNavigationError: String?
+    private var routeNavigationData: Data?
     @Published private(set) var routeRefreshError: String?
     var onRemoteAlertSources: (([UUID]) -> Void)?
     /// A server's mission list loaded; its subscribed missions carry their current map items.
@@ -167,15 +170,41 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
            identity.issuedAt.timeIntervalSince(published.issuedAt) < 3_600 { return }
         do {
             // Application context replaces the whole dictionary, so identity and vitals are always sent together.
-            try WCSession.default.updateApplicationContext([
-                WatchReportingIdentity.contextKey: identity.contextValue(),
-                WatchBiometrics.contextKey: biometrics.contextValue(),
-            ])
+            var context = WCSession.default.applicationContext
+            context[WatchReportingIdentity.contextKey] = try identity.contextValue()
+            context[WatchBiometrics.contextKey] = try biometrics.contextValue()
+            if let routeNavigationData { context[RouteNavigationState.contextKey] = routeNavigationData }
+            try WCSession.default.updateApplicationContext(context)
             publishedIdentity = identity
             publishedBiometricsAt = Date()
             identitySyncError = nil
         } catch {
             identitySyncError = "Unable to share watch identity with Companion: \(error.localizedDescription)"
+        }
+    }
+
+    func publishRouteNavigation(_ data: Data) {
+        routeNavigationData = data
+        guard WCSession.default.activationState == .activated else { return }
+        do {
+            var context = WCSession.default.applicationContext
+            context[RouteNavigationState.contextKey] = data
+            try WCSession.default.updateApplicationContext(context)
+            routeNavigationError = nil
+            if WCSession.default.isReachable {
+                WCSession.default.sendMessage([RouteNavigationState.contextKey: data], replyHandler: nil,
+                    errorHandler: { [weak self] error in
+                        Task { @MainActor in
+                            self?.routeNavigationError = "Route sync queued for reconnection: \(error.localizedDescription)"
+                        }
+                    })
+            }
+        } catch { routeNavigationError = "Route sync failed: \(error.localizedDescription)" }
+    }
+
+    func restoreRouteNavigation() {
+        if let data = WCSession.default.receivedApplicationContext[RouteNavigationState.contextKey] as? Data {
+            onRouteNavigation?(data)
         }
     }
 
@@ -684,6 +713,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             self?.applyDittoStatusContext(session.receivedApplicationContext)
             self?.phoneSitxSetUp = sitxSetUp
             self?.publishIdentity(force: true)
+            self?.restoreRouteNavigation()
             self?.refresh()
         }
     }
@@ -702,6 +732,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             if let configured { self.configured = configured }
             self.applySitxSettingsContext(context)
             self.applyDittoStatusContext(context)
+            if let data = context[RouteNavigationState.contextKey] as? Data { self.onRouteNavigation?(data) }
             self.phoneSitxSetUp = sitxSetUp
             if unavailable && !self.handshakeInFlight && !self.mapRefreshing {
                 self.pauseReason = paused.map { String($0.prefix(200)) }
@@ -711,6 +742,11 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             }
             else { self.refresh() }
         }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        guard let data = message[RouteNavigationState.contextKey] as? Data else { return }
+        Task { @MainActor [weak self] in self?.onRouteNavigation?(data) }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data) {

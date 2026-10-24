@@ -13,7 +13,8 @@ struct BloodhoundPickerChecks {
             if case .route = target {
                 precondition(BloodhoundPicker.indicator(for: target) == .route)
             } else {
-                precondition(BloodhoundPicker.indicator(for: target) == .bloodhound)
+                precondition(BloodhoundPicker.indicator(for: target) == nil,
+                             "The active compass already gives direction; hide the redundant Bloodhound icon")
             }
         }
         let activeTargets: [Target?] = [nil] + targets.map { Optional($0) }
@@ -21,6 +22,8 @@ struct BloodhoundPickerChecks {
             for active in activeTargets {
                 precondition(BloodhoundPicker.command(for: .showOnMap, target: target, active: active) == .showOnMap(target),
                              "Map preview must never start or stop navigation, even for the active row")
+                precondition(BloodhoundPicker.command(for: .remove, target: target, active: active) == .remove(target),
+                             "Delete must select local removal, never toggle navigation or transmit server deletion")
                 let expected: BloodhoundPicker.Command
                 if active == target { expected = .stop }
                 else if case .route(let id) = target { expected = .chooseRoute(id) }

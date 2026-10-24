@@ -2206,6 +2206,7 @@ private struct BloodhoundView: View {
     @State private var detailTarget: BloodhoundPicker.Target?
     @State private var mapTarget: BloodhoundPicker.Target?
     @State private var routeToStart: BloodhoundPicker.Target?
+    @State private var targetToRemove: BloodhoundPicker.Target?
     @State private var confirmRemoveAll = false
     @State private var showNavigation = false
 
@@ -2257,6 +2258,7 @@ private struct BloodhoundView: View {
         switch BloodhoundPicker.command(for: action, target: target, active: model.activeBloodhoundPickerTarget) {
         case .showOnMap(let target): mapTarget = target
         case .chooseRoute(let id): routeToStart = .route(id)
+        case .remove(let target): targetToRemove = target
         case .stop: model.stopBloodhoundLocally()
         case .start(let target): model.startPickerBloodhound(target)
         }
@@ -2268,7 +2270,8 @@ private struct BloodhoundView: View {
             active: target == model.activeBloodhoundPickerTarget, available: available,
             showDetail: detail,
             showMap: { perform(.showOnMap, target: target) },
-            navigate: { perform(.bloodhound, target: target) })
+            navigate: { perform(.bloodhound, target: target) },
+            remove: { perform(.remove, target: target) })
             .listRowInsets(EdgeInsets(top: 3, leading: 0, bottom: 3, trailing: 0))
             .listRowBackground(Color.clear)
     }
@@ -2314,6 +2317,7 @@ private struct BloodhoundView: View {
             }
             if let message = model.routeCompletionMessage { Text(message).foregroundStyle(.green) }
             if let error = model.routeError { Text(error).font(.caption2).foregroundStyle(.orange) }
+            if let error = model.companionClient.routeNavigationError { Text(error).font(.caption2).foregroundStyle(.orange) }
             if let error = model.remoteAlertError { Text(error).font(.caption2).foregroundStyle(.orange) }
             let alerts = model.bloodhoundOrderPoints.filter(\.isAlert)
             if !alerts.isEmpty {
@@ -2342,7 +2346,9 @@ private struct BloodhoundView: View {
                 !model.incomingEntities.contains(where: \.isUser) && model.bloodhoundOrderPoints.isEmpty {
                 Text("No incoming points").foregroundStyle(.secondary)
             }
-            if model.bloodhoundOrderPoints.contains(where: { !$0.isAlert }) {
+            if !model.watchRoutes.routes.isEmpty || !model.markers.isEmpty ||
+                model.incomingEntities.contains(where: \.isUser) ||
+                model.bloodhoundOrderPoints.contains(where: { !$0.isAlert }) {
                 Button("Remove All", role: .destructive) { confirmRemoveAll = true }
             }
         }
@@ -2381,10 +2387,23 @@ private struct BloodhoundView: View {
             }
             Button(String(localized: "Cancel", table: "WatchMain"), role: .cancel) { selectedPoint = nil }
         } message: { item in Text(pointDetail(item)) }
-        .confirmationDialog("Remove all incoming points?", isPresented: $confirmRemoveAll) {
+        .confirmationDialog("Remove all routes and points from this watch?", isPresented: $confirmRemoveAll) {
             Button("Remove All", role: .destructive) {
-                for id in model.bloodhoundOrderPoints.filter({ !$0.isAlert }).map(\.id) { model.removeIncomingPoint(id) }
+                model.removeAllPickerTargets()
             }
+        } message: {
+            Text("Routes, markers, contacts and ordinary incoming points are removed locally. Active alerts stay available. Server data is not deleted.")
+        }
+        .confirmationDialog("Remove from this watch?", isPresented: Binding(
+            get: { targetToRemove != nil }, set: { if !$0 { targetToRemove = nil } }
+        ), titleVisibility: .visible, presenting: targetToRemove) { target in
+            Button("Remove from This Watch", role: .destructive) {
+                model.removePickerTarget(target)
+                targetToRemove = nil
+            }
+            Button(String(localized: "Cancel", table: "WatchMain"), role: .cancel) { targetToRemove = nil }
+        } message: { _ in
+            Text("Only this watch's copy is removed. Shared route navigation to this target stops on both devices. Server data is not deleted.")
         }
         .onAppear {
             model.markIncomingPointsSeen()

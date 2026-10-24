@@ -4,82 +4,112 @@ import Foundation
 struct RouteFollowerChecks {
     static func main() {
         typealias Point = GarminRoute.Point
-        func point(_ lat: Double, _ lon: Double = 0, name: String? = nil) -> Point {
-            Point(lat: lat, lon: lon, name: name)
+        let degreesPerMeter = 180 / (Double.pi * 6_371_000)
+        func point(_ meters: Double, checkpoint: Bool = true) -> Point {
+            Point(lat: meters * degreesPerMeter, lon: 0, type: checkpoint ? "b-m-p-w" : "b-m-p-c")
         }
-        func route(_ points: [Point], server: String = "server") -> GarminRoute {
-            GarminRoute(serverId: server, uid: "route", name: "Test route", points: points)
+        func route(_ points: [Point], method: String? = "Driving", server: String = "server") -> GarminRoute {
+            GarminRoute(serverId: server, uid: "route", name: "Test route", points: points, method: method)
         }
         func near(_ actual: Double?, _ expected: Double, tolerance: Double = 0.01) {
             precondition(actual != nil && abs(actual! - expected) < tolerance)
         }
-
-        let geometry = [point(0, name: "Beginning"), point(0.001), point(0.002, name: "End")]
+        let geometry = [point(0), point(100), point(200)]
         let value = route(geometry)
         var beginning = RouteFollower(route: value, start: .beginning, location: nil)!
         precondition(beginning.targetIndex == 0 && beginning.points == geometry)
         precondition(beginning.routeID == value.id && !beginning.isComplete)
-        precondition(RouteFollower.arrivalRadiusMeters == 20)
+        precondition(RouteFollower.arrivalRadiusMeters(method: nil) == 10)
         precondition(RouteFollower(route: value, start: .nearest, location: nil) == nil)
-        precondition(RouteFollower(route: value, start: .nearest, location: point(.nan)) == nil)
+        precondition(RouteFollower(route: value, start: .nearest, location: .init(lat: .nan, lon: 0)) == nil)
         precondition(RouteFollower(route: route([]), start: .beginning, location: nil) == nil)
         precondition(RouteFollower.nearestIndex(in: [], to: point(0)) == nil)
-        precondition(RouteFollower.nearestIndex(in: geometry, to: point(91)) == nil)
-        precondition(RouteFollower.nearestIndex(in: geometry, to: point(0, 181)) == nil)
-        precondition(RouteFollower.nearestIndex(in: geometry, to: point(.infinity)) == nil)
+        precondition(RouteFollower.nearestIndex(in: geometry, to: .init(lat: 91, lon: 0)) == nil)
+        precondition(RouteFollower.nearestIndex(in: geometry, to: .init(lat: 0, lon: 181)) == nil)
         precondition(RouteFollower.nearestIndex(in: [point(-1), point(1)], to: point(0)) == 0)
-        precondition(RouteFollower.nearestIndex(in: [point(0, 179), point(0, -179.9)], to: point(0, 179.95)) == 1)
+        precondition(RouteFollower.nearestIndex(in: [.init(lat: 0, lon: 179), .init(lat: 0, lon: -179.9)],
+                                              to: .init(lat: 0, lon: 179.95)) == 1)
 
-        var nearest = RouteFollower(route: value, start: .nearest, location: point(0.0011))!
-        precondition(nearest.targetIndex == 1, "Nearest must retain the unnamed vertex's original index")
-        nearest.advance(at: point(0.0011))
-        precondition(nearest.targetIndex == 2)
-        nearest.advance(at: point(0))
-        precondition(nearest.targetIndex == 2, "Following must never go backwards")
-        nearest.advance(at: point(0.002))
-        precondition(nearest.isComplete)
-        near(nearest.remainingDistanceMeters(from: point(0.002)), 0)
-        nearest.advance(at: point(0.002))
-        precondition(nearest.targetIndex == geometry.count, "Completion is stable and cannot index past the end")
-
-        beginning.advance(at: point(-0.001))
-        precondition(beginning.targetIndex == 0)
-        beginning.advance(at: point(.nan))
-        precondition(beginning.targetIndex == 0)
+        let nearest = RouteFollower(route: value, start: .nearest, location: point(110))!
+        precondition(nearest.targetIndex == 2, "Nearest means the next checkpoint after along-route projection, not nearest vertex")
         beginning.advance(at: point(0))
         precondition(beginning.targetIndex == 1)
-        precondition(beginning.remainingDistanceMeters(from: point(.nan)) == nil)
-        near(beginning.remainingDistanceMeters(from: point(0)), 222.38985)
-        let bent = route([point(0), point(0.001), point(0.001, 0.001)])
-        let bentFollow = RouteFollower(route: bent, start: .beginning, location: nil)!
-        near(bentFollow.remainingDistanceMeters(from: point(-0.001)), 333.58478)
+        beginning.advance(at: point(95))
+        precondition(beginning.targetIndex == 1 && beginning.arrivedIndices.contains(1),
+                     "Entering a checkpoint bubble remembers arrival but does not skip its projected crossing")
+        beginning.advance(at: point(130))
+        precondition(beginning.targetIndex == 2, "Remembered arrival plus crossing may advance after leaving the bubble")
+        beginning.advance(at: point(0))
+        precondition(beginning.targetIndex == 2, "Navigation cannot go backwards")
+        near(beginning.remainingDistanceMeters(from: point(0)), 200)
+        beginning.advance(at: point(185))
+        precondition(beginning.isComplete)
+        near(beginning.remainingDistanceMeters(from: point(185)), 0)
+        beginning.advance(at: point(200))
+        precondition(beginning.targetIndex == geometry.count)
 
-        let dense = route([point(0), point(0), point(0.00005), point(0.0001), point(0.001)])
+        var neverArrived = RouteFollower(route: route([point(0, checkpoint: false), point(100), point(300)]),
+                                         start: .beginning, location: nil)!
+        neverArrived.advance(at: point(130))
+        precondition(neverArrived.targetIndex == 1, "Projected crossing alone cannot advance a never-arrived checkpoint")
+        neverArrived.advance(at: point(300))
+        precondition(neverArrived.isComplete, "Raw final arrival completes even with an earlier unvisited checkpoint")
+
+        let dense = route([point(0), point(5), point(9), point(80)])
         var denseFollow = RouteFollower(route: dense, start: .beginning, location: nil)!
         denseFollow.advance(at: point(0))
-        precondition(denseFollow.targetIndex == 4, "Skip all consecutive points inside 20 m in one fix")
-        denseFollow.advance(at: point(0.001))
-        precondition(denseFollow.isComplete)
-        var colocated = RouteFollower(route: route([point(0), point(0)]), start: .beginning, location: nil)!
-        colocated.advance(at: point(0))
-        precondition(colocated.isComplete, "A route may finish immediately when every remaining point is nearby")
+        precondition(denseFollow.targetIndex == 1)
+        denseFollow.advance(at: point(10))
+        precondition(denseFollow.targetIndex == 3, "Dense checkpoints require crossing, not just overlapping bubbles")
+        var duplicates = RouteFollower(route: route([point(0), point(0), point(80)]), start: .beginning, location: nil)!
+        duplicates.advance(at: point(0))
+        precondition(duplicates.targetIndex == 2)
+        var duplicateFinal = RouteFollower(route: route([point(0), point(0)]), start: .beginning, location: nil)!
+        duplicateFinal.advance(at: point(0))
+        precondition(duplicateFinal.isComplete)
 
-        let metersToDegrees = 180 / (Double.pi * 6_371_000)
-        var outside = RouteFollower(route: value, start: .beginning, location: nil)!
-        outside.advance(at: point(-20.01 * metersToDegrees))
-        precondition(outside.targetIndex == 0)
-        outside.advance(at: point(-19.99 * metersToDegrees))
-        precondition(outside.targetIndex == 1)
-        // A later vertex near the user must not skip an earlier, unvisited distant target.
-        var ordered = RouteFollower(route: route([point(0.01), point(0)]), start: .beginning, location: nil)!
-        ordered.advance(at: point(0))
-        precondition(ordered.targetIndex == 0)
-        let one = route([point(0)])
-        var single = RouteFollower(route: one, start: .beginning, location: nil)!
-        single.advance(at: point(0))
-        precondition(single.isComplete)
-        let otherServer = RouteFollower(route: route(geometry, server: "other"), start: .beginning, location: nil)!
-        precondition(otherServer.routeID != beginning.routeID)
-        print("PASS: route start modes, original indices, nearest vertex, ordered/dense arrival, completion, remaining distance")
+        let controls = route([point(0, checkpoint: false), point(100, checkpoint: false), point(200, checkpoint: false)])
+        var controlFollow = RouteFollower(route: controls, start: .beginning, location: nil)!
+        precondition(controlFollow.targetIndex == 2 && controlFollow.points.count == 3)
+        controlFollow.advance(at: point(100))
+        precondition(controlFollow.targetIndex == 2)
+        controlFollow.advance(at: point(200))
+        precondition(controlFollow.isComplete)
+        let mixed = route([point(0, checkpoint: false), point(100), point(200, checkpoint: false)])
+        precondition(RouteFollower(route: mixed, start: .beginning, location: nil)?.targetIndex == 1)
+        precondition(RouteFollower(route: mixed, targetIndex: 0) == nil, "Control-only vertices are not objectives")
+        near(RouteFollower(route: mixed, start: .beginning, location: nil)?.remainingDistanceMeters(from: point(0)), 200)
+        let loop = route([point(0), point(100), point(0)])
+        precondition(RouteFollower(route: loop, start: .nearest, location: point(50))?.targetIndex == 1,
+                     "Equal-distance projections choose the first segment")
+        let dateLine = route([.init(lat: 0, lon: 179.9), .init(lat: 0, lon: -179.9)])
+        near(RouteFollower.projectedDistance(in: dateLine.points, to: .init(lat: 0, lon: 180)), 11_119.49266)
+
+        for (method, radius) in [("Walking", 10.0), ("Swimming", 10), ("Driving", 20),
+                                 ("Watercraft", 100), ("Flying", 1_000), ("Unknown", 10)] {
+            let methodRoute = route([point(0), point(10_000)], method: method)
+            var follower = RouteFollower(route: methodRoute, targetIndex: 1)!
+            precondition(follower.arrivalRadiusMeters == radius)
+            follower.advance(at: point(10_000 - radius - 0.01))
+            precondition(!follower.isComplete, "\(method) must not arrive outside its radius")
+            follower.advance(at: point(10_000 - radius + 0.01))
+            precondition(follower.isComplete, "\(method) must arrive inside its radius")
+        }
+        let accuracyRoute = route([point(0), point(200)], method: "Walking")
+        var withAccuracy = RouteFollower(route: accuracyRoute, targetIndex: 1)!
+        withAccuracy.advance(at: point(180), accuracyMeters: 10.1)
+        precondition(withAccuracy.isComplete, "GNSS CE expands method arrival radius")
+        for invalid in [-1.0, .nan, .infinity] {
+            var follower = RouteFollower(route: accuracyRoute, targetIndex: 1)!
+            follower.advance(at: point(180), accuracyMeters: invalid)
+            precondition(!follower.isComplete, "Invalid CE must contribute zero")
+        }
+        var largeCE = RouteFollower(route: accuracyRoute, targetIndex: 1)!
+        largeCE.advance(at: point(0), accuracyMeters: 1_000_000)
+        precondition(largeCE.isComplete, "Finite CE is not silently clamped")
+        precondition(RouteFollower(route: value, targetIndex: -1) == nil)
+        precondition(RouteFollower(route: value, targetIndex: 4) == nil)
+        precondition(RouteFollower(route: value, targetIndex: value.points.count)?.isComplete == true)
+        print("PASS: checkpoint/control objectives, projected nearest/crossing, remembered arrival, final override, method radius + CE, dense/loop/date-line geometry")
     }
 }
