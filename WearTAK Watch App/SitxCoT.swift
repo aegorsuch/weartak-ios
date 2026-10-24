@@ -135,6 +135,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     private var textElement: String?
     private var deletedUID: String?
     private var circleRadius: Double?
+    private var hasVideoDetail = false
 
     init(excludedUID: String, now: Date) {
         self.excludedUID = excludedUID
@@ -167,6 +168,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             textElement = nil
             deletedUID = nil
             circleRadius = nil
+            hasVideoDetail = false
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             var stale = attributes["stale"].flatMap { formatter.date(from: $0) }
@@ -184,6 +186,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                 sentAt = attributes["time"].flatMap { formatter.date(from: $0) }
             }
             how = attributes["how"]
+        } else if elementName == "__video", depth == 3 {
+            hasVideoDetail = true
         } else if elementName == "contact" {
             callSign = attributes["callsign"]?.trimmingCharacters(in: .whitespacesAndNewlines)
             hasContactEndpoint = !(attributes["endpoint"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
@@ -264,7 +268,8 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             return
         }
         guard eventType.hasPrefix("a-") || eventType == "b-m-p-s-m" || eventType == "b-m-p-s-p-i" ||
-                eventType.hasPrefix("u-d-") || emergencyState != nil else {
+                eventType.hasPrefix("u-d-") || CoTCamera.recognizes(type: eventType, hasVideoDetail: hasVideoDetail) ||
+                emergencyState != nil else {
             SitxCoT.diagnose("Rejected CoT entity: unsupported type")
             return
         }
@@ -293,6 +298,6 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                                            isUser: emergencyState == nil && isUser, sentAt: sentAt, how: how,
                                            emergencyState: emergencyState, alertCategory: alertCategory, staleAt: staleAt,
                                            hasUsableLocation: point != nil, hasChatEndpoint: hasContactEndpoint,
-                                           circleRadius: circleRadius))
+                                           circleRadius: circleRadius, hasVideoDetail: hasVideoDetail))
     }
 }

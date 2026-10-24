@@ -62,6 +62,7 @@ struct EntityRelayPayload: Codable {
     var hasChatEndpoint: Bool? = nil
     var deletedUID: String? = nil
     var circleRadius: Double? = nil
+    var hasVideoDetail: Bool? = nil
 
     var isHumanEntered: Bool { how?.hasPrefix("h") == true }
 

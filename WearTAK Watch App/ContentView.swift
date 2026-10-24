@@ -2351,7 +2351,7 @@ private struct BloodhoundView: View {
 
     private func pointRow(_ item: IncomingMapEntity) -> some View {
         row(.point(item.id), title: item.displayTitle, subtitle: pointDetail(item),
-            glyph: item.isAlert ? "exclamationmark.triangle.fill" : "mappin", available: item.hasUsableLocation) {
+            glyph: item.pickerGlyph, available: item.hasUsableLocation) {
                 if item.isAlert { detailTarget = .point(item.id) }
                 else { selectedPoint = item }
             }
@@ -2412,7 +2412,7 @@ private struct BloodhoundView: View {
                 row(.contact(contact.id), title: contact.callSign ?? contact.id,
                     subtitle: subtitle(String(localized: "Contact", table: "WatchMain"),
                         points: contact.hasUsableLocation ? [.init(lat: contact.latitude, lon: contact.longitude)] : []),
-                    glyph: "person.fill", available: contact.hasUsableLocation) { detailTarget = .contact(contact.id) }
+                    glyph: contact.pickerGlyph, available: contact.hasUsableLocation) { detailTarget = .contact(contact.id) }
             }
             ForEach(model.bloodhoundOrderPoints.filter { !$0.isAlert }) { item in pointRow(item) }
             if model.watchRoutes.routes.isEmpty && model.markers.isEmpty &&
