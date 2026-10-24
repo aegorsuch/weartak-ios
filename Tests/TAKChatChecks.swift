@@ -4,7 +4,7 @@ import Foundation
 struct TAKChatChecks {
     static func main() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        precondition(TAKChatMessage.quickMessages == ["Roger", "Negative", "Objective Sighted", "In Position"])
+        precondition(TAKChatMessage.quickMessages == ["In Position", "Negative", "Objective Sighted", "Roger"])
         for text in TAKChatMessage.quickMessages {
             let quick = try TAKChatMessage.outgoing(senderUID: "watch", senderCallSign: "Watch",
                 recipientUID: "atak", recipientCallSign: "ATAK", text: text, now: now)

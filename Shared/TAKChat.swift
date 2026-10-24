@@ -37,7 +37,11 @@ struct TAKChatMessage: Identifiable, Equatable {
 
     static let allChatRoomsUID = "All Chat Rooms"
     static let maximumTextBytes = 2_000
-    static let quickMessages = ["Roger", "Negative", "Objective Sighted", "In Position"]
+    static let quickMessages = ["In Position", "Negative", "Objective Sighted", "Roger"]
+
+    static func quickMessages(including custom: [String]) -> [String] {
+        (quickMessages + custom).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
 
     static func outgoing(senderUID: String, senderCallSign: String, recipientUID: String,
                          recipientCallSign: String, text: String, now: Date = Date(),

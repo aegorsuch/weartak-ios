@@ -1923,16 +1923,7 @@ private struct ContactChatView: View {
             if sent { Text(model.offlineNotice ?? String(localized: "Chat stored for forwarding.", table: "WatchMain")).font(.caption) }
             if pdlSaved { Text("Custom Ditto PDL saved securely in Keychain.").font(.caption) }
             Section(String(localized: "Quick Messages", table: "WatchMain")) {
-                ForEach(TAKChatMessage.quickMessages, id: \.self) { message in
-                    Button(message) {
-                        selectQuickMessage(message)
-                    }
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(minHeight: 44)
-                    .disabled(sending)
-                }
-                ForEach(model.savedChatMessages, id: \.self) { message in
+                ForEach(TAKChatMessage.quickMessages(including: model.savedChatMessages), id: \.self) { message in
                     HStack(spacing: 0) {
                         Button { selectQuickMessage(message) } label: {
                             Text(message)
@@ -1942,15 +1933,18 @@ private struct ContactChatView: View {
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel(message)
-                        Button(role: .destructive) {
-                            do { try model.removeSavedChatMessage(message) }
-                            catch { self.error = error.localizedDescription }
-                        } label: {
-                            Image(systemName: "trash")
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
+                        if model.savedChatMessages.contains(message) {
+                            Button(role: .destructive) {
+                                do { try model.removeSavedChatMessage(message) }
+                                catch { self.error = error.localizedDescription }
+                            } label: {
+                                Image(systemName: "trash.fill")
+                                    .foregroundStyle(.red)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel(Text("Delete saved message \(message)"))
                         }
-                        .accessibilityLabel(Text("Delete saved message \(message)"))
                     }
                     .buttonStyle(.plain)
                     .disabled(sending)
@@ -2578,32 +2572,26 @@ private struct ManualAlertView: View {
                     Label(String(localized: "Clear Manual Alert", table: "WatchMain"), systemImage: "xmark.circle.fill")
                 }
             } else {
-                ForEach(ManualAlertType.allCases.sorted {
-                    $0.watchMainLabel.localizedStandardCompare($1.watchMainLabel) == .orderedAscending
-                }) { type in
-                    Button(type.watchMainLabel) {
-                        send(type)
-                    }
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(minHeight: 44)
-                }
-                ForEach(model.savedManualAlertTypes) { type in
+                ForEach(ManualAlertType.pickerTypes(custom: model.savedManualAlertTypes,
+                                                  label: { $0.watchMainLabel })) { type in
                     HStack(spacing: 0) {
                         Button { send(type) } label: {
-                            Text(type.rawValue)
+                            Text(type.watchMainLabel)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel(type.rawValue)
-                        Button(role: .destructive) { model.removeSavedManualAlert(type) } label: {
-                            Image(systemName: "trash")
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
+                        if model.savedManualAlertTypes.contains(type) {
+                            Button(role: .destructive) { model.removeSavedManualAlert(type) } label: {
+                                Image(systemName: "trash.fill")
+                                    .foregroundStyle(.red)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel(Text("Delete saved alert \(type.rawValue)"))
                         }
-                        .accessibilityLabel(Text("Delete saved alert \(type.rawValue)"))
                     }
                     .buttonStyle(.plain)
                 }

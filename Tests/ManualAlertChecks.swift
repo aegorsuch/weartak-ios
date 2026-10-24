@@ -8,6 +8,17 @@ struct ManualAlertChecks {
         defer { defaults.removePersistentDomain(forName: name) }
         var saved = try SavedManualAlerts(defaults: defaults)
         precondition(saved.types.isEmpty)
+        precondition(!ManualAlertType.allCases.contains(.gunshotInjury))
+        precondition(ManualAlertType.allCases.contains(.gunshot))
+        precondition(ManualAlertType(rawValue: "Gunshot Injury") == .gunshotInjury,
+                     "Existing active/custom alerts must remain readable")
+        let alpha = ManualAlertType(rawValue: "alpha")!
+        let zulu = ManualAlertType(rawValue: "Zulu")!
+        let picker = ManualAlertType.pickerTypes(custom: [zulu, alpha])
+        precondition(picker.map(\.rawValue) == ["911 Alert", "alpha", "Gate Runner", "Geofence Breached",
+            "Gunshot", "In Contact", "Injury", "Ring The Bell", "UAS", "Vehicle", "Zulu"])
+        let translated = ManualAlertType.pickerTypes(custom: [], label: { $0 == .vehicle ? "AAA" : $0.rawValue })
+        precondition(translated[1] == .vehicle, "Alert ordering must use displayed localized labels")
         let custom = try saved.add("  Need assistance  ", defaults: defaults)
         precondition(custom.rawValue == "Need assistance")
         let duplicate = try saved.add("need ASSISTANCE", defaults: defaults)

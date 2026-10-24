@@ -98,7 +98,11 @@ Manual Alert on the watch uses one single-line row per alert. Tap the bottom
 sending it. Custom choices are trimmed, case-insensitively deduplicated against
 saved choices and presets, retained across restarts and individually deletable.
 Their send and delete controls have separate 44-point targets; text truncates
-instead of wrapping into another control. Saving or deleting a choice does not
+instead of wrapping into another control. Presets and saved choices are alphabetized
+together by their displayed labels; each saved choice has a visible right-side
+trash icon, with no hold-to-delete gesture or helper text. Only the Gunshot Injury
+preset has been removed; gunshot detection and existing alert handling are unchanged.
+Saving or deleting a choice does not
 start/cancel an alert. An active alert can still be cleared after its saved choice
 has been deleted. Companion has no independent Manual Alert composer; it relays
 the watch's alert.
@@ -112,7 +116,7 @@ alerts:
 | Ring The Bell | `b-a-o-pan` | `b-a-o-can` |
 | Geofence Breached | `b-a-g` | `b-a-o-can` |
 | In Contact | `b-a-o-opn` | `b-a-o-can` |
-| Gate Runner, Gunshot, Gunshot Injury, Injury, UAS, Vehicle, custom | `b-a-o` | `b-a-o-can` |
+| Gate Runner, Gunshot, Injury, UAS, Vehicle, custom | `b-a-o` | `b-a-o-can` |
 
 The cancel reuses the active alert UID. Each user activation creates one durable
 start intent and each clear creates one cancel intent; repeated UI callbacks,
@@ -131,8 +135,9 @@ Watch conversations (direct, group and All Chat Rooms) retain the built-in
 **Type Custom Message**, then **Save**; saving never sends or replaces the
 current draft. Both built-in and saved rows select text into the existing
 composer; **Send** (or its submit action) sends through the usual GeoChat path.
-Quick-message rows stay on one line, with a separate delete control for each
-custom reply. Built-ins cannot be deleted.
+Quick-message rows are alphabetized together with saved replies and stay on one
+line, with a separate visible right-side trash icon for each custom reply.
+Built-ins cannot be deleted.
 
 Custom replies are trimmed, nonblank, single-line text of up to 128 characters
 and 2,000 UTF-8 bytes. Duplicates of built-ins or saved replies are ignored
@@ -1371,8 +1376,8 @@ in-memory GeoChat retry buffer (32 events, 40 KB of XML), returned on watch
 handshakes as well as attempted live delivery. Inbox deduplication prevents
 repeated unread notifications. Disabled/removed server entries are pruned;
 overflow evicts oldest events and is logged. Phone restart clears the buffer.
-Quick Messages (Roger, Negative,
-Objective Sighted, In Position) fill the draft; Send is still required. Known
+Quick Messages (In Position, Negative,
+Objective Sighted, Roger) fill the draft; Send is still required. Known
 conversations remain replyable without a current map contact, using their original
 source. Unknown or unavailable sources show an explicit unavailable message;
 live ATAK interoperability still needs paired-device/server testing.
@@ -1831,7 +1836,7 @@ application context (at most every 30 seconds). Alert events include the
 Manual, physiological, and environmental alert activations and cancellations,
 point updates, and point deletions send independently of the PLI timer. Alert
 picker choices are alphabetized by their displayed labels and include 911 Alert,
-Gate Runner, Geofence Breached, Gunshot, Gunshot Injury, In Contact, Injury,
+Gate Runner, Geofence Breached, Gunshot, In Contact, Injury,
 Ring The Bell, UAS, and Vehicle. Received emergency categories preserve those
 same names; Geofence Breached is a manual alert, not automatic geofence monitoring.
 Alert activation
