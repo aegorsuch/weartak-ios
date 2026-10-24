@@ -204,7 +204,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
         dittoRuntime.ownUID = {
             try? WatchReportingIdentity.decode(
-                contextValue: WCSession.default.receivedApplicationContext[WatchReportingIdentity.contextKey]).uid
+                contextValue: WCSession.default.receivedApplicationContext[WatchReportingIdentity.contextKey])?.uid
         }
         dittoRuntime.onEvent = { [weak self] xml in self?.receiveDitto(xml) }
         do {
@@ -1537,8 +1537,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             return await dittoTrackReply(to: message, xml: xml)
         }
         if message.kind == .dittoEvent, let xml = message.xml {
-            let identity = try WatchReportingIdentity.decode(
-                contextValue: WCSession.default.receivedApplicationContext[WatchReportingIdentity.contextKey])
+            guard let identity = try WatchReportingIdentity.decode(
+                contextValue: WCSession.default.receivedApplicationContext[WatchReportingIdentity.contextKey]) else {
+                throw CompanionFailure.message("Ditto is waiting for this watch's reporting identity.")
+            }
             let published = await dittoRuntime.publishEvent(xml, uid: identity.uid, callsign: identity.callSign)
             return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: published,
                                       dittoStatus: dittoRuntime.status)

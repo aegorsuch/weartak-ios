@@ -774,7 +774,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data, replyHandler: @escaping (Data) -> Void) {
         Task { @MainActor [weak self] in
             guard let self, let message = try? BridgeWire.Message.decode(data) else { replyHandler(Data()); return }
-            if message.kind == .cot, message.xml != nil, self.active, self.usesCompanion {
+            if message.kind == .cot, message.xml != nil, self.active,
+               (self.usesCompanion || (self.settings.dittoEnabled && message.sourceServerID == DittoCoTDocument.sourceID)) {
                 self.applySession(message)
                 self.onCoT?(message)
             }
