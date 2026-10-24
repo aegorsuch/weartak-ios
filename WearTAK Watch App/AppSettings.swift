@@ -11,25 +11,6 @@ private enum DittoPDLSettingsFailure: LocalizedError {
     }
 }
 
-enum DashboardMetric: String, CaseIterable, Identifiable {
-    case exertion = "Exertion"
-    case heartRate = "Heart Rate"
-    case latLon = "Lat/Lon"
-    case mgrs = "MGRS"
-
-    var id: Self { self }
-    var symbol: String {
-        switch self {
-        case .exertion: return "figure.strengthtraining.traditional"
-        case .heartRate: return "waveform.path.ecg"
-        case .latLon: return "globe"
-        case .mgrs: return "square.grid.3x3"
-        }
-    }
-
-    var isCoordinate: Bool { self == .latLon || self == .mgrs }
-}
-
 enum MulticastOutputProtocol: String, CaseIterable, Identifiable {
     case udp = "UDP"
     var id: Self { self }
@@ -599,7 +580,7 @@ final class AppSettings: ObservableObject {
         self.defaults = defaults
         developerMode = defaults.bool(forKey: Keys.developerMode)
         networkPreferencesLocked = defaults.bool(forKey: Keys.networkPreferencesLocked)
-        dashboardMetric = DashboardMetric(rawValue: defaults.string(forKey: Keys.dashboardMetric) ?? "") ?? .exertion
+        dashboardMetric = DashboardMetric.restored(defaults.string(forKey: Keys.dashboardMetric))
         mapButtonsVisible = defaults.object(forKey: Keys.mapButtonsVisible) as? Bool ?? true
         hiddenMapTeams = Set(defaults.stringArray(forKey: Keys.hiddenMapTeams) ?? [])
         hiddenMapRoles = Set(defaults.stringArray(forKey: Keys.hiddenMapRoles) ?? [])

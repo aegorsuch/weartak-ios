@@ -1,6 +1,18 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Alerts" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Alerts" } } }
+    },
+    "Disabled" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Disabled" } } }
+    },
+    "Edit alert thresholds" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit alert thresholds" } } }
+    },
+    "Location status. Reporting rate settings" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Location status. Reporting rate settings" } } }
+    },
     "Range: %@" : {
       "comment" : "Bloodhound range already formatted in Metric or Imperial units.",
       "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Range: %@" } } }
@@ -16710,7 +16722,7 @@
         }
       }
     },
-    "Lat/Lon" : {
+    "Lat/Long" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -16751,7 +16763,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lat/Lon"
+            "value" : "Lat/Long"
           }
         },
         "es" : {

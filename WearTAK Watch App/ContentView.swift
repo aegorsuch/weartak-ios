@@ -131,7 +131,10 @@ struct ContentView: View {
         }
         .onChange(of: settings.physiologicalMonitoringEnabled) { _, enabled in
             if enabled && scenePhase == .active {
-                Task { await physiology.startMonitoring() }
+                Task {
+                    await physiology.startViewing()
+                    if settings.physiologicalAlertsEnabled { await physiology.startMonitoring() }
+                }
             } else if !enabled {
                 physiology.stopSensing()
             }
@@ -245,13 +248,11 @@ private struct WatchDashboardView: View {
     }
 
     private var metricAccessibilityText: String {
+        if !settings.dashboardMetric.isCoordinate {
+            return "\(settings.dashboardMetric.watchMainLabel) \(metricReadingText)"
+        }
         switch settings.dashboardMetric {
-        case .exertion:
-            return physiology.exertionPercent.map { String(localized: "Exertion \($0) percent", table: "WatchMain") }
-                ?? String(localized: "Exertion unavailable", table: "WatchMain")
-        case .heartRate:
-            return physiology.heartRate.map { String(localized: "Heart rate \($0) beats per minute", table: "WatchMain") }
-                ?? String(localized: "Heart rate unavailable", table: "WatchMain")
+        case .exertion, .heartRate: return metricReadingText
         case .latLon, .mgrs:
             let lines = model.lastLocation.flatMap {
                 MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: settings.dashboardMetric == .mgrs)
@@ -260,7 +261,19 @@ private struct WatchDashboardView: View {
         }
     }
 
+    private var metricReadingText: String {
+        switch settings.dashboardMetric.reading(monitoringEnabled: settings.physiologicalMonitoringEnabled,
+            value: settings.dashboardMetric == .exertion ? physiology.exertionPercent : physiology.heartRate,
+            measuredAt: physiology.readingDate) {
+        case .disabled: return String(localized: "Disabled", table: "WatchMain")
+        case .unavailable: return String(localized: "Unavailable", table: "WatchMain")
+        case .value(let value):
+            return settings.dashboardMetric == .exertion ? "\(value)%" : "\(value) BPM"
+        }
+    }
+
     private var physiologyBorderColor: Color {
+        guard settings.physiologicalMonitoringEnabled else { return .clear }
         switch DashboardPhysiologySeverity.resolve(
             warningActive: physiology.warningCategory != nil,
             alertActive: physiology.activeAutomaticAlert != nil
@@ -295,7 +308,7 @@ private struct WatchDashboardView: View {
             }
             Spacer(minLength: 0)
             NavigationLink {
-                DashboardMetricPreferencesView(model: model, settings: settings, monitor: physiology)
+                DashboardMetricPreferencesView(settings: settings)
             } label: {
                 Group {
                     if settings.dashboardMetric.isCoordinate {
@@ -320,9 +333,7 @@ private struct WatchDashboardView: View {
                                 Image(systemName: settings.dashboardMetric.symbol)
                                     .font(.system(size: small ? 11 : 13))
                                     .foregroundStyle(accent)
-                                Text(settings.dashboardMetric == .exertion
-                                    ? physiology.exertionPercent.map { "\($0)%" } ?? "--%"
-                                    : physiology.heartRate.map { "\($0)" } ?? "--")
+                                Text(metricReadingText)
                                     .font(.system(size: small ? 16 : 18, weight: .semibold))
                                     .monospacedDigit()
                                     .lineLimit(1)
@@ -344,6 +355,8 @@ private struct WatchDashboardView: View {
                 } label: {
                     DashboardLocationIndicator(model: model, small: small)
                 }
+                .accessibilityLabel(String(localized: "Location status. Reporting rate settings", table: "WatchMain"))
+                .accessibilityIdentifier("dashboard-reporting-rates")
                 TimelineView(.periodic(from: .now, by: 30)) { _ in
                     let battery = WKInterfaceDevice.current().batteryLevel
                     Image(systemName: battery < 0 ? "battery.0percent" : battery < 0.25 ? "battery.25percent" : battery < 0.5 ? "battery.50percent" : battery < 0.75 ? "battery.75percent" : "battery.100percent")
@@ -506,65 +519,51 @@ private struct WatchDashboardView: View {
 }
 
 private struct DashboardMetricPreferencesView: View {
-    @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
-    @ObservedObject var monitor: PhysiologyMonitor
     @Environment(\.dismiss) private var dismiss
+    @State private var showAlertThresholds = false
 
     var body: some View {
         List {
-            Toggle(isOn: $settings.physiologicalAlertsEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Physiological Alerts", tableName: "WatchMain")
-                    Text(settings.physiologicalAlertsEnabled ? String(localized: "On", table: "WatchMain") : String(localized: "Off", table: "WatchMain"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Toggle(String(localized: "Alerts", table: "WatchMain"), isOn: $settings.physiologicalAlertsEnabled)
+                    .accessibilityIdentifier("metric-alerts-enabled")
+                Button {
+                    showAlertThresholds = true
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(String(localized: "Edit alert thresholds", table: "WatchMain"))
+                .accessibilityIdentifier("metric-alert-thresholds")
             }
+            Toggle(String(localized: "Physiological Monitoring", table: "WatchSettings"),
+                isOn: $settings.physiologicalMonitoringEnabled)
+                .accessibilityIdentifier("metric-monitoring-enabled")
             Section(String(localized: "Display", table: "WatchMain")) {
-                ForEach(DashboardMetric.allCases) { metric in
+                ForEach(DashboardMetric.sorted(label: \.watchMainLabel)) { metric in
                     Button {
                         settings.dashboardMetric = metric
                         dismiss()
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: metric.symbol)
-                                .frame(width: 22)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(metric.watchMainLabel)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                Text(reading(for: metric))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                            }
+                            Text(metric.watchMainLabel)
                             Spacer(minLength: 0)
                             if settings.dashboardMetric == metric {
                                 Image(systemName: "checkmark")
                             }
                         }
                     }
+                    .accessibilityAddTraits(settings.dashboardMetric == metric ? .isSelected : [])
+                    .accessibilityIdentifier("metric-choice-\(metric.rawValue)")
                 }
             }
         }
         .navigationTitle(String(localized: "Metric", table: "WatchMain"))
-        .task { await monitor.startViewing() }
-        .onDisappear { monitor.stopViewing() }
-    }
-
-    private func reading(for metric: DashboardMetric) -> String {
-        switch metric {
-        case .exertion:
-            return monitor.exertionPercent.map { "\($0)%" } ?? String(localized: "Unavailable", table: "WatchMain")
-        case .heartRate:
-            return monitor.heartRate.map { "\($0) BPM" } ?? String(localized: "Unavailable", table: "WatchMain")
-        case .latLon, .mgrs:
-            return model.lastLocation.flatMap {
-                MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: metric == .mgrs)
-            }.map { "\($0.0) \($0.1)" } ?? String(localized: "No fix", table: "WatchMain")
+        .navigationDestination(isPresented: $showAlertThresholds) {
+            PhysiologicalAlertsView(settings: settings)
         }
     }
 }
@@ -2075,7 +2074,7 @@ private extension DashboardMetric {
         switch self {
         case .exertion: return String(localized: "Exertion", table: "WatchMain")
         case .heartRate: return String(localized: "Heart Rate", table: "WatchMain")
-        case .latLon: return String(localized: "Lat/Lon", table: "WatchMain")
+        case .latLon: return String(localized: "Lat/Long", table: "WatchMain")
         case .mgrs: return rawValue
         }
     }
