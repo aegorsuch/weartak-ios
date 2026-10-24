@@ -29,6 +29,11 @@ struct DittoCoTDocument {
     }
 
     static func decode(_ doc: [String: Any], collection: String, now: Date = Date()) throws -> Self {
+        if collection == "chat" { return try DittoChatDocument.decode(doc, ownUID: nil, now: now) }
+        return try decodeAliases(doc, collection: collection, now: now)
+    }
+
+    static func decodeAliases(_ doc: [String: Any], collection: String, now: Date = Date()) throws -> Self {
         func text(_ key: String) throws -> String {
             guard let value = doc[key] as? String, !value.isEmpty, value.count <= 512,
                   !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
@@ -101,6 +106,16 @@ struct DittoCoTDocument {
             doc["c"] = callsign
             doc["e"] = callsign
             doc["o"] = milliseconds(time.addingTimeInterval(86_400))
+            guard let chat = TAKChatMessage.parse(xml, ownUID: author) else { throw Failure.invalid }
+            doc["eventUid"] = uid
+            doc["_id"] = chat.id
+            doc["d"] = author
+            doc["msg"] = chat.text
+            doc["room"] = chat.title ?? fields.room ?? chat.recipientUID
+            doc["roomId"] = chat.conversationUid ?? chat.recipientUID
+            doc["parent"] = fields.parent ?? "RootContactGroup"
+            doc["authorType"] = "a-f-G-U-C"
+            doc["authorLoc"] = "\(doc["j"]!),\(doc["l"]!),\(doc["i"]!)"
         }
         _ = try decode(doc, collection: collection)
         return (collection, doc)
@@ -144,6 +159,8 @@ private final class DittoXMLFields: NSObject, XMLParserDelegate {
     var point: [String: String] = [:]
     var callsign: String?
     var parentUID: String?
+    var room: String?
+    var parent: String?
     private var depth = 0
     private var root = ""
     private var valid = true
@@ -163,6 +180,7 @@ private final class DittoXMLFields: NSObject, XMLParserDelegate {
         if name == "detail", depth != (root == "event" ? 2 : 1) { valid = false }
         if name == "point", depth == 2 { point = attributes }
         if name == "contact" { callsign = attributes["callsign"] }
+        if name == "__chat", depth == 3 { room = attributes["chatroom"]; parent = attributes["parent"] }
         if name == "link", depth == 3, attributes["relation"] == "p-p" { parentUID = attributes["uid"] }
     }
     func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {

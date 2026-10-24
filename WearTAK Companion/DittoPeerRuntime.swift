@@ -17,6 +17,7 @@ final class DittoPeerRuntime {
     private var observers: [DittoStoreObserver] = []
     private var ingress = DittoIngress()
     private var chatEvictionInFlight = false
+    private var verifiedChatGroups: [String: [String]] = [:]
     var ownUID: (() -> String?)?
     var onEvent: ((String) -> Void)?
     private var generation = 0
@@ -195,11 +196,18 @@ final class DittoPeerRuntime {
         for raw in documents {
             if raw["_r"] as? Bool == true || raw["visible"] as? Bool == false || raw["f"] as? Bool == false { continue }
             do {
-                let doc = try DittoCoTDocument.decode(raw, collection: collection)
+                let room = raw["roomId"] as? String ?? ""
+                let doc = try collection == "chat" ? DittoChatDocument.decode(raw, ownUID: uid,
+                    verifiedMembers: verifiedChatGroups[room] ?? []) :
+                    DittoCoTDocument.decode(raw, collection: collection)
                 if collection == "chat" {
                     if doc.stale <= Date() { evictExpiredChat(); continue }
                     guard let chat = TAKChatMessage.parse(doc.xml, ownUID: uid),
                           chat.senderUID != uid, doc.author == chat.senderUID else { continue }
+                    if chat.isGroup, chat.conversationUid != TAKChatMessage.allChatRoomsUID,
+                       let room = chat.conversationUid, raw["r"] != nil, verifiedChatGroups.count < 50 {
+                        verifiedChatGroups[room] = chat.participantUids
+                    }
                 }
                 guard ingress.accept(doc, ownUID: uid, localPeer: instance.presence.graph.localPeer.peerKey) else { continue }
                 onEvent?(doc.xml)
@@ -215,8 +223,8 @@ final class DittoPeerRuntime {
         Task {
             defer { chatEvictionInFlight = false }
             do {
-                try await instance.store.execute(query: "EVICT FROM chat WHERE o <= :now",
-                    arguments: ["now": (Date().timeIntervalSince1970 * 1_000).rounded()])
+                try await instance.store.execute(query: "EVICT FROM chat WHERE b <= :oldest",
+                    arguments: ["oldest": ((Date().timeIntervalSince1970 - 86_400) * 1_000).rounded()])
             } catch { logger.error("Ditto expired chat eviction failed: \(error.localizedDescription, privacy: .public)") }
         }
     }
@@ -224,10 +232,14 @@ final class DittoPeerRuntime {
     func publishEvent(_ xml: String, uid: String, callsign: String) async -> Bool {
         guard let instance, instance.sync.isActive else { return false }
         do {
-            let (collection, doc) = try DittoCoTDocument.make(xml: xml,
+            let (collection, document) = try DittoCoTDocument.make(xml: xml,
                 peer: instance.presence.graph.localPeer.peerKey, author: uid, callsign: callsign)
             guard collection != "track" else { throw DittoCoTDocument.Failure.invalid }
-            try await instance.store.execute(query: "INSERT INTO \(collection) DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE",
+            var doc = document
+            if collection == "chat" { doc["_c"] = 1 }
+            let query = collection == "chat" ? DittoChatDocument.upsertQuery :
+                "INSERT INTO \(collection) DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE"
+            try await instance.store.execute(query: query,
                                              arguments: ["doc": doc])
             return true
         } catch {
@@ -262,6 +274,7 @@ final class DittoPeerRuntime {
         subscriptions.forEach { $0.cancel() }
         subscriptions.removeAll()
         ingress = DittoIngress()
+        verifiedChatGroups.removeAll()
         instance = nil
     }
 

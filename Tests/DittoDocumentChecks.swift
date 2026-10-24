@@ -70,6 +70,8 @@ enum DittoDocumentChecks {
                 now: now, messageID: "message-\(recipient)", isGroup: group, participantUids: members)
             let (c, doc) = try DittoCoTDocument.make(xml: chat, peer: "peer", author: "remote", callsign: "Remote")
             precondition(c == "chat" && doc["w"] as? String == "b-t-f")
+            precondition(doc["_id"] as? String == "message-\(recipient)" && doc["d"] as? String == "remote")
+            precondition(doc["msg"] as? String == "A&B <ready>" && doc["roomId"] as? String == recipient)
             precondition((doc["o"] as! Double) - (doc["b"] as! Double) == 86_400_000)
             let received = try DittoCoTDocument.decode(doc, collection: c, now: now)
             let parsed = TAKChatMessage.parse(received.xml, ownUID: "other")!
@@ -83,6 +85,28 @@ enum DittoDocumentChecks {
             precondition(!inbox.record(parsed, conversation: "TAK", ownUID: "other"),
                          "Message UID must deduplicate across transports")
             precondition(inbox.messages["TAK"] == nil)
+            var native = doc
+            for key in ["eventUid", "r", "n", "o", "w", "g", "h", "i", "j", "k", "l", "p", "q"] {
+                native.removeValue(forKey: key)
+            }
+            if recipient != "group-1" {
+                let nativeDecoded = try DittoChatDocument.decode(native, ownUID: "other", now: now)
+                precondition(TAKChatMessage.parse(nativeDecoded.xml, ownUID: "other")?.text == parsed.text)
+            } else {
+                do {
+                    _ = try DittoChatDocument.decode(native, ownUID: "other", now: now)
+                    preconditionFailure("Unknown native group without roster was treated as broadcast")
+                } catch DittoCoTDocument.Failure.invalid {}
+                let known = try DittoChatDocument.decode(native, ownUID: "other",
+                    verifiedMembers: ["remote", "other", "third"], now: now)
+                precondition(TAKChatMessage.parse(known.xml, ownUID: "other")?.isGroup == true)
+            }
+            var conflict = doc
+            conflict["msg"] = "Different message"
+            do {
+                _ = try DittoChatDocument.decode(conflict, ownUID: "other", now: now)
+                preconditionFailure("Conflicting extension detail accepted")
+            } catch DittoCoTDocument.Failure.invalid {}
         }
         let wire = try BridgeWire.Message(kind: .dittoEvent, xml: xml).encoded()
         let decodedWire = try BridgeWire.Message.decode(wire)
