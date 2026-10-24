@@ -123,13 +123,13 @@ export class AppStoreClient {
       try { result = await response.json(); }
       catch { throw new Error(`App Store API ${method} ${url.pathname} returned HTTP ${response.status} without JSON; inspect the operation before retrying.`); }
       if (!response.ok) {
+        const detail = (result.errors ?? []).map(error => `${error.code}: ${error.detail ?? error.title}`).join('; ').slice(0, 1500);
         if (response.status === 403) {
-          throw new Error(`App Store API access denied (403) for ${method} ${url.pathname}. The API key needs App Manager or Admin rights and access to WearTAK; upload-only/Developer permission is insufficient for App Review.`);
+          throw new Error(`App Store API access denied (403) for ${method} ${url.pathname}: ${detail || 'No error detail'}. Check resource access. App Review requires App Manager or Admin rights and access to WearTAK; upload-only/Developer permission is insufficient.`);
         }
         if (response.status === 401) {
           throw new Error('App Store API authentication failed (401). Check the API key, issuer, private key and runner clock.');
         }
-        const detail = (result.errors ?? []).map(error => `${error.code}: ${error.detail ?? error.title}`).join('; ').slice(0, 1500);
         throw new Error(`App Store API ${method} ${url.pathname} failed (HTTP ${response.status}): ${detail || 'No error detail'}`);
       }
       return result;
