@@ -4,6 +4,7 @@ import Foundation
 struct DashboardMetricChecks {
     static func main() throws {
         precondition(DashboardMetric.allCases == [.exertion, .heartRate, .latLon, .mgrs])
+        precondition(DashboardMetric.heartRate.symbol == "heart.fill")
         let english: [DashboardMetric: String] = [
             .exertion: "Exertion", .heartRate: "Heart Rate", .latLon: "Lat/Long", .mgrs: "MGRS"
         ]
@@ -33,9 +34,7 @@ struct DashboardMetricChecks {
         let source = try String(contentsOfFile: "WearTAK Watch App/ContentView.swift", encoding: .utf8)
         let selector = source.components(separatedBy: "private struct DashboardMetricPreferencesView: View {")[1]
             .components(separatedBy: "private struct DashboardLocationIndicator: View {")[0]
-        precondition(selector.contains("Toggle(String(localized: \"Alerts\""))
-        precondition(selector.contains("isOn: $settings.physiologicalAlertsEnabled"))
-        precondition(selector.contains("isOn: $settings.physiologicalMonitoringEnabled"))
+        precondition(selector.contains("PhysiologicalControlsView(settings: settings)"))
         precondition(selector.contains("showAlertThresholds = true"))
         precondition(selector.contains("PhysiologicalAlertsView(settings: settings)"))
         precondition(!selector.contains(".disabled(") && !selector.contains("settings.physiologicalAlertsEnabled ="))
@@ -43,6 +42,36 @@ struct DashboardMetricChecks {
         precondition(selector.contains("TimelineView(.periodic") && selector.contains("minimumScaleFactor"))
         precondition(selector.contains("await monitor.startViewing()"))
         precondition(selector.contains("metric.reading(monitoringEnabled:"))
+        let settings = try String(contentsOfFile: "WearTAK Watch App/SettingsView.swift", encoding: .utf8)
+        let controls = settings.components(separatedBy: "struct PhysiologicalControlsView: View {")[1]
+            .components(separatedBy: "struct PhysiologicalAlertsView: View {")[0]
+        precondition(controls.contains("isOn: $settings.physiologicalMonitoringEnabled"))
+        precondition(controls.contains("isOn: $settings.physiologicalAlertsEnabled"))
+        precondition(controls.range(of: "physiologicalMonitoringEnabled")!.lowerBound <
+            controls.range(of: "physiologicalAlertsEnabled")!.lowerBound)
+        precondition(!controls.contains(".disabled(") && controls.contains("44, height: 44"))
+        precondition(settings.components(separatedBy: "PhysiologicalControlsView(settings: settings)").count == 3)
+        let coordinates = source.components(separatedBy: "if settings.dashboardMetric.isCoordinate {")[1]
+            .components(separatedBy: "} else {")[0]
+        precondition(!coordinates.contains("Image(") && coordinates.contains("dashboardLines"))
+        var readiness = OutboundRouteReadiness()
+        precondition(!readiness.update([]))
+        precondition(readiness.update(["server"]))
+        precondition(!readiness.update(["server"]))
+        precondition(readiness.update(["server", "ditto"]))
+        precondition(!readiness.update(["ditto"]))
+        precondition(!readiness.update([]))
+        precondition(readiness.update(["ditto"]))
+        let phone = try String(contentsOfFile: "WearTAK Companion/PhoneBridgeModel.swift", encoding: .utf8)
+        let announcement = phone.components(separatedBy: "private func refreshOutboundAnnouncements() {")[1]
+            .components(separatedBy: "private func reportPhoneFix(")[0]
+        precondition(announcement.contains("outboundReadiness.update(routes)"))
+        precondition(announcement.contains("requestSelfPosition(allowLastKnown: false)"))
+        precondition(!announcement.contains("chat") && !announcement.contains("emergency"))
+        precondition(phone.contains("if self.connectivityAnnouncementPending, let fix"))
+        let watch = try String(contentsOfFile: "WearTAK Watch App/WatchSessionModel.swift", encoding: .utf8)
+        precondition(watch.contains("self.refreshDittoAnnouncement()"))
+        precondition(watch.contains("revision == dittoAnnouncementRevision"))
         let locationLink = source.components(separatedBy: "ReportingStrategyView(settings: settings)")[1]
             .components(separatedBy: "dashboard-reporting-rates")[0]
         precondition(locationLink.contains("DashboardLocationIndicator(model: model, small: small)"))

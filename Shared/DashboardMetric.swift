@@ -11,7 +11,7 @@ enum DashboardMetric: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .exertion: return "figure.strengthtraining.traditional"
-        case .heartRate: return "waveform.path.ecg"
+        case .heartRate: return "heart.fill"
         case .latLon: return "globe"
         case .mgrs: return "square.grid.3x3"
         }

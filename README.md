@@ -511,7 +511,12 @@ falling back to Exertion. Per the user's iOS-specific decision, Skin Temp and
 Steps are not added: this app has no existing live display source for either.
 Companion has no equivalent top-metric surface.
 
-The same screen has independent Alerts and Physiological Monitoring switches.
+The same screen starts with matching native Physiological Monitoring and
+Physiological Alerts switches, in that order. Device preferences and the
+physiological threshold screen reuse the same top controls. Heart Rate uses
+the same filled-heart symbol as the physiology dashboard. The selected MGRS
+home value is already text-only (no coordinate glyph); full precision and the
+separate location/reporting shortcut are retained.
 The separate chevron beside Alerts opens the existing threshold editor even
 when alerts are off; it does not toggle alerts. Switching alerts off does not
 stop on-screen sensing, and switching sensing back on resumes live readings
@@ -1095,6 +1100,17 @@ resume reporting in the background.
 The position source is the phone's GPS, not the watch's. Reports are
 `a-f-G-U-C` PLI using the watch's UID, callsign, team and role, with
 `how="m-g"`, `precisionlocation` GPS and `takv` platform "WearTAK Companion".
+When an existing outbound server, Sit(x) or Ditto route becomes usable,
+Companion coalesces a current self-position announcement instead of waiting
+for the periodic PLI interval. It requests a fresh phone fix and only reuses
+a cached fix if it passes the normal current-location checks, never the
+last-known emergency allowance. Repeated ready notifications do not request
+another announcement; reconnects do. In-flight sends retain a pending
+announcement for the newly usable route. The watch similarly refreshes its
+current Ditto track when watch GPS is the selected source; phone-GPS reporting
+keeps ownership when active. No saved chat, alert or historical event is replayed
+by these connectivity announcements. UID, consent, freshness and existing
+watch/phone duplicate suppression remain unchanged.
 The watch publishes this identity, plus its relay selection and reporting
 intervals and combined manual/physiological/environmental alert state, through
 WatchConnectivity application context whenever those

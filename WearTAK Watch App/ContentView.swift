@@ -529,23 +529,7 @@ private struct DashboardMetricPreferencesView: View {
 
     var body: some View {
         List {
-            HStack(spacing: 8) {
-                Toggle(String(localized: "Alerts", table: "WatchMain"), isOn: $settings.physiologicalAlertsEnabled)
-                    .accessibilityIdentifier("metric-alerts-enabled")
-                Button {
-                    showAlertThresholds = true
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(String(localized: "Edit alert thresholds", table: "WatchMain"))
-                .accessibilityIdentifier("metric-alert-thresholds")
-            }
-            Toggle(String(localized: "Physiological Monitoring", table: "WatchSettings"),
-                isOn: $settings.physiologicalMonitoringEnabled)
-                .accessibilityIdentifier("metric-monitoring-enabled")
+            PhysiologicalControlsView(settings: settings) { showAlertThresholds = true }
             Section(String(localized: "Display", table: "WatchMain")) {
                 ForEach(DashboardMetric.sorted(label: \.watchMainLabel)) { metric in
                     Button {
