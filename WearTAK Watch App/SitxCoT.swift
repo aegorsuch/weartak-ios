@@ -160,7 +160,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             hasContactEndpoint = false
             hasDeviceUID = false
             emergencyState = eventType == "b-a-o-can" || eventType?.hasPrefix("b-a-o-can-") == true ? .cancel :
-                (eventType == "b-a-o" || eventType?.hasPrefix("b-a-o-") == true ? .alert : nil)
+                (eventType == "b-a-o" || eventType?.hasPrefix("b-a-o-") == true || eventType == "b-a-g" ? .alert : nil)
             alertCategory = nil
             emergencyText = ""
             remarksText = ""

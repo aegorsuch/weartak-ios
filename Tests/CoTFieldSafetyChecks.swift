@@ -61,6 +61,23 @@ struct CoTFieldSafetyChecks {
         precondition(update.contains("lat=\"39.0\"") && update.contains("uid=\"watch-alert-911\""))
         precondition(update.contains("time=\"") && update.contains("stale=\""))
         precondition(AlertLocationHistory.refreshingAlert(filled, ownUID: "other", fix: refreshed, now: now) == nil)
+        let manualXML = xml.replacingOccurrences(of: "<emergency", with: "<weartak manualAlert=\"true\"/><emergency")
+        let manualFilled = AlertLocationHistory.fillingMissingAlertLocation(manualXML, ownUID: "watch", fix: good, now: now)
+        precondition(manualFilled.contains("lat=\"38.0\"") && manualFilled.contains("manualAlert=\"true\""),
+                     "A manual alert may receive its first good phone location before its one send")
+        let geofence = manualXML.replacingOccurrences(of: "type=\"b-a-o\"", with: "type=\"b-a-g\"")
+        precondition(AlertLocationHistory.fillingMissingAlertLocation(geofence, ownUID: "watch", fix: good, now: now)
+            .contains("lat=\"38.0\""), "Phone relay must recognize geofence kind for first-fix filling")
+        for seconds in [1.0, 5.0, 10.0, 60.0] {
+            var nextFix = refreshed
+            nextFix.timestamp = now.addingTimeInterval(seconds)
+            precondition(AlertLocationHistory.refreshingAlert(manualFilled, ownUID: "watch",
+                fix: nextFix, now: nextFix.timestamp) == nil,
+                "New phone fixes must not generate duplicate manual alerts")
+        }
+        let nestedMarker = filled.replacingOccurrences(of: "<detail>", with: "<detail><container><weartak manualAlert=\"true\"/></container>")
+        precondition(AlertLocationHistory.refreshingAlert(nestedMarker, ownUID: "watch", fix: refreshed, now: now) != nil,
+                     "Only direct detail metadata may suppress automatic tracking")
         let cancelXML = xml.replacingOccurrences(of: "type=\"b-a-o\"", with: "type=\"b-a-o-can\"")
         precondition(AlertLocationHistory.refreshingAlert(cancelXML, ownUID: "watch", fix: refreshed, now: now) == nil)
         let noPoint = xml.replacingOccurrences(of: "<point lat=\"0\" lon=\"0\" ce=\"9999999\"/>", with: "")

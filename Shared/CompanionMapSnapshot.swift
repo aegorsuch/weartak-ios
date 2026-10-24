@@ -208,7 +208,7 @@ private final class CoTMapHeaderParser: NSObject, XMLParserDelegate {
         if depth == 1, elementName == "event" {
             self.attributes = attributes
             let type = attributes["type"] ?? ""
-            isEmergency = type == "b-a-o" || type.hasPrefix("b-a-o-")
+            isEmergency = type == "b-a-o" || type.hasPrefix("b-a-o-") || type == "b-a-g"
         }
         if depth == 3, elementName == "emergency" { isEmergency = true }
         if depth == 3, elementName == "link", self.attributes?["type"] == "t-x-d-d",

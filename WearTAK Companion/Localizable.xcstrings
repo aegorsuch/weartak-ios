@@ -1,6 +1,27 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Display Preferences" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Display Preferences" } } }
+    },
+    "Units" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Units" } } }
+    },
+    "Metric" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Metric" } } }
+    },
+    "Imperial" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Imperial" } } }
+    },
+    "Remaining: %@" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Remaining: %@" } } }
+    },
+    "Arrival radius: %@" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Arrival radius: %@" } } }
+    },
+    "Distance unavailable" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Distance unavailable" } } }
+    },
     "Routes" : {
       "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Routes" } } }
     },

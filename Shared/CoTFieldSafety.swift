@@ -61,7 +61,7 @@ struct AlertLocationHistory {
         let parser = XMLParser(data: Data(xml.utf8))
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
-        guard parser.parse(), delegate.isAlert,
+        guard parser.parse(), delegate.isAlert, !delegate.isManualAlert,
               delegate.parentUID == ownUID || delegate.uid?.hasPrefix(ownUID + "-alert-") == true else { return nil }
         return delegate.output
     }
@@ -85,6 +85,7 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
     var uid: String?
     var parentUID: String?
     var isAlert = false
+    var isManualAlert = false
     var needsLocation = false
     var hasPosition = false
     var measuredAt: Date?
@@ -107,7 +108,7 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
         if depth == 1, name == "event" {
             uid = values["uid"]
             let type = values["type"] ?? ""
-            isAlert = (type == "b-a-o" || type.hasPrefix("b-a-o-")) && !type.hasPrefix("b-a-o-can")
+            isAlert = (type == "b-a-o" || type.hasPrefix("b-a-o-") || type == "b-a-g") && !type.hasPrefix("b-a-o-can")
             if refresh {
                 values["time"] = ISO8601DateFormatter().string(from: now)
                 values["start"] = ISO8601DateFormatter().string(from: now)
@@ -116,6 +117,7 @@ private final class AlertLocationRewriter: NSObject, XMLParserDelegate {
         }
 
         if depth == 3, name == "link", values["relation"] == "p-p" { parentUID = values["uid"] }
+        if depth == 3, name == "weartak", values["manualAlert"] == "true" { isManualAlert = true }
         if depth == 2, name == "point" {
             hasPoint = true
             let lat = values["lat"].flatMap(Double.init), lon = values["lon"].flatMap(Double.init)

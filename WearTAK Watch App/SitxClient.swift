@@ -535,17 +535,20 @@ final class SitxClient: ObservableObject, TAKTransport {
         try await deliver(emergencyXML(state: state, type: type), eventKey: Self.deviceID() + "-alert-" + type)
     }
 
-    func emergencyXML(state: EmergencyState, type: String) -> String {
+    func emergencyXML(state: EmergencyState, type: String, manual: Bool = false) -> String {
         let now = Date()
         let fix = alertLocations.lastKnown(at: now)
         let uid = Self.deviceID() + "-alert-" + type
         let cancel = state == .cancel
+        let emergencyName = ManualAlertType(rawValue: type)?.emergencyName ?? type
         let emergency = cancel ? "<emergency cancel=\"true\">\(SitxCoT.escape(settings.callSign))</emergency>"
-            : "<emergency type=\"\(SitxCoT.escape(type))\">\(SitxCoT.escape(settings.callSign))</emergency>"
+            : "<emergency type=\"\(SitxCoT.escape(emergencyName))\">\(SitxCoT.escape(settings.callSign))</emergency>"
         let detail = "<contact callsign=\"\(SitxCoT.escape(settings.callSign))\"/><link uid=\"\(Self.deviceID())\" type=\"a-f-G-U-C\" relation=\"p-p\"/><remarks>\(SitxCoT.escape(type))</remarks>" +
             biometrics.fresh(reportingInterval: biometricsReportingInterval).biometricsElement(uid: Self.deviceID(),
-                alertAttributes: " alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertCategory=\"\(SitxCoT.escape(type))\" alertPriority=\"1\" alertDescription=\"\(SitxCoT.escape(type))\"") + emergency
-        return SitxCoT.event(uid: uid, type: cancel ? "b-a-o-can" : "b-a-o",
+                alertAttributes: " alertUid=\"\(SitxCoT.escape(uid))\" alertState=\"\(state.rawValue)\" alertCategory=\"\(SitxCoT.escape(type))\" alertPriority=\"\(ManualAlertType.priority)\" alertDescription=\"\(SitxCoT.escape(type))\"") +
+            (manual ? "<weartak manualAlert=\"true\"/>" : "") + emergency
+        let cotType = ManualAlertType(rawValue: type)?.cotType ?? "b-a-o"
+        return SitxCoT.event(uid: uid, type: cancel ? ManualAlertType.cancelCoTType : cotType,
                             coordinate: CLLocationCoordinate2D(latitude: fix?.latitude ?? 0, longitude: fix?.longitude ?? 0),
                             detail: detail + (fix.map { AlertLocationHistory.detail($0, now: now) } ?? ""),
                             lifetime: 86_400, now: now,

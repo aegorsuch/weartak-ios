@@ -280,7 +280,7 @@ enum GarminRelayProtocol {
             if let major = ellipse["major"], let minor = ellipse["minor"],
                major == minor, major <= 100_000 { payload["radius"] = major }
         }
-        if payload["lat"] == nil, type != "t-x-d-d", !type.hasPrefix("b-a-o"), delegate.emergency == nil { return nil }
+        if payload["lat"] == nil, type != "t-x-d-d", !type.hasPrefix("b-a-o"), type != "b-a-g", delegate.emergency == nil { return nil }
         let isUser = type.hasPrefix("a-") &&
             (delegate.hasUserMetadata || (CoTMapSymbol(cotType: type) == nil &&
                 type.split(separator: "-").dropFirst(2).starts(with: ["G", "U", "C"])))

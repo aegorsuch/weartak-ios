@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PhoneRouteListView: View {
     @ObservedObject var bridge: PhoneBridgeModel
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
 
     var body: some View {
         List {
@@ -16,7 +17,7 @@ struct PhoneRouteListView: View {
                         if let location = bridge.routeLocation,
                            let follower = RouteFollower(route: state.route, targetIndex: state.targetIndex),
                            let remaining = follower.remainingDistanceMeters(from: location) {
-                            Text("Remaining: \(Int(remaining.rounded())) m")
+                            Text("Remaining: \(distanceUnits.distance(remaining))")
                         } else {
                             Text("Remaining distance unavailable").foregroundStyle(.secondary)
                         }
@@ -53,13 +54,14 @@ struct PhoneRouteListView: View {
 
 private struct PhoneRouteDetailView: View {
     @ObservedObject var bridge: PhoneBridgeModel
+    @AppStorage(DistanceUnits.storageKey) private var distanceUnits = DistanceUnits.metric
     let route: GarminRoute
 
     var body: some View {
         List {
             Section {
                 Text(route.name).font(.headline)
-                Text("Arrival radius: \(Int(RouteFollower.arrivalRadiusMeters(method: route.method))) m")
+                Text("Arrival radius: \(distanceUnits.radius(RouteFollower.arrivalRadiusMeters(method: route.method))))")
             }
             Section {
                 if let state = bridge.routeNavigationState, state.phase == .active, state.route.id == route.id {
