@@ -1528,7 +1528,8 @@ Do not edit an app ID inside an issued PDL. Default identity provisioning requir
 explicit authorization and never commits the credential.
 
 Signed CI builds consume the optional masked, protected **standard variable**
-`DITTO_COMMUNITY_PDL`. The signing script writes it to a private temporary
+`DITTO_COMMUNITY_PDL`. The signing script validates it with the app's actual
+PDL parser (including SharedKey v2 and expiry), then writes it to a private temporary
 iPhone-only Info.plist, unsets the environment variable before Xcode, and verifies
 the exported IPA against that plist before upload. Logs contain only length and
 SHA256, never the encoded PDL. The original tracked plist and watch provisioning
