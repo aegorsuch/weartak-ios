@@ -641,6 +641,21 @@ struct SitxProtocolChecks {
         precondition(deletion.attributes["link"]?.first?["relation"] == "none")
         precondition(deletion.attributes["link"]?.first?["type"] == "none")
         precondition(deletion.attributes["__forcedelete"] != nil)
+        let escapedDeletionXML = client.deleteMarkerXML(uid: "own-pin&\"<target>")
+        let escapedDeletion = try fields(escapedDeletionXML)
+        precondition(escapedDeletion.attributes["link"]?.count == 1)
+        precondition(escapedDeletion.attributes["link"]?.first?["uid"] == "own-pin&\"<target>")
+        precondition(escapedDeletion.attributes["link"]?.first?["relation"] == "none")
+        precondition(escapedDeletion.attributes["link"]?.first?["type"] == "none")
+        precondition(escapedDeletion.attributes["event"]?.first?["uid"] != "own-pin&\"<target>")
+        precondition(escapedDeletion.attributes["point"]?.count == 1)
+        let deletionEvent = escapedDeletion.attributes["event"]!.first!
+        let deletionTime = TAKMissionAPI.date(deletionEvent["time"])!
+        let deletionStart = TAKMissionAPI.date(deletionEvent["start"])!
+        let deletionStale = TAKMissionAPI.date(deletionEvent["stale"])!
+        precondition(deletionTime == deletionStart && deletionStale.timeIntervalSince(deletionTime) == 86_400)
+        precondition(client.pendingEvents[marker.id.uuidString]?.contains("__forcedelete") == true)
+        print("PASS: actual own-pin delete serializer, exact/escaped target UID, required ATAK link fields, forcedelete, point and 24h action timestamps")
         let defaultMarkerTitles: [String?] = [nil, ""]
         for title in defaultMarkerTitles {
             let defaultMarker = WatchMarker(id: UUID(), kind: .friendly, latitude: 38.1, longitude: -77.1,

@@ -9,14 +9,32 @@ struct DataSyncChecks {
         precondition(visible == [uid, URLQueryItem(name: "defaultRole", value: "true")])
         precondition(TAKMissionAPI.takServerQuery(path: "/missions", method: "GET", query: [])
             == [URLQueryItem(name: "defaultRole", value: "true")])
-        for (path, method) in [("/missions/Team", "GET"), ("/missions", "PUT"),
+        for (path, method) in [("/missions/Team", "GET"), ("/missions/", "GET"), ("/missions", "PUT"),
+                               ("/missions", "POST"), ("/missions", "DELETE"),
                                ("/missions/Team/contents", "DELETE"), ("/missions/Team/subscription", "PUT")] {
             precondition(TAKMissionAPI.takServerQuery(path: path, method: method, query: [uid]) == [uid])
         }
+        let existing = [URLQueryItem(name: "clientUid", value: "watch A&B"),
+                        URLQueryItem(name: "defaultRole", value: "false"),
+                        URLQueryItem(name: "limit", value: "40"),
+                        URLQueryItem(name: "defaultRole", value: nil)]
+        precondition(TAKMissionAPI.takServerQuery(path: "/missions", method: "GET", query: existing)
+            == [existing[0], existing[2], URLQueryItem(name: "defaultRole", value: "true")])
+        var url = URLComponents(string: "https://fixture.invalid/Marti/api/missions")!
+        url.queryItems = TAKMissionAPI.takServerQuery(path: "/missions", method: "GET", query: existing)
+        precondition(url.queryItems?.filter { $0.name == "defaultRole" }.map(\.value) == ["true"])
+        precondition(url.url!.absoluteString.contains("defaultRole=true"))
+        precondition(url.queryItems?.first?.value == "watch A&B")
+        let publicMissions = try TAKMissionAPI.parseList(Data("""
+        {"data":[{"name":"MDJ Team","tool":"public","defaultRole":{"type":"MISSION_ANONYMOUS"}},
+                 {"name":"Chicago","tool":"public"},{"name":"Private tool","tool":"ExCheck"}]}
+        """.utf8))
+        precondition(publicMissions.map(\.name) == ["Chicago", "MDJ Team"])
         let tak = try String(contentsOfFile: "WearTAK Companion/TAKChannelClient.swift", encoding: .utf8)
         let sitx = try String(contentsOfFile: "WearTAK Companion/CompanionSitxSession.swift", encoding: .utf8)
         precondition(tak.contains("TAKMissionAPI.takServerQuery(path: path, method: method, query: query)"))
         precondition(!sitx.contains("takServerQuery") && !sitx.contains("defaultRole"))
+        print("PASS: GET-only defaultRole=true, duplicate normalization, unrelated query preservation and public ANON mission fixtures")
         let list = try TAKMissionAPI.parseList(Data("""
         {"version":"3","type":"Mission","data":[
           {"name":"Zulu","tool":"public","uids":[{"data":"a"},{"data":"b"}],"description":"  Main op  "},

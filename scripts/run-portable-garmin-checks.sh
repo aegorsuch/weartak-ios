@@ -145,6 +145,20 @@ swiftc -swift-version 5 -parse-as-library \
   -o "$build_dir/mission-checks"
 "$build_dir/mission-checks"
 
+if [[ "$(uname -s)" == Darwin ]]; then
+  swiftc -swift-version 5 -parse-as-library \
+    "WearTAK Watch App/AppSettings.swift" "WearTAK Watch App/DashboardStatus.swift" \
+    "WearTAK Watch App/WatchSettingsLabels.swift" "WearTAK Watch App/PluginCatalog.swift" \
+    "WearTAK Watch App/RelayProtocol.swift" "WearTAK Watch App/SitxCoT.swift" \
+    "WearTAK Watch App/MulticastTAKTransport.swift" "WearTAK Watch App/SitxClient.swift" \
+    Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+    Shared/CoTMapSymbol.swift Shared/TAKMulticast.swift Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift \
+    Shared/TAKChat.swift Shared/SitxShared.swift Shared/PhoneLocationReporting.swift Shared/CoTFieldSafety.swift \
+    Shared/UserMetrics.swift Shared/DittoPDL.swift Shared/DashboardMetric.swift Shared/ManualAlerts.swift \
+    Tests/SitxProtocolChecks.swift -o "$build_dir/sitx-protocol-checks"
+  "$build_dir/sitx-protocol-checks"
+fi
+
 swiftc -swift-version 5 -parse-as-library \
   Shared/GarminDeliveryLedger.swift Tests/GarminDeliveryLedgerTests.swift \
   -o "$build_dir/garmin-ledger-checks"
