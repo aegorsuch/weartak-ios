@@ -86,6 +86,14 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/bridge-checks"
 
 swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
+  Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
+  Shared/DittoPDL.swift scripts/ValidateDittoPDL.swift \
+  -o "$build_dir/validate-community-pdl"
+"$build_dir/validate-community-pdl"
+
+swiftc -swift-version 5 -parse-as-library \
   Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Tests/CompanionMapChecks.swift \
   -o "$build_dir/map-checks"
