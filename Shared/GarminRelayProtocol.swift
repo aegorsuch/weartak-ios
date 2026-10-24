@@ -319,14 +319,16 @@ private final class GarminCoTParser: NSObject, XMLParserDelegate {
     var ellipse: [String: Double]?
     var hasUserMetadata = false
     var hasVideoDetail = false
+    private var inDetail = false
     private var depth = 0
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName qName: String?, attributes: [String: String]) {
         depth += 1
+        if depth == 2 { inDetail = elementName == "detail" }
         switch (depth, elementName) {
         case (1, "event"): event = attributes
         case (2, "point"): point = attributes
-        case (3, "__video"): hasVideoDetail = true
+        case (3, "__video") where inDetail: hasVideoDetail = true
         case (3, "contact"):
             callsign = attributes["callsign"]
             if !(attributes["endpoint"]?.isEmpty ?? true) { hasUserMetadata = true }

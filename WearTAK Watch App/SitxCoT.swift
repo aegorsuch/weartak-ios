@@ -136,6 +136,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     private var deletedUID: String?
     private var circleRadius: Double?
     private var hasVideoDetail = false
+    private var inDetail = false
 
     init(excludedUID: String, now: Date) {
         self.excludedUID = excludedUID
@@ -145,6 +146,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName: String?, attributes: [String: String]) {
         depth += 1
+        if depth == 2 { inDetail = elementName == "detail" }
         if elementName == "event", depth == 1 {
             eventUID = attributes["uid"]
             eventType = attributes["type"]
@@ -169,6 +171,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
             deletedUID = nil
             circleRadius = nil
             hasVideoDetail = false
+            inDetail = false
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             var stale = attributes["stale"].flatMap { formatter.date(from: $0) }
@@ -186,7 +189,7 @@ private final class CoTEntityParser: NSObject, XMLParserDelegate {
                 sentAt = attributes["time"].flatMap { formatter.date(from: $0) }
             }
             how = attributes["how"]
-        } else if elementName == "__video", depth == 3 {
+        } else if elementName == "__video", depth == 3, inDetail {
             hasVideoDetail = true
         } else if elementName == "contact" {
             callSign = attributes["callsign"]?.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -127,6 +127,9 @@ struct GarminRelayProtocolTests {
         let unsupportedSubtype = try GarminRelayProtocol.incoming(
             "<event uid=\"other\" type=\"b-i-v-extra\"><point lat=\"38\" lon=\"-77\"/></event>", ownUID: "watch")
         precondition(unsupportedSubtype == nil)
+        let wrongVideoParent = try GarminRelayProtocol.incoming(
+            "<event uid=\"other\" type=\"a-f-G\"><point lat=\"38\" lon=\"-77\"/><other><__video/></other></event>", ownUID: "watch")!
+        precondition(wrongVideoParent.payload["__video"] == nil)
         let deletion = try GarminRelayProtocol.incoming(
             "<event uid=\"deletion\" type=\"t-x-d-d\"><detail><link uid=\"target\" relation=\"p-p\"/></detail></event>", ownUID: "watch")!
         precondition(deletion.payload["lat"] == nil && (deletion.payload["link"] as? [String: String])?["uid"] == "target")

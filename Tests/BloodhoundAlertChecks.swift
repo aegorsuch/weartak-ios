@@ -128,6 +128,8 @@ struct BloodhoundAlertChecks {
         }
         precondition(parse(type: "a-f-G", detail: "<contact callsign=\"CAMERA VIDEO\"/>").first?.hasVideoDetail == false)
         precondition(parse(type: "a-f-G", detail: "<wrapper><__video/></wrapper>").first?.hasVideoDetail == false)
+        let wrongParent = "<event uid=\"other\" type=\"a-f-G\" stale=\"\(formatter.string(from: now.addingTimeInterval(300)))\"><point lat=\"38\" lon=\"-77\"/><other><__video/></other></event>"
+        precondition(SitxCoT.parse(Data(wrongParent.utf8), excluding: "self", now: now).first?.hasVideoDetail == false)
         let encodedCamera = try JSONEncoder().encode(camera)
         precondition(!String(decoding: encodedCamera, as: UTF8.self).contains("private.invalid"))
         let restoredCamera = try JSONDecoder().decode(EntityRelayPayload.self, from: encodedCamera)
