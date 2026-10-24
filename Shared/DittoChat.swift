@@ -45,18 +45,27 @@ enum DittoChatDocument {
         doc["p"] = raw["p"] ?? "h-g-i-g-o"
         doc["q"] = raw["q"] ?? "Undefined"
         let components = try text("authorLoc").split(separator: ",", omittingEmptySubsequences: false)
-        var location = components.compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
-        guard (2...3).contains(components.count), location.count == components.count,
-              location.allSatisfy(\.isFinite),
-              (-90...90).contains(location[0]), (-180...180).contains(location[1]) else {
+        func coordinate(_ index: Int) -> Double? {
+            guard components.indices.contains(index),
+                  let value = Double(components[index].trimmingCharacters(in: .whitespaces)),
+                  value.isFinite else { return nil }
+            return value
+        }
+        guard components.count >= 2, let latitude = coordinate(0), let longitude = coordinate(1),
+              (-90...90).contains(latitude), (-180...180).contains(longitude) else {
             throw DittoCoTDocument.Failure.invalid
         }
-        if location.count == 2 { location.append(0) }
-        doc["j"] = raw["j"] ?? location[0]
-        doc["l"] = raw["l"] ?? location[1]
-        doc["i"] = raw["i"] ?? location[2]
-        doc["h"] = raw["h"] ?? 9_999_999
-        doc["k"] = raw["k"] ?? 9_999_999
+        // ATAK GeoPoint.toString(6): latitude,longitude,altitude,ALTREF,CE,LE.
+        let altitudeIsHAE = components.count < 4 ||
+            components[3].trimmingCharacters(in: .whitespaces) == "HAE"
+        let altitude = altitudeIsHAE ? coordinate(2) : nil
+        let ce = coordinate(4).flatMap { $0 >= 0 ? $0 : nil }
+        let le = coordinate(5).flatMap { $0 >= 0 ? $0 : nil }
+        doc["j"] = raw["j"] ?? latitude
+        doc["l"] = raw["l"] ?? longitude
+        doc["i"] = raw["i"] ?? altitude ?? 9_999_999
+        doc["h"] = raw["h"] ?? ce ?? 9_999_999
+        doc["k"] = raw["k"] ?? le ?? 9_999_999
         if raw["r"] == nil {
             // Native documents have no roster: only direct-to-self and broadcast are safe to reconstruct.
             let knownGroup = ownUID.map { verifiedMembers.contains($0) && verifiedMembers.contains(sender) } ?? false

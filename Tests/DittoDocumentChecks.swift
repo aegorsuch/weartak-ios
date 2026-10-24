@@ -96,6 +96,33 @@ enum DittoDocumentChecks {
                 var twoCoordinates = native
                 twoCoordinates["authorLoc"] = "38,-77"
                 _ = try DittoChatDocument.decode(twoCoordinates, ownUID: "other", now: now)
+                for (location, altitude, ce, le) in [
+                    ("41.879815,-87.642469,156.933,HAE,19.4,9999999.0", 156.933, 19.4, 9_999_999.0),
+                    (" 41.879815 , -87.642469 , NaN , HAE , NaN , NaN ", 9_999_999.0, 9_999_999.0, 9_999_999.0),
+                    ("41.879815,-87.642469", 9_999_999.0, 9_999_999.0, 9_999_999.0),
+                    ("41.879815,-87.642469,Infinity,HAE,-1,Infinity,extra", 9_999_999.0, 9_999_999.0, 9_999_999.0),
+                    ("41.879815,-87.642469,156.933,AGL,19.4,20", 9_999_999.0, 19.4, 20.0)
+                ] {
+                    var official = native
+                    official["authorLoc"] = location
+                    let decoded = try DittoChatDocument.decode(official, ownUID: "other", now: now)
+                    precondition(decoded.xml.contains("lat=\"41.879815\" lon=\"-87.642469\""))
+                    precondition(decoded.xml.contains("hae=\"\(altitude)\" ce=\"\(ce)\" le=\"\(le)\""))
+                    precondition(TAKChatMessage.parse(decoded.xml, ownUID: "other")?.text == parsed.text)
+                    official["i"] = 123.0
+                    official["h"] = 4.0
+                    official["k"] = 5.0
+                    let extended = try DittoChatDocument.decode(official, ownUID: "other", now: now)
+                    precondition(extended.xml.contains("hae=\"123.0\" ce=\"4.0\" le=\"5.0\""))
+                }
+                for location in ["NaN,-87", "41,Infinity", "91,-87", "41,-181", "41", ",-87"] {
+                    var invalid = native
+                    invalid["authorLoc"] = location
+                    do {
+                        _ = try DittoChatDocument.decode(invalid, ownUID: "other", now: now)
+                        preconditionFailure("Invalid native chat latitude/longitude accepted")
+                    } catch DittoCoTDocument.Failure.invalid {}
+                }
                 var multiline = native
                 multiline["msg"] = "First line\nSecond\tline"
                 let multilineReceived = try DittoChatDocument.decode(multiline, ownUID: "other", now: now)
