@@ -20,6 +20,7 @@ struct GarminRelayProtocolTests {
         do { _ = try booleans.integer("yes", range: 0...1); fatalError("Booleans cannot substitute for numbers.") }
         catch GarminRelayProtocol.Failure.invalid {}
         let now = Date()
+        let sentMilliseconds = Int64(now.timeIntervalSince1970.rounded(.down) * 1_000)
         let device = UUID()
         let identity = try GarminRelayProtocol.identity(envelope("watch_settings", [
             "callsign": "TEST", "team": "Cyan", "role": "Team Member", "reportIntSecs": 10
@@ -136,6 +137,7 @@ struct GarminRelayProtocolTests {
         precondition(receivedGroup.payload["senderCallsign"] as? String == identity.resolvedCallSign)
         precondition(receivedGroup.payload["msg"] as? String == "Group reply")
         precondition(receivedGroup.payload["receivedAt"] as? Int64 == Int64(now.timeIntervalSince1970 * 1_000))
+        precondition(receivedGroup.payload["sentAt"] as? Int64 == sentMilliseconds)
         precondition(receivedGroup.payload["messageId"] as? String == "group-1")
         precondition(receivedGroup.payload["eventUid"] as? String == "GeoChat.\(identity.uid).team-room.group-1")
         precondition(receivedGroup.payload["isGroup"] as? Bool == true)
@@ -156,6 +158,27 @@ struct GarminRelayProtocolTests {
         let directXML = try TAKChatMessage.outgoing(senderUID: "other", senderCallSign: "Other",
             recipientUID: identity.uid, recipientCallSign: "Garmin", text: "Private", now: now)
         let receivedDirect = try GarminRelayProtocol.incoming(directXML, ownUID: identity.uid)!
+        let delayed = try GarminRelayProtocol.incoming(directXML, ownUID: identity.uid,
+            receivedAt: now.addingTimeInterval(600))!
+        precondition(delayed.payload["sentAt"] as? Int64 == sentMilliseconds)
+        precondition(delayed.payload["receivedAt"] as? Int64 == Int64(now.addingTimeInterval(600).timeIntervalSince1970 * 1_000))
+        precondition(delayed.payload["messageId"] as? String == receivedDirect.payload["messageId"] as? String)
+        for text in [
+            "#weartakcommandusep12 00 server=\(UUID().uuidString)",
+            "#weartakcommandsetpdl fixture==",
+            "#weartakcommandsetprofile " + String(repeating: "x", count: 513)
+        ] {
+            let command = try TAKChatMessage.outgoing(senderUID: "other", senderCallSign: "Other",
+                recipientUID: identity.uid, recipientCallSign: "Garmin", text: text, now: now)
+            do {
+                _ = try GarminRelayProtocol.incoming(command, ownUID: identity.uid, receivedAt: now)
+                fatalError("Credential or truncated command entered legacy relay")
+            } catch GarminRelayProtocol.Failure.unsupported {}
+        }
+        let longOrdinaryChat = try TAKChatMessage.outgoing(senderUID: "other", senderCallSign: "Other",
+            recipientUID: identity.uid, recipientCallSign: "Garmin", text: String(repeating: "x", count: 600), now: now)
+        let shortenedOrdinaryChat = try GarminRelayProtocol.incoming(longOrdinaryChat, ownUID: identity.uid)!
+        precondition((shortenedOrdinaryChat.payload["msg"] as? String)?.count == 512)
         precondition(receivedDirect.payload["conversationUid"] as? String == "other")
         precondition(receivedDirect.type == "chat_received")
         precondition(receivedDirect.payload["uid"] as? String ==
