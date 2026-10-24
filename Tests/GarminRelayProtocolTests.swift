@@ -107,6 +107,29 @@ struct GarminRelayProtocolTests {
             precondition((incoming.payload["shape"] as? [String: [String: Double]])?["ellipse"]?["minor"] == 500)
             precondition(incoming.payload["stale"] as? String == "2026-10-23T00:05:00Z")
         }
+        for type in ["b-i-v", "a-f-G"] {
+            let xml = "<event uid=\"camera\" type=\"\(type)\"><point lat=\"38\" lon=\"-77\"/><detail><__video url=\"srt://private.invalid/secret\"><ConnectionEntry password=\"secret\"/></__video></detail></event>"
+            let camera = try GarminRelayProtocol.incoming(xml, ownUID: "watch")!
+            precondition((camera.payload["__video"] as? [String: String])?.isEmpty == true)
+            precondition(camera.payload["type"] as? String == type)
+            let encoded = try JSONSerialization.data(withJSONObject: camera.object)
+            precondition(!String(decoding: encoded, as: UTF8.self).contains("secret"))
+        }
+        let exactCamera = try GarminRelayProtocol.incoming(
+            "<event uid=\"camera\" type=\"b-i-v\"><point lat=\"38\" lon=\"-77\"/><detail/></event>", ownUID: "watch")
+        precondition(exactCamera != nil)
+        for detail in ["<contact callsign=\"CAMERA VIDEO\"/>", "<wrapper><__video/></wrapper>", "<sensor/>"] {
+            let ordinary = try GarminRelayProtocol.incoming(
+                "<event uid=\"ordinary\" type=\"a-f-G\"><point lat=\"38\" lon=\"-77\"/><detail>\(detail)</detail></event>",
+                ownUID: "watch")!
+            precondition(ordinary.payload["__video"] == nil)
+        }
+        let unsupportedSubtype = try GarminRelayProtocol.incoming(
+            "<event uid=\"other\" type=\"b-i-v-extra\"><point lat=\"38\" lon=\"-77\"/></event>", ownUID: "watch")
+        precondition(unsupportedSubtype == nil)
+        let wrongVideoParent = try GarminRelayProtocol.incoming(
+            "<event uid=\"other\" type=\"a-f-G\"><point lat=\"38\" lon=\"-77\"/><other><__video/></other></event>", ownUID: "watch")!
+        precondition(wrongVideoParent.payload["__video"] == nil)
         let deletion = try GarminRelayProtocol.incoming(
             "<event uid=\"deletion\" type=\"t-x-d-d\"><detail><link uid=\"target\" relation=\"p-p\"/></detail></event>", ownUID: "watch")!
         precondition(deletion.payload["lat"] == nil && (deletion.payload["link"] as? [String: String])?["uid"] == "target")

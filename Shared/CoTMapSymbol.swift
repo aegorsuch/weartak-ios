@@ -1,5 +1,18 @@
 import Foundation
 
+enum CoTCamera {
+    static func recognizes(type: String, hasVideoDetail: Bool = false) -> Bool {
+        type == "b-i-v" || hasVideoDetail
+    }
+
+    static func pickerGlyph(type: String, hasVideoDetail: Bool = false, isAlert: Bool = false,
+                            isUser: Bool = false) -> String {
+        if isAlert { return "exclamationmark.triangle.fill" }
+        if recognizes(type: type, hasVideoDetail: hasVideoDetail) { return "video.fill" }
+        return isUser ? "person.fill" : "mappin"
+    }
+}
+
 enum CoTMapSymbol: String {
     case fixedWing = "airplane"
     case rotaryWing = "helicopter.fill"

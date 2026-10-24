@@ -116,6 +116,24 @@ struct BloodhoundAlertChecks {
                                  excluding: "self", now: now).isEmpty)
         precondition(SitxCoT.parse(Data("<event>broken".utf8), excluding: "self", now: now).isEmpty)
 
+        precondition(parse(type: "b-i-v").count == 1)
+        let camera = parse(type: "a-f-G", detail: "<__video url=\"srt://private.invalid/secret\"/>").first!
+        precondition(camera.hasVideoDetail == true)
+        precondition(CoTCamera.pickerGlyph(type: camera.type, hasVideoDetail: camera.hasVideoDetail == true) == "video.fill")
+        precondition(CoTCamera.pickerGlyph(type: "b-i-v") == "video.fill")
+        precondition(CoTCamera.pickerGlyph(type: "b-i-v", isAlert: true) == "exclamationmark.triangle.fill")
+        precondition(CoTCamera.pickerGlyph(type: "a-f-G-U-C", isUser: true) == "person.fill")
+        for type in ["b-i-v-extra", "a-f-G-E-S", "b-m-p-s-p-i", "a-f-G"] {
+            precondition(!CoTCamera.recognizes(type: type))
+        }
+        precondition(parse(type: "a-f-G", detail: "<contact callsign=\"CAMERA VIDEO\"/>").first?.hasVideoDetail == false)
+        precondition(parse(type: "a-f-G", detail: "<wrapper><__video/></wrapper>").first?.hasVideoDetail == false)
+        let wrongParent = "<event uid=\"other\" type=\"a-f-G\" stale=\"\(formatter.string(from: now.addingTimeInterval(300)))\"><point lat=\"38\" lon=\"-77\"/><other><__video/></other></event>"
+        precondition(SitxCoT.parse(Data(wrongParent.utf8), excluding: "self", now: now).first?.hasVideoDetail == false)
+        let encodedCamera = try JSONEncoder().encode(camera)
+        precondition(!String(decoding: encodedCamera, as: UTF8.self).contains("private.invalid"))
+        let restoredCamera = try JSONDecoder().decode(EntityRelayPayload.self, from: encodedCamera)
+        precondition(restoredCamera.hasVideoDetail == true)
         let restored = try JSONDecoder().decode(EntityRelayPayload.self, from: JSONEncoder().encode(alert[0]))
         precondition(restored.emergencyState == .alert && restored.alertCategory == "Injury" && restored.staleAt == alert[0].staleAt)
         let legacy = try JSONDecoder().decode(EntityRelayPayload.self,

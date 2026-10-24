@@ -1219,6 +1219,16 @@ The contact panel omits team, role and last-seen text; contact expiry still appl
 
 ### Incoming points (RGR / nPos)
 
+The Bloodhound picker shows a camera glyph for the exact CoT video type
+`b-i-v` or a direct `<detail><__video .../></detail>` element. Names, generic
+sensors and SPI types do not imply a camera. Alert glyphs retain precedence,
+and contact/route actions and distance labels are unchanged. The Apple bridge
+retains the original CoT; parsed watch records retain only video-detail presence.
+The iPhone's normalized Garmin entity relay preserves the original `type` and
+adds `__video: {}` only when that detail is present, never its URL or attributes.
+This is an icon/identity affordance, not video playback, SRT or KLV support.
+Companion has no equivalent standalone Bloodhound picker.
+
 Each newly received live (non-user) point plays a haptic and adds a red count
 badge to the dashboard Compass button; opening Compass clears it. Compass lists
 incoming points with affiliation and range. Data Sync mission items are not

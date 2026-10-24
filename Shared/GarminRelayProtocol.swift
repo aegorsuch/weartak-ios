@@ -271,8 +271,10 @@ enum GarminRelayProtocol {
         }
         guard type.hasPrefix("a-") || type.hasPrefix("b-a-o") || type == "b-a-g" ||
                 type == "b-m-p-s-m" || type == "b-m-p-s-p-i" || type.hasPrefix("u-d-") || type == "t-x-d-d" ||
+                CoTCamera.recognizes(type: type, hasVideoDetail: delegate.hasVideoDetail) ||
                 delegate.emergency != nil else { return nil }
         var payload: [String: Any] = ["uid": uid, "type": type]
+        if delegate.hasVideoDetail { payload["__video"] = [String: String]() }
         for key in ["time", "start", "stale", "how"] { if let value = delegate.event[key] { payload[key] = value } }
         if let point = delegate.point, let lat = Double(point["lat"] ?? ""), let lon = Double(point["lon"] ?? ""),
            lat.isFinite, lon.isFinite, (-90...90).contains(lat), (-180...180).contains(lon),
@@ -316,13 +318,17 @@ private final class GarminCoTParser: NSObject, XMLParserDelegate {
     var link: [String: String]?
     var ellipse: [String: Double]?
     var hasUserMetadata = false
+    var hasVideoDetail = false
+    private var inDetail = false
     private var depth = 0
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName qName: String?, attributes: [String: String]) {
         depth += 1
+        if depth == 2 { inDetail = elementName == "detail" }
         switch (depth, elementName) {
         case (1, "event"): event = attributes
         case (2, "point"): point = attributes
+        case (3, "__video") where inDetail: hasVideoDetail = true
         case (3, "contact"):
             callsign = attributes["callsign"]
             if !(attributes["endpoint"]?.isEmpty ?? true) { hasUserMetadata = true }

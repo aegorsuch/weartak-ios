@@ -68,6 +68,11 @@ struct IncomingMapEntity: Identifiable {
     var alertLocationObservedAt: Date? = nil
     var hasChatEndpoint: Bool = true
     var circleRadius: Double? = nil
+    var hasVideoDetail = false
+
+    var pickerGlyph: String {
+        CoTCamera.pickerGlyph(type: type, hasVideoDetail: hasVideoDetail, isAlert: isAlert, isUser: isUser)
+    }
 
     var displayTitle: String {
         callSign.flatMap { $0.isEmpty ? nil : $0 } ??
@@ -584,7 +589,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
                     sourceServerID: entity.sourceServerID,
                     sourceGeneration: 0, expiresAt: entity.expiresAt, isUser: entity.isUser,
                     missionName: entity.missionName, alertCategory: entity.alertCategory, isAlert: entity.isAlert,
-                    hasChatEndpoint: entity.hasChatEndpoint, circleRadius: entity.circleRadius)
+                    hasChatEndpoint: entity.hasChatEndpoint, circleRadius: entity.circleRadius,
+                    hasVideoDetail: entity.hasVideoDetail)
             }
             self.saveCompanionMapCache()
         }
@@ -1522,7 +1528,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             alertCategory: payload.alertCategory, isAlert: payload.emergencyState == .alert,
             hasChatEndpoint: (sourceServerID == DittoCoTDocument.sourceID && payload.isUser == true) ||
                 payload.hasChatEndpoint == true || previous?.hasChatEndpoint == true,
-            circleRadius: payload.circleRadius
+            circleRadius: payload.circleRadius, hasVideoDetail: payload.hasVideoDetail ?? false
         )
         let isNew: Bool
         if let index = incomingEntities.firstIndex(where: { $0.id == payload.uid }) {
@@ -1699,7 +1705,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 id: id, latitude: item.lat, longitude: item.lon, type: item.type, lastSeen: Date(),
                 callSign: item.callsign, team: old.team, role: old.role, senderUID: old.senderUID,
                 sourceServerID: old.sourceServerID, sourceGeneration: old.sourceGeneration, expiresAt: nil,
-                isUser: old.isUser, sourceTransport: old.sourceTransport, missionName: old.missionName)
+                isUser: old.isUser, sourceTransport: old.sourceTransport, missionName: old.missionName,
+                hasVideoDetail: old.hasVideoDetail)
         }
     }
 
