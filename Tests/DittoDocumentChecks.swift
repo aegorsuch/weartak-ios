@@ -71,6 +71,7 @@ enum DittoDocumentChecks {
             let (c, doc) = try DittoCoTDocument.make(xml: chat, peer: "peer", author: "remote", callsign: "Remote")
             precondition(c == "chat" && doc["w"] as? String == "b-t-f")
             precondition(doc["_id"] as? String == "message-\(recipient)" && doc["d"] as? String == "remote")
+            precondition(doc["_c"] == nil, "The legacy PN counter must be created by APPLY, never a numeric register")
             precondition(doc["msg"] as? String == "A&B <ready>" && doc["roomId"] as? String == recipient)
             precondition((doc["o"] as! Double) - (doc["b"] as! Double) == 86_400_000)
             let received = try DittoCoTDocument.decode(doc, collection: c, now: now)
@@ -106,6 +107,12 @@ enum DittoDocumentChecks {
             do {
                 _ = try DittoChatDocument.decode(conflict, ownUID: "other", now: now)
                 preconditionFailure("Conflicting extension detail accepted")
+            } catch DittoCoTDocument.Failure.invalid {}
+            var wrongAuthor = doc
+            wrongAuthor["AuthorId"] = "different-author"
+            do {
+                _ = try DittoChatDocument.decode(wrongAuthor, ownUID: "other", now: now)
+                preconditionFailure("Chat sender/author mismatch accepted")
             } catch DittoCoTDocument.Failure.invalid {}
         }
         let wire = try BridgeWire.Message(kind: .dittoEvent, xml: xml).encoded()

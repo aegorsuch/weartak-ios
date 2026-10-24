@@ -132,7 +132,7 @@ final class DittoPeerRuntime {
         do {
             let pdlText: String
             if configuration.source == .community {
-                guard let communityPDL, !communityPDL.isEmpty else { throw DittoPDLError.missing }
+                guard let communityPDL, !communityPDL.isEmpty else { throw DittoPDLError.communityNotProvisioned }
                 pdlText = communityPDL
             } else if let customPDL = configuration.customPDL, !customPDL.isEmpty {
                 pdlText = customPDL
@@ -235,12 +235,16 @@ final class DittoPeerRuntime {
             let (collection, document) = try DittoCoTDocument.make(xml: xml,
                 peer: instance.presence.graph.localPeer.peerKey, author: uid, callsign: callsign)
             guard collection != "track" else { throw DittoCoTDocument.Failure.invalid }
-            var doc = document
-            if collection == "chat" { doc["_c"] = 1 }
+            let doc = document
             let query = collection == "chat" ? DittoChatDocument.upsertQuery :
                 "INSERT INTO \(collection) DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE"
             try await instance.store.execute(query: query,
                                              arguments: ["doc": doc])
+            if collection == "chat" {
+                guard let messageID = doc["_id"] as? String else { throw DittoCoTDocument.Failure.invalid }
+                try await instance.store.execute(query: DittoChatDocument.counterQuery,
+                    arguments: ["increment": 1, "id": messageID])
+            }
             return true
         } catch {
             logger.error("Ditto publication failed: \(error.localizedDescription, privacy: .public)")

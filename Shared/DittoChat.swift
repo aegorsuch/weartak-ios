@@ -3,7 +3,8 @@ import CoreFoundation
 
 /// Native Ditto ATAK Edge Sync 1.1.1 chat fields, plus optional lossless WearTAK CoT extensions.
 enum DittoChatDocument {
-    static let upsertQuery = "INSERT INTO COLLECTION chat (_c COUNTER) DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE"
+    static let upsertQuery = "INSERT INTO chat DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE"
+    static let counterQuery = "UPDATE chat APPLY _c PN_INCREMENT BY :increment WHERE _id = :id"
 
     static func decode(_ raw: [String: Any], ownUID: String?, verifiedMembers: [String] = [],
                        now: Date = Date()) throws -> DittoCoTDocument {
@@ -16,7 +17,13 @@ enum DittoChatDocument {
         }
         let sender = try text("d"), id = try text("_id"), room = try text("roomId")
         let name = try text("e"), title = try text("room"), parent = try text("parent")
-        let body = try text("msg", maximum: TAKChatMessage.maximumTextBytes)
+        guard let body = raw["msg"] as? String,
+              !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              body.utf8.count <= TAKChatMessage.maximumTextBytes,
+              !body.unicodeScalars.contains(where: { $0.value < 32 && $0 != "\n" && $0 != "\t" }),
+              raw["AuthorId"] == nil || raw["AuthorId"] as? String == sender else {
+            throw DittoCoTDocument.Failure.invalid
+        }
         let type = try text("authorType")
         guard type.hasPrefix("a-"), let time = raw["b"] as? NSNumber,
               CFGetTypeID(time) != CFBooleanGetTypeID(), time.doubleValue.isFinite,

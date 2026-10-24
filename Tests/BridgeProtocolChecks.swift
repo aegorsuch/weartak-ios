@@ -76,6 +76,7 @@ struct BridgeProtocolChecks {
         precondition(decodedDittoStatus.dittoStatus == dittoStatus)
         precondition(!String(decoding: encodedDittoStatus, as: UTF8.self).contains(customPDL))
         #if canImport(Compression)
+        precondition(DittoPDLError.communityNotProvisioned.localizedDescription.contains("Select Custom"))
         let pdlFixture = "eJw1y0EKgDAMBdG7_HUKtXQhvYJLTxBtwFKpYIIg4t1FwVk-mAsHUiAUQ8I4gMBIMFFzmY0nVgFBf9OFd8muygnCu3y6llmairOtSgNBkGLnQ4yx92_3AyLgHk4"
         let parsedPDL = try DittoPDLParser.parse(pdlFixture, now: Date(timeIntervalSince1970: 1_700_000_000))
         precondition(parsedPDL.appID == "test-database" && parsedPDL.sharedKey == "test-shared-key")

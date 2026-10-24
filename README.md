@@ -1457,8 +1457,10 @@ UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
 impersonate an allowed sender.
 
 Ditto is an iPhone Companion service; its SDK is linked only to the iOS target.
-It is off by default and uses a locally provisioned Community PDL unless Custom
-is selected. Before building, create the ignored file
+It is off by default. Community requires a locally provisioned Community PDL;
+the released build does not currently contain one and reports a clear missing
+identity status rather than pretending to sync. Custom PDLs from the watch still
+work. Before building with an authorized Community identity, create the ignored file
 `BuildConfiguration/Companion.local.xcconfig` with
 `DITTO_COMMUNITY_PDL = <Community PDL>`; this value is embedded in the iPhone
 app's Info.plist and must not be committed. Custom PDLs can be saved from a
@@ -1495,7 +1497,8 @@ from the received conversation. Built-in/custom quick replies work unchanged.
 message ID, `d` the sender UID, `e` callsign, `msg` plain text, `room` title,
 `roomId` conversation UID, `parent` contact-group parent, `authorType` sender CoT
 type and `authorLoc` the latitude/longitude/altitude string. `_c` is a native
-counter, not a numeric register. The common peer/schema/lifecycle/time fields
+legacy PN counter (created with `APPLY _c PN_INCREMENT BY`), not a numeric
+register or the newer settable counter. The common peer/schema/lifecycle/time fields
 remain. Optional WearTAK `eventUid`/detail/envelope extensions preserve original
 GeoChat event identity and verified named-group participants; extension identity
 and text must match native fields. Native direct/broadcast documents work
@@ -1514,6 +1517,14 @@ verification; schema compatibility alone is not proof of end-to-end delivery.
 Ditto is stopped when Companion backgrounds; iOS does not guarantee continuous
 background peer-to-peer sync. Nearby-peer discovery and record exchange require
 testing on physical devices.
+
+All peers must use the same authorized Ditto database and compatible identity
+credentials; matching collection schemas alone does not join different meshes.
+The existing WearOS and official ATAK plugin Community database IDs differ.
+Either import an authorized common WearTAK PDL into ATAK (using its identity
+import), or obtain a compatible PDL from Ditto Federal. Do not edit an app ID
+inside an issued PDL or copy credentials out of an APK. Provisioning a default
+iOS build identity is a separate, explicit change.
 
 Companion performs the requests on the watch's behalf. TAK Server uses the
 client certificate on HTTPS port `8443` (`GET /Marti/api/missions`,

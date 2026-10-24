@@ -11,6 +11,7 @@ struct DittoPDL {
 
 enum DittoPDLError: LocalizedError {
     case missing
+    case communityNotProvisioned
     case invalidBase64
     case invalidCompression
     case invalidJSON
@@ -22,6 +23,8 @@ enum DittoPDLError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missing: return "The selected Ditto PDL is not configured."
+        case .communityNotProvisioned:
+            return "This iPhone build has no Community Ditto identity. Select Custom on the watch and save an authorized PDL shared with your peers."
         case .invalidBase64: return "The selected Ditto PDL is not valid Base64."
         case .invalidCompression: return "The selected Ditto PDL could not be decompressed."
         case .invalidJSON: return "The selected Ditto PDL does not contain valid JSON."
