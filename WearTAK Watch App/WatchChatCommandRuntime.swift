@@ -105,6 +105,9 @@ final class WatchChatCommandRuntime {
             if command.name == "usep12" {
                 guard !settings.networkPreferencesLocked else { return .reply("Command rejected: network settings are locked.") }
                 do { _ = try ChatP12Request(command) }
+                catch ChatP12Request.Failure.server {
+                    return .reply("Command rejected: server=<configured-server-UUID> is required; nothing changed.")
+                }
                 catch { return .reply("Command rejected: invalid P12 command.") }
                 return .phoneProvisioning
             }

@@ -48,7 +48,8 @@ struct WatchChatCommandRuntimeChecks {
             TAKChatMessage(id: id, senderUID: sender, recipientUID: "watch", senderCallSign: "Sender",
                 text: text, sentAt: sentAt ?? now, isGroup: group)
         }
-        let credential = "#weartakcommandusep12 " + String(repeating: "ab", count: 4_096)
+        let credential = "#weartakcommandusep12 " + String(repeating: "ab", count: 4_096) +
+            " server=\(UUID().uuidString)"
         let first = message(credential, id: "one-command-many-routes")
         precondition(runtime.handle(first, ownUID: "watch", settings: settings, now: now) == .phoneProvisioning)
         precondition(runtime.handle(first, ownUID: "watch", settings: settings, now: now) == .consumed)
@@ -70,7 +71,10 @@ struct WatchChatCommandRuntimeChecks {
         else { fatalError("Locked credential command accepted") }
         precondition(!locked.contains("abab"))
         settings.networkPreferencesLocked = false
-        let invalid = message("#weartakcommandusep12 private-fixture")
+        let missingServer = message("#weartakcommandusep12 00")
+        precondition(runtime.handle(missingServer, ownUID: "watch", settings: settings, now: now) ==
+            .reply("Command rejected: server=<configured-server-UUID> is required; nothing changed."))
+        let invalid = message("#weartakcommandusep12 private-fixture server=\(UUID().uuidString)")
         guard case .reply(let rejected) = runtime.handle(invalid, ownUID: "watch", settings: settings, now: now)
         else { fatalError("Invalid credential accepted") }
         precondition(!rejected.contains("private-fixture"))

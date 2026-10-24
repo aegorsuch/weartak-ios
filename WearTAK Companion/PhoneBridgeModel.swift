@@ -1529,20 +1529,17 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
               abs(Date().timeIntervalSince(sentAt)) <= 300 else {
             return reply("Command rejected: phone configuration locked or request expired.")
         }
-        guard case .parsed(let command) = ChatCommandParser.parse(text),
-              let request = try? ChatP12Request(command) else {
+        guard case .parsed(let command) = ChatCommandParser.parse(text) else {
             return reply("Command rejected: invalid P12 command.")
         }
-        let target: CompanionServer?
-        if let selector = request.server {
-            target = servers.first { $0.id.uuidString.caseInsensitiveCompare(selector) == .orderedSame }
-        } else if let source = message.sourceServerID, let sourceServer = servers.first(where: { $0.id == source }) {
-            target = sourceServer
-        } else {
-            target = servers.count == 1 ? servers.first : nil
+        let request: ChatP12Request
+        do { request = try ChatP12Request(command) }
+        catch ChatP12Request.Failure.server {
+            return reply("Command rejected: server=<configured-server-UUID> is required; nothing changed.")
         }
-        guard let target else {
-            return reply("Command rejected: specify server=<configured-server-UUID>.")
+        catch { return reply("Command rejected: invalid P12 command.") }
+        guard let target = servers.first(where: { $0.id == request.server }) else {
+            return reply("Command rejected: server ID is not configured; nothing changed.")
         }
         let key = "WearTAK.companion.provisioningReceipts"
         let now = Date().timeIntervalSince1970

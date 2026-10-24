@@ -603,6 +603,11 @@ private struct CompanionServerEditor: View {
                             }
                         ))
                         .disabled(busy || bridge.adminLockEnabled)
+                        LabeledContent(String(localized: "Server ID", table: "CompanionApp")) {
+                            Text(serverID.uuidString)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                        }
                     } footer: {
                         Text("Turn off Server enabled to edit the address or authentication. Save your changes before enabling again. This switch immediately changes the saved server; Cancel does not undo it.", tableName: "CompanionApp")
                     }

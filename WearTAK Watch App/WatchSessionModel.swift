@@ -1353,9 +1353,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 guard let self else { return }
                 let text: String
                 do {
-                    let source: UUID?
-                    if case .companion(let id) = route { source = id } else { source = nil }
-                    text = try await companionClient.provisionIdentity(from: message, source: source)
+                    text = try await companionClient.provisionIdentity(from: message)
                 } catch {
                     text = "Provisioning unavailable. Open paired iPhone Companion and check its certificate status before retrying."
                 }

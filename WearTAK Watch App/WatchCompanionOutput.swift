@@ -501,8 +501,8 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
             throw CompanionRefreshFailure.message(reply.detail ?? "The contact's TAK server did not accept the chat.")
         }
 
-        func provisionIdentity(from message: TAKChatMessage, source: UUID?) async throws -> String {
-            let reply = try await request(BridgeWire.Message(kind: .provisionIdentity, sourceServerID: source,
+        func provisionIdentity(from message: TAKChatMessage) async throws -> String {
+            let reply = try await request(BridgeWire.Message(kind: .provisionIdentity,
                 provisioningCommand: message.text, commandSender: message.senderUID,
                 commandMessageID: message.id, commandSentAt: message.sentAt), timeoutSeconds: 20)
             guard reply.kind == .acknowledgement, let detail = reply.detail else {

@@ -18,7 +18,7 @@ enum ChatCommandParser {
     static let maximumArguments = 12
     static let maximumValueLength = 128
     static let maximumProvisioningLength = 24_000
-    private static let namePattern = try! NSRegularExpression(pattern: "^[a-z]{1,32}$")
+    private static let namePattern = try! NSRegularExpression(pattern: "^[a-z][a-z0-9]{0,31}$")
     private static let keyPattern = try! NSRegularExpression(pattern: "^[a-z][a-z0-9]{0,15}$")
 
     static func parse(_ text: String) -> ChatCommandParse {
@@ -160,12 +160,15 @@ struct ChatP12Request {
     static let maximumBytes = 8_192
     let data: Data
     let password: String
-    let server: String?
+    let server: UUID
 
     init(_ command: ChatCommand) throws {
         guard command.name == "usep12", command.positional.count == 1,
               Set(command.arguments.keys).isSubset(of: ["password", "server"]) else {
             throw Failure.syntax
+        }
+        guard let selector = command.arguments["server"], let server = UUID(uuidString: selector) else {
+            throw Failure.server
         }
         let hex = Array(command.positional[0].utf8)
         guard !hex.isEmpty, hex.count <= Self.maximumBytes * 2, hex.count.isMultiple(of: 2) else {
@@ -186,8 +189,8 @@ struct ChatP12Request {
         }
         data = decoded
         password = command.arguments["password"] ?? "atakatak"
-        server = command.arguments["server"]
+        self.server = server
     }
 
-    enum Failure: Error { case syntax, hex }
+    enum Failure: Error { case syntax, hex, server }
 }

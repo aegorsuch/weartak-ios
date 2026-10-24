@@ -49,19 +49,20 @@ struct ChatCommandChecks {
             return command
         }
         let bytes = String(repeating: "aB", count: 4_096)
-        let request = try ChatP12Request(parse("#weartakcommandusep12 \(bytes)"))
+        let server = UUID().uuidString
+        let request = try ChatP12Request(parse("#weartakcommandusep12 \(bytes) server=\(server)"))
         precondition(request.data == Data(repeating: 0xab, count: 4_096))
-        precondition(request.password == "atakatak" && request.server == nil)
+        precondition(request.password == "atakatak" && request.server.uuidString == server)
         let overridden = try ChatP12Request(parse(
-            "#weartakcommandusep12 00 password=\"fixture only\" server=configured"))
-        precondition(overridden.password == "fixture only" && overridden.server == "configured")
-        let emptyPassword = try ChatP12Request(parse("#weartakcommandusep12 00 password=\"\""))
+            "#weartakcommandusep12 00 password=\"fixture only\" server=\(server)"))
+        precondition(overridden.password == "fixture only" && overridden.server.uuidString == server)
+        let emptyPassword = try ChatP12Request(parse("#weartakcommandusep12 00 password=\"\" server=\(server)"))
         precondition(emptyPassword.password.isEmpty)
         let pdl = parse("#weartakcommandsetpdl Zml4dHVyZQ==")
         precondition(pdl.positional == ["Zml4dHVyZQ=="] && pdl.arguments.isEmpty)
         for hex in ["", "a", "xz", "0x00", "００", String(repeating: "00", count: 8_193)] {
             do {
-                _ = try ChatP12Request(ChatCommand(name: "usep12", arguments: [:], positional: [hex]))
+                _ = try ChatP12Request(ChatCommand(name: "usep12", arguments: ["server": server], positional: [hex]))
                 fatalError("Invalid hex accepted")
             } catch ChatP12Request.Failure.hex {}
         }
@@ -70,6 +71,12 @@ struct ChatCommandChecks {
                 _ = try ChatP12Request(ChatCommand(name: "usep12", arguments: args, positional: ["00"]))
                 fatalError("Unknown argument accepted")
             } catch ChatP12Request.Failure.syntax {}
+        }
+        for args in [[:], ["server": "not-configured-uuid"]] {
+            do {
+                _ = try ChatP12Request(ChatCommand(name: "usep12", arguments: args, positional: ["00"]))
+                fatalError("Missing or malformed server ID accepted")
+            } catch ChatP12Request.Failure.server {}
         }
         for text in [
             "#weartakcommandusep12 00 password=a password=b",

@@ -1471,10 +1471,12 @@ Ditto fan-out.
 
 `#weartakcommandsetpdl <pdl>` validates and stores a custom PDL in the watch
 Keychain and selects Custom without implicitly enabling Ditto.
-`#weartakcommandusep12 <hex>` imports a client identity on the paired iPhone.
-Optional `server=<configured-server-UUID>` selects an existing server; otherwise
-the ingress TAK server is selected, or the only configured server for multicast
-and Ditto. Ambiguous selection is rejected. Optional `password="..."` overrides
+`#weartakcommandusep12 <hex> server=<configured-server-UUID>` imports a client
+identity on the paired iPhone. The explicit existing server ID is required on
+every route, even with only one server configured. Missing, invalid, or unknown
+IDs receive a not-changed reply; no server is implicitly selected.
+The selectable Server ID is shown in that server's iPhone settings.
+Optional `password="..."` overrides
 the conventional `atakatak` default; `password=""` supports an unencrypted P12.
 No remote command creates servers, changes trust anchors, or disables TLS hostname
 verification. Both the watch network lock and phone administrator lock are honored.
