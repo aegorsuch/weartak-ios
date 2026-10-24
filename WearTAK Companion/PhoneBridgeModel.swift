@@ -1798,7 +1798,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let source = DittoCoTDocument.sourceID
         let event = CompanionMapEvent(xml: xml, sourceServerID: source, sourceGeneration: 0, receivedAt: Date())
         if event.header?.type == "b-t-f" {
-            if chatBuffer.receive(event) { chatLogger.warning("Ditto chat buffer evicted oldest messages") }
+            if !TAKChatMessage.containsProvisioningCommand(in: xml), chatBuffer.receive(event) {
+                chatLogger.warning("Ditto chat buffer evicted oldest messages")
+            }
         } else {
             mapCache.receive(event)
             mapCacheWrites.schedule()
@@ -1899,7 +1901,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                                       sourceGeneration: sourceGenerations[sourceID, default: 0], receivedAt: Date())
         let isChat = event.header?.type == "b-t-f"
         if isChat { chatLogger.notice("Server GeoChat received") }
-        if isChat, chatBuffer.receive(event) {
+        if isChat, !TAKChatMessage.containsProvisioningCommand(in: xml), chatBuffer.receive(event) {
             chatLogger.warning("GeoChat buffer limit reached; oldest messages evicted")
         }
         if event.isValid { lastMapEventReceivedAt = event.receivedAt }

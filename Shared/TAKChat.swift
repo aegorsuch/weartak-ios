@@ -97,13 +97,22 @@ struct TAKChatMessage: Identifiable, Equatable {
         """
     }
 
-    static func parse(_ xml: String, ownUID: String) -> Self? {
+    private static func parsedXML(_ xml: String) -> TAKChatParser? {
         guard CoTStreamFramer.isEvent(Data(xml.utf8)) else { return nil }
         let delegate = TAKChatParser()
         let parser = XMLParser(data: Data(xml.utf8))
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
-        guard parser.parse(), delegate.type == "b-t-f", let chat = delegate.chat,
+        return parser.parse() ? delegate : nil
+    }
+
+    static func containsProvisioningCommand(in xml: String) -> Bool {
+        guard let delegate = parsedXML(xml), delegate.type == "b-t-f" else { return false }
+        return isProvisioningCommand(delegate.text)
+    }
+
+    static func parse(_ xml: String, ownUID: String) -> Self? {
+        guard let delegate = parsedXML(xml), delegate.type == "b-t-f", let chat = delegate.chat,
               let group = delegate.group, let sender = group["uid0"], let recipient = group["uid1"],
               sender != recipient,
               let id = chat["messageId"], !id.isEmpty, !sender.isEmpty, !recipient.isEmpty,
