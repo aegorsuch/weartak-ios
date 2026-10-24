@@ -9,7 +9,7 @@ struct ChatCommandSettingsView: View {
         List {
             Section {
                 Toggle("Enable Commands", isOn: $settings.commandsEnabled)
-                Text("Commands change the watch profile when an allowed UID sends a direct TAK chat message.")
+                Text("Commands change the watch profile or credentials when an allowed UID sends a direct chat over any enabled transport.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -36,12 +36,15 @@ struct ChatCommandSettingsView: View {
                 Text("Profile commands: callsign, team, role, height, weight, birthyear, sex, usertype, pants, waist.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text("setpdl accepts a custom PDL. usep12 accepts a hexadecimal client certificate for a configured iPhone server. Network and administrator locks apply.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text("enrollserver and loadprofile are not supported on iOS. Other unknown commands are rejected.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Section {
-                Text("UID allow-lists reduce accidental activation but are not cryptographic authentication. TAK CoT sender UIDs can be spoofed by a peer with access to the network.")
+                Text("UID allow-lists are not authentication. Network peers can spoof sender UIDs. Multicast listeners and shared Ditto peers may see credentials; use controlled networks and disable commands after provisioning.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

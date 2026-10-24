@@ -1,9 +1,10 @@
 import Foundation
 
-enum WatchChatCommandOutcome {
+enum WatchChatCommandOutcome: Equatable {
     case notCommand
     case consumed
     case reply(String)
+    case phoneProvisioning
 }
 
 @MainActor
@@ -54,20 +55,46 @@ final class WatchChatCommandRuntime {
     }
 
     private var authorizer = ChatCommandAuthorizer()
+    private let defaults: UserDefaults
+    private let replayKey = "WearTAK.chatCommandReceipts"
+    private var replayStorageFailed = false
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        if let stored = defaults.object(forKey: replayKey) {
+            do {
+                guard let data = stored as? Data else { throw ChatP12Request.Failure.syntax }
+                authorizer = try JSONDecoder().decode(ChatCommandAuthorizer.self, from: data)
+            } catch {
+                replayStorageFailed = true
+            }
+        }
+    }
 
     func handle(_ message: TAKChatMessage, ownUID: String, settings: AppSettings,
                 now: Date = Date()) -> WatchChatCommandOutcome {
-        guard message.senderUID != ownUID, !message.isGroup else { return .notCommand }
         let parsed = ChatCommandParser.parse(message.text)
-        guard parsed != .notCommand, settings.commandsEnabled else { return .notCommand }
+        let sensitive = TAKChatMessage.isProvisioningCommand(message.text)
+        guard message.senderUID != ownUID, !message.isGroup, settings.commandsEnabled else {
+            return sensitive ? .consumed : .notCommand
+        }
+        guard parsed != .notCommand else { return .notCommand }
         switch authorizer.authorize(senderUID: message.senderUID, allowedUIDs: settings.commandSenderUIDs,
             messageID: message.id, sentAt: message.sentAt, now: now) {
         case .allowed:
-            break
+            guard !replayStorageFailed else { return .reply("Commands unavailable: replay storage could not be read.") }
+            do {
+                defaults.set(try JSONEncoder().encode(authorizer), forKey: replayKey)
+            } catch {
+                replayStorageFailed = true
+                return .reply("Commands unavailable: replay storage could not be saved.")
+            }
         case .duplicate:
             return .consumed
+        case .rateLimited:
+            return .reply("Command rejected: rate limit. Retry after five minutes.")
         case .senderNotAllowed, .stale:
-            return .notCommand
+            return sensitive ? .consumed : .notCommand
         }
         switch parsed {
         case .notCommand:
@@ -75,11 +102,30 @@ final class WatchChatCommandRuntime {
         case .malformed(let reason):
             return .reply("Command rejected: \(reason)")
         case .parsed(let command):
+            if command.name == "usep12" {
+                guard !settings.networkPreferencesLocked else { return .reply("Command rejected: network settings are locked.") }
+                do { _ = try ChatP12Request(command) }
+                catch { return .reply("Command rejected: invalid P12 command.") }
+                return .phoneProvisioning
+            }
             return .reply(execute(command, settings: settings))
         }
     }
 
     private func execute(_ command: ChatCommand, settings: AppSettings) -> String {
+        if command.name == "setpdl" {
+            guard !settings.networkPreferencesLocked else { return "Command rejected: network settings are locked." }
+            guard command.positional.count == 1, command.arguments.isEmpty else {
+                return "Use setpdl <pdl>."
+            }
+            do {
+                try settings.storeDittoCustomPDL(command.positional[0])
+                settings.dittoIdentitySource = .custom
+                return "Custom Ditto identity updated."
+            } catch {
+                return "Command rejected: invalid identity or secure storage unavailable."
+            }
+        }
         if command.name == "enrollserver" || command.name == "loadprofile" {
             return "\(command.name) is not supported in WearTAK for iOS."
         }

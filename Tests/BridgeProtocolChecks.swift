@@ -8,6 +8,20 @@ struct BridgeProtocolChecks {
         let routeSnapshot = try BridgeWire.Message.decode(
             BridgeWire.Message(kind: .routes, routes: [route]).encoded())
         precondition(routeSnapshot.routes == [route])
+        let provisioning = BridgeWire.Message(kind: .provisionIdentity,
+            provisioningCommand: "#weartakcommandusep12 " + String(repeating: "ab", count: 4_096),
+            commandSender: "authorized", commandMessageID: "same-across-routes", commandSentAt: Date())
+        let decodedProvisioning = try BridgeWire.Message.decode(provisioning.encoded())
+        precondition(decodedProvisioning.commandMessageID == "same-across-routes")
+        for malformed in [
+            BridgeWire.Message(kind: .provisionIdentity, provisioningCommand: "missing metadata"),
+            BridgeWire.Message(kind: .status, provisioningCommand: "never in status")
+        ] {
+            do {
+                _ = try BridgeWire.Message.decode(malformed.encoded())
+                fatalError("Invalid provisioning envelope accepted")
+            } catch BridgeWire.Failure.invalidCoT {}
+        }
         do {
             _ = try BridgeWire.Message.decode(BridgeWire.Message(kind: .routes, routes: [route, route]).encoded())
             fatalError("Duplicate route snapshot accepted")

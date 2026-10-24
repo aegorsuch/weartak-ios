@@ -209,6 +209,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         var recipientUID: String?
         var normalDelivered: Bool?
         var dittoDelivered: Bool?
+        var originatingRouteOnly: Bool?
     }
     private static let markerStorageKey = "WearTAK.droppedPoints"
     private static let companionCacheKey = "WearTAK.cachedCompanionMap"
@@ -1277,7 +1278,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func sendContactChat(uid: String, route: ContactChatRoute, text: String, isGroup: Bool = false,
-                         allowUnknownDirectRecipient: Bool = false) async throws {
+                         allowUnknownDirectRecipient: Bool = false, originatingRouteOnly: Bool = false) async throws {
         let isDitto = route == .companion(DittoCoTDocument.sourceID)
         let groupMembers = contactMessages[ContactConversation(uid: uid, route: route, isGroup: true)]?
             .last?.participantUids.filter { $0 != SitxClient.deviceID() && $0 != uid } ?? []
@@ -1300,8 +1301,23 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
             throw ContactChatFailure.message("Unable to record the outgoing chat message.")
         }
+        if TAKChatMessage.isProvisioningCommand(text) {
+            guard !isGroup else { throw ContactChatFailure.message("Provisioning requires a direct chat.") }
+            switch route {
+            case .companion(let server):
+                if server == DittoCoTDocument.sourceID {
+                    try await companionClient.sendDittoEvent(xml, id: UUID())
+                } else {
+                    try await companionClient.sendChat(xml, serverID: server)
+                }
+            case .multicast: try await multicastClient.send(xml)
+            case .sitx: try await sitxClient.sendContactChat(xml)
+            }
+            return
+        }
         guard storeOffline(OfflineOperation(kind: .chat, scope: offlineScope, xml: xml,
-                                            route: route, recipientUID: uid),
+                                            route: route, recipientUID: uid,
+                                            originatingRouteOnly: originatingRouteOnly),
                            key: "chat-\(message.id)", notice: String(localized: "Chat stored and will be sent when connected", table: "WatchStatus")) else {
             throw ContactChatFailure.message(offlineNotice ?? "Unable to store chat.")
         }
@@ -1315,8 +1331,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private func recordChat(_ message: TAKChatMessage, route: ContactChatRoute) {
         let ownUID = SitxClient.deviceID()
         let key = ContactConversation(uid: message.conversationUID(ownUID: ownUID), route: route, isGroup: message.isGroup)
-        switch route == .companion(DittoCoTDocument.sourceID) ? WatchChatCommandOutcome.notCommand :
-            chatCommandRuntime.handle(message, ownUID: ownUID, settings: settings) {
+        switch chatCommandRuntime.handle(message, ownUID: ownUID, settings: settings) {
         case .notCommand:
             break
         case .consumed:
@@ -1326,10 +1341,29 @@ final class WatchSessionModel: NSObject, ObservableObject {
             Task { @MainActor [weak self] in
                 do {
                     try await self?.sendContactChat(uid: message.senderUID, route: route, text: text,
-                        allowUnknownDirectRecipient: true)
+                        allowUnknownDirectRecipient: true, originatingRouteOnly: true)
                 }
                 catch {
                     self?.chatLogger.error("Chat command reply failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            return
+        case .phoneProvisioning:
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let text: String
+                do {
+                    let source: UUID?
+                    if case .companion(let id) = route { source = id } else { source = nil }
+                    text = try await companionClient.provisionIdentity(from: message, source: source)
+                } catch {
+                    text = "Provisioning unavailable. Open paired iPhone Companion and check its certificate status before retrying."
+                }
+                do {
+                    try await sendContactChat(uid: message.senderUID, route: route, text: text,
+                        allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                } catch {
+                    chatLogger.error("Provisioning acknowledgement could not be sent.")
                 }
             }
             return
@@ -2282,10 +2316,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
                         try offlineOutbox.replacePayload(id: entry.id, payload: JSONEncoder().encode(operation))
                     }
                     guard let xml = operation.xml else { continue }
-                    let meshEligible = operation.kind == .marker || operation.kind == .alert ||
-                        operation.kind == .chat || (operation.kind == .broadcast && PhonePLI.header(xml)?.type == "b-t-f")
+                    let meshEligible = operation.originatingRouteOnly != true &&
+                        (operation.kind == .marker || operation.kind == .alert ||
+                        operation.kind == .chat || (operation.kind == .broadcast && PhonePLI.header(xml)?.type == "b-t-f"))
                     let dittoOnly = operation.kind == .chat && operation.route == .companion(DittoCoTDocument.sourceID)
-                    if meshEligible, settings.dittoEnabled, operation.dittoDelivered != true,
+                    if (meshEligible || dittoOnly), settings.dittoEnabled, operation.dittoDelivered != true,
                        companionClient.dittoStatus?.state == .syncing {
                         do {
                             try await companionClient.sendDittoEvent(xml, id: entry.id)

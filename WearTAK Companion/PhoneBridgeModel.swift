@@ -1519,7 +1519,59 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             dittoStatus: dittoRuntime.status)
     }
 
+    private func provisionIdentity(_ message: BridgeWire.Message) -> BridgeWire.Message {
+        func reply(_ text: String, ready: Bool = false) -> BridgeWire.Message {
+            BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: ready, detail: text)
+        }
+        guard watchRoute == .apple, !adminLockEnabled,
+              let text = message.provisioningCommand, let sender = message.commandSender,
+              let id = message.commandMessageID, let sentAt = message.commandSentAt,
+              abs(Date().timeIntervalSince(sentAt)) <= 300 else {
+            return reply("Command rejected: phone configuration locked or request expired.")
+        }
+        guard case .parsed(let command) = ChatCommandParser.parse(text),
+              let request = try? ChatP12Request(command) else {
+            return reply("Command rejected: invalid P12 command.")
+        }
+        let target: CompanionServer?
+        if let selector = request.server {
+            target = servers.first { $0.id.uuidString.caseInsensitiveCompare(selector) == .orderedSame }
+        } else if let source = message.sourceServerID, let sourceServer = servers.first(where: { $0.id == source }) {
+            target = sourceServer
+        } else {
+            target = servers.count == 1 ? servers.first : nil
+        }
+        guard let target else {
+            return reply("Command rejected: specify server=<configured-server-UUID>.")
+        }
+        let key = "WearTAK.companion.provisioningReceipts"
+        let now = Date().timeIntervalSince1970
+        var receipts: [String: Double] = [:]
+        if let stored = defaults.object(forKey: key) {
+            guard let decoded = stored as? [String: Double], decoded.values.allSatisfy(\.isFinite) else {
+                return reply("Command rejected: provisioning replay storage is unreadable.")
+            }
+            receipts = decoded.filter { now - $0.value <= 600 }
+        }
+        let receipt = "\(sender.utf8.count):\(sender)\(id)"
+        guard receipts[receipt] == nil else { return reply("Command already processed.") }
+        guard receipts.count < 1_024 else { return reply("Command rejected: provisioning rate limit.") }
+        // Claim before touching credentials; a crash must not replay a provisioning operation.
+        receipts[receipt] = now
+        defaults.set(receipts, forKey: key)
+        do {
+            try CertificateStore.replaceP12(request.data, password: request.password, endpoint: target.endpoint.key)
+            sessions[target.id]?.reconnect()
+            synchronize()
+            return reply("Client certificate updated for configured server. Connection status is shown on iPhone.", ready: true)
+        } catch {
+            // Security framework diagnostics and input are deliberately excluded from chats and logs.
+            return reply("Certificate update failed; check the P12, password, validity, and iPhone secure storage.")
+        }
+    }
+
     private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
+        if message.kind == .provisionIdentity { return provisionIdentity(message) }
         if message.locationRefresh == true || message.kind == .mapSnapshot {
             requestSelfPosition()
         }
@@ -1743,7 +1795,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         return ids
     }
 
-    /// Ditto is a data-only source independent of TAK connectivity. Never dispatch packages or commands here.
+    /// Ditto chats use the same watch command authorization as every other chat ingress.
     private func receiveDitto(_ xml: String) {
         guard watchRoute == .apple, dittoStatus.enabled else { return }
         let source = DittoCoTDocument.sourceID

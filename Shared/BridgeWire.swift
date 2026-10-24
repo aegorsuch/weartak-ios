@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes, provisionIdentity }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -63,6 +63,11 @@ enum BridgeWire {
         var routeError: String?
         /// A self-position action requests phone GPS without waiting for acquisition.
         var locationRefresh: Bool?
+        /// Authorized watch request; never placed in application context, snapshots, or an outbox.
+        var provisioningCommand: String?
+        var commandSender: String?
+        var commandMessageID: String?
+        var commandSentAt: Date?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -74,6 +79,17 @@ enum BridgeWire {
             guard data.count <= BridgeWire.maximumMessageBytes else { throw Failure.tooLarge }
             let message = try JSONDecoder().decode(Self.self, from: data)
             guard message.version == BridgeWire.version else { throw Failure.unsupportedVersion }
+            if message.kind == .provisionIdentity {
+                guard let text = message.provisioningCommand, text.utf8.count <= 24_000,
+                      let sender = message.commandSender, !sender.isEmpty, sender.utf8.count <= 512,
+                      let id = message.commandMessageID, !id.isEmpty, id.utf8.count <= 512,
+                      let sentAt = message.commandSentAt, sentAt.timeIntervalSince1970.isFinite else {
+                    throw Failure.invalidCoT
+                }
+            } else if message.provisioningCommand != nil || message.commandSender != nil ||
+                        message.commandMessageID != nil || message.commandSentAt != nil {
+                throw Failure.invalidCoT
+            }
             if let routes = message.routes {
                 guard message.kind == .routes else { throw Failure.invalidCoT }
                 var store = GarminRouteStore()

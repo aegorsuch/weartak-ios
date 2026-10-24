@@ -37,6 +37,16 @@ struct TAKChatMessage: Identifiable, Equatable {
 
     static let allChatRoomsUID = "All Chat Rooms"
     static let maximumTextBytes = 2_000
+    static func isProvisioningCommand(_ text: String) -> Bool {
+        let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace).first?.lowercased()
+        return name == "#weartakcommandusep12" || name == "#weartakcommandsetpdl"
+    }
+
+    // Only provisioning commands may exceed the ordinary chat budget.
+    static func acceptsTextLength(_ text: String) -> Bool {
+        text.utf8.count <= (isProvisioningCommand(text) ? 24_000 : maximumTextBytes)
+    }
     static let quickMessages = ["In Position", "Negative", "Objective Sighted", "Roger"]
 
     static func quickMessages(including custom: [String]) -> [String] {
@@ -49,7 +59,7 @@ struct TAKChatMessage: Identifiable, Equatable {
                          participantUids: [String] = []) throws -> String {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !senderUID.isEmpty, !recipientUID.isEmpty, senderUID != recipientUID,
-              !body.isEmpty, body.utf8.count <= maximumTextBytes, !messageID.isEmpty,
+              !body.isEmpty, acceptsTextLength(body), !messageID.isEmpty,
               !body.unicodeScalars.contains(where: { $0.value < 32 && $0 != "\n" && $0 != "\t" }) else {
             throw ChatError.invalidMessage
         }
@@ -98,7 +108,7 @@ struct TAKChatMessage: Identifiable, Equatable {
               sender != recipient,
               let id = chat["messageId"], !id.isEmpty, !sender.isEmpty, !recipient.isEmpty,
               !delegate.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              delegate.text.utf8.count <= maximumTextBytes,
+              acceptsTextLength(delegate.text),
               let stamp = delegate.timestamp else { return nil }
         let room = chat["id"] ?? group["id"] ?? recipient
         guard !room.isEmpty else { return nil }

@@ -8,7 +8,7 @@ enum CompanionFailure: LocalizedError {
     var errorDescription: String? { switch self { case .message(let text): return text } }
 }
 
-struct StoredIdentity: Codable {
+struct StoredIdentity: Codable, Equatable {
     var p12: Data?
     var passphrase: String?
     var keyTag: Data?
@@ -195,6 +195,13 @@ enum CertificateStore {
 
     static func save(_ stored: StoredIdentity, endpoint: String) throws {
         let previous = try read(endpoint: endpoint)
+        try write(stored, endpoint: endpoint)
+        if previous?.keyTag != stored.keyTag, let tag = previous?.keyTag {
+            SecItemDelete([kSecClass: kSecClassKey, kSecAttrApplicationTag: tag] as CFDictionary)
+        }
+    }
+
+    private static func write(_ stored: StoredIdentity, endpoint: String) throws {
         let data = try JSONEncoder().encode(stored)
         let query = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: endpoint] as CFDictionary
         var status = SecItemUpdate(query, [kSecValueData: data] as CFDictionary)
@@ -206,7 +213,27 @@ enum CertificateStore {
             ] as CFDictionary, nil)
         }
         guard status == errSecSuccess else { throw CompanionFailure.message("Keychain save failed (\(status)).") }
-        if previous?.keyTag != stored.keyTag, let tag = previous?.keyTag {
+    }
+
+    /// One endpoint record is the commit point. Keep the previous enrolled key until readback succeeds.
+    static func replaceP12(_ data: Data, password: String, endpoint: String) throws {
+        let candidate = try importP12(data, password: password)
+        _ = try resolve(candidate)
+        let previous = try read(endpoint: endpoint)
+        try AtomicRecordReplacement.apply(candidate, read: {
+            try read(endpoint: endpoint)
+        }, write: {
+            try write($0, endpoint: endpoint)
+        }, remove: {
+            let status = SecItemDelete([
+                kSecClass: kSecClassGenericPassword, kSecAttrService: service,
+                kSecAttrAccount: endpoint
+            ] as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw CompanionFailure.message("Certificate rollback failed (\(status)).")
+            }
+        })
+        if let tag = previous?.keyTag {
             SecItemDelete([kSecClass: kSecClassKey, kSecAttrApplicationTag: tag] as CFDictionary)
         }
     }
@@ -232,7 +259,8 @@ enum CertificateStore {
         options[kSecImportToMemoryOnly] = true
         #endif
         let status = SecPKCS12Import(data as CFData, options as CFDictionary, &result)
-        guard status == errSecSuccess, let item = (result as? [[String: Any]])?.first,
+        guard status == errSecSuccess, let items = result as? [[String: Any]], items.count == 1,
+              let item = items.first,
               let raw = item[kSecImportItemIdentity as String], CFGetTypeID(raw as CFTypeRef) == SecIdentityGetTypeID() else {
             throw CompanionFailure.message("Cannot open .p12. Check its password and client private key (\(status)).")
         }
@@ -254,6 +282,7 @@ enum CertificateStore {
         }
         try verify(key: key, leaf: leaf)
         _ = try expiry(of: leaf)
+        try validateClientUsage(leaf)
         return StoredIdentity(p12: data, passphrase: password, chain: chain.map { SecCertificateCopyData($0) as Data })
     }
 
@@ -344,6 +373,39 @@ enum CertificateStore {
             throw CompanionFailure.message("Certificate expired or not yet valid. Check the phone clock.")
         }
         return dates[1]
+    }
+
+    private static func validateClientUsage(_ certificate: SecCertificate) throws {
+        let root = try DER.parse(Array(SecCertificateCopyData(certificate) as Data))
+        guard case .constructed(let children) = root.content, let tbs = Array(children).first,
+              case .constructed(let fields) = tbs.content else {
+            throw CompanionFailure.message("Invalid X.509 certificate.")
+        }
+        guard let extensions = fields.first(where: {
+            $0.identifier == ASN1Identifier(tagWithNumber: 3, tagClass: .contextSpecific)
+        }) else { return }
+        guard case .constructed(let wrapper) = extensions.content, let sequence = Array(wrapper).first,
+              case .constructed(let entries) = sequence.content else {
+            throw CompanionFailure.message("Invalid certificate extensions.")
+        }
+        for entry in entries {
+            guard case .constructed(let values) = entry.content else {
+                throw CompanionFailure.message("Invalid certificate extension.")
+            }
+            let nodes = Array(values)
+            guard let oid = nodes.first, let value = nodes.last else {
+                throw CompanionFailure.message("Invalid certificate extension.")
+            }
+            guard try ASN1ObjectIdentifier(derEncoded: oid) == [2, 5, 29, 37] else { continue }
+            let usage = try DER.parse(ASN1OctetString(derEncoded: value).bytes)
+            guard usage.identifier == .sequence, case .constructed(let purposes) = usage.content else {
+                throw CompanionFailure.message("Invalid extended key usage.")
+            }
+            let identifiers = try purposes.map { try ASN1ObjectIdentifier(derEncoded: $0) }
+            guard identifiers.contains([1, 3, 6, 1, 5, 5, 7, 3, 2]) || identifiers.contains([2, 5, 29, 37, 0]) else {
+                throw CompanionFailure.message("The certificate does not permit TLS client authentication.")
+            }
+        }
     }
 
     static func decodeCertificate(_ text: String) throws -> Data {

@@ -19,7 +19,7 @@ enum DittoChatDocument {
         let name = try text("e"), title = try text("room"), parent = try text("parent")
         guard let body = raw["msg"] as? String,
               !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              body.utf8.count <= TAKChatMessage.maximumTextBytes,
+              TAKChatMessage.acceptsTextLength(body),
               !body.unicodeScalars.contains(where: {
                   CharacterSet.controlCharacters.contains($0) && $0 != "\n" && $0 != "\t"
               }),

@@ -1461,6 +1461,48 @@ Unknown command names are rejected, while ordinary chat remains unchanged.
 UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
 impersonate an allowed sender.
 
+The same authorization applies to native ATAK Ditto 1.1.1 chat, TAK server chat
+through Companion, Sit(x), watch multicast, and their WatchConnectivity ingress.
+Commands remain direct-only, non-self, and within five minutes of their timestamp.
+Sender/message-ID receipts are shared across routes and retained across watch
+restarts; a full replay ledger rejects new commands rather than evicting live receipts.
+Acknowledgments use only the originating route, not the ordinary chat's additional
+Ditto fan-out.
+
+`#weartakcommandsetpdl <pdl>` validates and stores a custom PDL in the watch
+Keychain and selects Custom without implicitly enabling Ditto.
+`#weartakcommandusep12 <hex>` imports a client identity on the paired iPhone.
+Optional `server=<configured-server-UUID>` selects an existing server; otherwise
+the ingress TAK server is selected, or the only configured server for multicast
+and Ditto. Ambiguous selection is rejected. Optional `password="..."` overrides
+the conventional `atakatak` default; `password=""` supports an unencrypted P12.
+No remote command creates servers, changes trust anchors, or disables TLS hostname
+verification. Both the watch network lock and phone administrator lock are honored.
+
+Provisioning commands have a 24,000-byte command-only chat budget (ordinary chat
+remains 2,000 bytes). P12 input must be strict even-length ASCII hex, at most 8,192
+decoded bytes, with exactly one usable identity, matching private key, and a
+currently valid leaf certificate. The phone validates before committing one
+endpoint Keychain record, verifies readback, and restores the previous record on
+readback failure without prematurely deleting an enrolled key. This is local
+credential validation, not proof that a remote server will accept the identity;
+the acknowledgment directs the operator to the iPhone connection status.
+Phone receipts prevent duplicate credential application. The paired iPhone must
+be reachable; watchOS does not own a TAK TLS client identity or run the Ditto SDK.
+The Garmin relay's existing 6,000-byte envelope and 512-character chat relay are
+not a certificate-transfer transport; Garmin provisioning is implemented in its
+own app, not by expanding this bridge.
+
+Provisioning bodies are consumed without entering watch chat history, notifications,
+or the durable outgoing queue; local sends require an immediately available direct
+route. Replies, diagnostics, and replay receipts never contain P12/PDL/password
+material. This does **not** erase upstream server logs or Ditto's replicated chat
+documents. Shared-community Ditto peers and multicast listeners can observe the
+credential, and sender UIDs can be spoofed. Enable commands only on a controlled
+network with narrowly scoped sender UIDs, use dedicated/revocable identities,
+and disable command acceptance after provisioning. Sending a P12 and its password
+in the same chat is not end-to-end credential protection.
+
 Ditto is an iPhone Companion service; its SDK is linked only to the iOS target.
 It is off by default. Community requires an authorized Community PDL; if absent,
 the app reports a clear missing-identity status rather than pretending to sync.
@@ -1492,8 +1534,8 @@ contact/map/Bloodhound/alert lifecycle, deduplicated by UID against other CoT
 transports. Local-peer and own-UID/author echoes, malformed fields, future times,
 hidden/removed documents and repeated/older revisions are rejected or ignored.
 Absent or hidden documents are not inferred to be authenticated deletion commands.
-Ditto ingress is data-only; it does not execute watch chat commands or load
-configuration, plugins or data packages.
+Ditto chats enter the authorized command runtime described above. Other Ditto
+documents do not load configuration, plugins or data packages.
 
 Locally generated markers and alerts are queued to Ditto independently of TAK
 connectivity; each accepted output is recorded in the durable watch operation so

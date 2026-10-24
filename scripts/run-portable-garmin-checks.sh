@@ -7,6 +7,23 @@ trap 'rm -rf "$build_dir"' EXIT
 
 cd "$repo_root"
 
+swiftc -swift-version 5 -parse-as-library Shared/ChatCommands.swift Tests/ChatCommandChecks.swift \
+  -o "$build_dir/chat-command-checks"
+"$build_dir/chat-command-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Tests/TAKChatChecks.swift \
+  -o "$build_dir/tak-chat-checks"
+"$build_dir/tak-chat-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Shared/ChatCommands.swift \
+  "WearTAK Watch App/WatchChatCommandRuntime.swift" Tests/WatchChatCommandRuntimeChecks.swift \
+  -o "$build_dir/watch-command-checks"
+"$build_dir/watch-command-checks"
+
 swiftc -swift-version 5 -parse-as-library Shared/DistanceUnits.swift Tests/DistanceUnitsChecks.swift \
   -o "$build_dir/distance-units-checks"
 "$build_dir/distance-units-checks"
