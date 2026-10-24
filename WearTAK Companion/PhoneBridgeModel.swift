@@ -94,6 +94,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private let reporter: PhoneLocationReporter
     private let dittoRuntime: DittoPeerRuntime
     private var watchIdentity: Result<WatchReportingIdentity, WatchReportingIdentity.Failure> = .failure(.missing)
+    private var watchSelfStatus = WatchSelfStatusReceiver()
+    private var lastSharedSelfStatus = ""
+    private var garminSelfStatusUID: String?
+    private var garminSelfStatusSession: String?
+    private var garminSelfStatusAdvertised = false
     private var lastPhoneReportAt: Date?
     private var phoneReportsByServer: [UUID: Date] = [:]
     private var latestPhoneFix: PhoneLocationFix?
@@ -300,6 +305,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         garminGeneration = UUID()
         garminIdentity = nil
         garminBiometrics = WatchBiometrics(batdokCotEnabled: false)
+        watchSelfStatus.disconnect()
+        garminSelfStatusUID = nil
+        garminSelfStatusSession = nil
+        garminSelfStatusAdvertised = false
         garminChannelServers = []
         garminQueue = []
         garminSending = false
@@ -442,6 +451,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             if connectionChanged {
                 self.garminConnectionToken = token
                 self.garminGeneration = UUID()
+                self.garminBiometrics = WatchBiometrics(batdokCotEnabled: false)
+                self.watchSelfStatus.disconnect()
+                self.garminSelfStatusUID = nil
+                self.garminSelfStatusSession = nil
+                self.garminSelfStatusAdvertised = false
                 self.garminQueue = []
                 self.garminSending = false
                 self.garminRouteVersion = nil
@@ -454,6 +468,11 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 self.enqueueGarmin(GarminEnvelope("request_settings"))
             } else if !ready {
                 self.garminGeneration = UUID()
+                self.garminBiometrics = WatchBiometrics(batdokCotEnabled: false)
+                self.watchSelfStatus.disconnect()
+                self.garminSelfStatusUID = nil
+                self.garminSelfStatusSession = nil
+                self.garminSelfStatusAdvertised = false
                 self.garminQueue = []
                 self.garminSending = false
                 self.garminRouteVersion = nil
@@ -936,7 +955,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                    sessionID: bridgeSessionID, phoneReporting: phoneReportingSummary,
                    phoneLocationEnabled: reporter.isRunning, sitxStatus: sitxStatusSummary ?? "",
                    sitxSettings: sitx.settingsSnapshot, relayPaused: relayPauseReason,
-                   remoteAlertSourceIDs: Array(connectedAlertSourceIDs), dittoStatus: dittoStatus)
+                   remoteAlertSourceIDs: Array(connectedAlertSourceIDs), dittoStatus: dittoStatus,
+                   selfStatus: WatchSelfStatus.supportedVersion)
     }
 
     /// Non-nil while Companion is backgrounded without phone location reporting: iOS then only grants short
@@ -1106,13 +1126,15 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let interval = PhoneReportingPolicy.interval(for: identity, speed: fix.speed)
         phoneInterval = interval
         phoneReporting.interval = interval
+        refreshSelfStatusLink()
+        let contribution = watchSelfStatus.current()
+        let sharedStatus = contribution?.remarks ?? ""
+        if sharedStatus != lastSharedSelfStatus { lastPhoneReportAt = nil }
         guard !phoneSendInFlight, PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt, interval: interval) else { return }
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let biometrics = watchRoute == .garmin ? garminBiometrics :
-            WatchBiometrics.decode(contextValue: WCSession.default.receivedApplicationContext[WatchBiometrics.contextKey])
         let xml = PhonePLI.event(identity: identity, fix: fix, interval: interval, appVersion: version,
                                  osVersion: "iOS \(UIDevice.current.systemVersion)",
-                                 biometrics: biometrics ?? WatchBiometrics())
+                                 selfStatus: contribution)
         publishPhoneDittoTrack(xml, interval: interval)
         let ready = readyOutputs()
         guard !ready.isEmpty else {
@@ -1144,7 +1166,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                   current.hasSameSettings(as: identity) else { return }
             self.phoneReportsByServer.merge(delivered) { _, latest in latest }
             if !delivered.isEmpty {
-                self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s); vitals \((biometrics ?? WatchBiometrics()).fresh(reportingInterval: interval).remarks, privacy: .public)")
+                self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s); live watch status included: \(contribution != nil, privacy: .public)")
+                self.lastSharedSelfStatus = sharedStatus
                 self.lastPhoneReportAt = Date()
                 self.phoneReporting.lastReportAt = self.lastPhoneReportAt
             }
@@ -1170,6 +1193,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             garminReceivesInFlight += 1
             defer { garminReceivesInFlight -= 1 }
             try beginBackgroundRefresh()
+            if envelope.type == "self_status" {
+                guard garminSelfStatusAdvertised, let uid = garminSelfStatusUID else {
+                    throw WatchSelfStatus.Failure.wrongSource
+                }
+                let payload = try JSONSerialization.data(withJSONObject: envelope.payload)
+                let value = try JSONDecoder().decode(WatchSelfStatus.self, from: payload)
+                guard value.session == garminSelfStatusSession else { throw WatchSelfStatus.Failure.changedSession }
+                try receiveSelfStatus(value, uid: uid, model: "GARMIN")
+                return
+            }
             if envelope.type == "watch_settings" {
                 guard let id = garminDeviceID.flatMap(UUID.init(uuidString:)) else {
                     throw GarminRelayProtocol.Failure.noIdentity
@@ -1417,8 +1450,22 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 "chatGroups": false,
                 "routeVersion": GarminRoute.version,
             ]
+            if let uid = request.payload["watchUid"] as? String,
+               let session = request.payload["relaySession"] as? String {
+                _ = try WatchSelfStatus(version: 1, session: session, seq: 0, deviceUid: uid,
+                    model: "GARMIN", ppe: nil, physio: nil).validated()
+                if garminSelfStatusUID != uid || garminSelfStatusSession != session { watchSelfStatus.disconnect() }
+                garminSelfStatusUID = uid
+                garminSelfStatusSession = session
+                payload["selfStatus"] = WatchSelfStatus.supportedVersion
+            } else {
+                watchSelfStatus.disconnect()
+                garminSelfStatusUID = nil
+                garminSelfStatusSession = nil
+            }
             if let session = request.payload["relaySession"] as? String { payload["relaySession"] = session }
             enqueueGarmin(GarminEnvelope("relay_status", payload))
+            garminSelfStatusAdvertised = payload["selfStatus"] != nil
             garminRouteVersion = (try? request.integer("routeVersion", range: 1...1))
             replayGarminRoutes()
             return
@@ -1568,6 +1615,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
+        if message.kind == .selfStatus {
+            guard watchRoute == .apple, let value = message.selfStatusPayload else {
+                throw WatchSelfStatus.Failure.wrongSource
+            }
+            refreshWatchIdentity()
+            guard case .success(let identity) = watchIdentity else { throw WatchSelfStatus.Failure.wrongSource }
+            try receiveSelfStatus(value, uid: identity.uid, model: "WATCHOS")
+            return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true,
+                                      selfStatus: WatchSelfStatus.supportedVersion)
+        }
         if message.kind == .provisionIdentity { return provisionIdentity(message) }
         if message.locationRefresh == true || message.kind == .mapSnapshot {
             requestSelfPosition()
@@ -1699,10 +1756,30 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
     }
 
+    private var selfStatusLinkConnected: Bool {
+        if watchRoute == .garmin { return garminReady }
+        let session = WCSession.default
+        return WCSession.isSupported() && session.activationState == .activated &&
+            session.isPaired && session.isWatchAppInstalled && session.isReachable
+    }
+
+    private func refreshSelfStatusLink() {
+        if !selfStatusLinkConnected { watchSelfStatus.disconnect() }
+    }
+
+    private func receiveSelfStatus(_ value: WatchSelfStatus, uid: String, model: String) throws {
+        guard selfStatusLinkConnected else { throw WatchSelfStatus.Failure.wrongSource }
+        let before = watchSelfStatus.current()?.remarks ?? ""
+        try watchSelfStatus.receive(value, uid: uid, model: model)
+        let after = watchSelfStatus.current()?.remarks ?? ""
+        if before != after || after != lastSharedSelfStatus { requestSelfPosition() }
+    }
+
     /// Accepts identity only from the activated session of a paired watch with WearTAK installed. WatchConnectivity
     /// persists that context per paired watch, so Companion keeps no separate copy that could outlive a watch switch.
     private func refreshWatchIdentity(contextValue: Data? = nil) {
         guard watchRoute == .apple else { return }
+        refreshSelfStatusLink()
         let session = WCSession.default
         guard WCSession.isSupported(), session.activationState == .activated, session.isPaired,
               session.isWatchAppInstalled else {
@@ -1722,6 +1799,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func setWatchIdentity(_ identity: Result<WatchReportingIdentity, WatchReportingIdentity.Failure>) {
+        switch (watchIdentity, identity) {
+        case (.success(let old), .success(let new)) where old.uid == new.uid: break
+        default: watchSelfStatus.disconnect()
+        }
         var settingsChanged = false
         if case .success(let new) = identity, case .success(let old) = watchIdentity, new.hasSameSettings(as: old) {
             watchIdentity = identity
@@ -1751,6 +1832,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func publishState() {
+        refreshSelfStatusLink()
         evaluateReporting()
         configured = serverStates.values.contains { $0.configured }
         connected = canRelay && serverStates.values.contains { $0.connected }
@@ -1983,12 +2065,14 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         Task { @MainActor [weak self] in
             self?.publishState()
             self?.publishRouteNavigation()
+            self?.requestSelfPosition()
         }
     }
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         Task { @MainActor [weak self] in
             guard self?.watchRoute == .apple else { return }
+            self?.watchSelfStatus.disconnect()
             self?.setWatchIdentity(.failure(.watchUnavailable))
         }
     }

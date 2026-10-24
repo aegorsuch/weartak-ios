@@ -1211,16 +1211,22 @@ private struct PluginsView: View {
                         NavigationLink {
                             ChatCommandSettingsView(settings: settings)
                         } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(plugin.title)
-                                Text(settings.commandsEnabled ? "Enabled" : "Disabled")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(plugin.title)
+                                    Text(settings.commandsEnabled ? "Enabled" : "Disabled")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: plugin.symbol)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .buttonStyle(.borderless)
                         Toggle(isOn: $settings.commandsEnabled) { EmptyView() }
                             .labelsHidden()
+                            .accessibilityLabel(String(localized: "Enable Commands", table: "WatchSettings"))
                     }
                 case .dataSync:
                     HStack {
@@ -1251,52 +1257,51 @@ private struct PluginsView: View {
                         NavigationLink {
                             DittoSettingsView(model: model, settings: settings)
                         } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(plugin.title)
-                                Text(dittoSubtitle)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(plugin.title)
+                                    Text(dittoSubtitle)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+                            } icon: {
+                                Image(systemName: plugin.symbol)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .buttonStyle(.borderless)
                         Toggle(isOn: dittoEnabledBinding) { EmptyView() }
                             .labelsHidden()
+                            .accessibilityLabel(String(localized: "Enable Ditto", table: "WatchSettings"))
                     }
                 case .mopp:
-                    NavigationLink {
-                        MOPPView(settings: settings)
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(plugin.title)
-                                Text(settings.moppStatus.localizedLabel)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                    HStack {
+                        NavigationLink {
+                            MOPPView(settings: settings)
+                        } label: {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(plugin.title)
+                                    Text(settings.moppStatus.localizedLabel)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                ProtectiveMaskIcon().frame(width: 24, height: 24)
                             }
-                        } icon: {
-                            ProtectiveMaskIcon().frame(width: 24, height: 24)
                         }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("mopp-settings")
+                        Toggle(isOn: $settings.moppEnabled) { EmptyView() }
+                            .labelsHidden()
+                            .accessibilityLabel(String(localized: "Enable MOPP", table: "WatchSettings"))
+                            .accessibilityIdentifier("mopp-enabled")
                     }
-                    .accessibilityIdentifier("mopp-settings")
                 case .placeholder:
                     Toggle(isOn: .constant(false)) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(plugin.title)
-                            Text(String(localized: String.LocalizationValue(plugin.subtitle), table: "WatchSettings"))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-                    }
-                    .disabled(true)
-                case .sensorManager:
-                    Toggle(isOn: $settings.sensorManagerEnabled) {
-                        NavigationLink {
-                            SensorManagerView()
-                        } label: {
+                        Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(plugin.title)
                                 Text(String(localized: String.LocalizationValue(plugin.subtitle), table: "WatchSettings"))
@@ -1305,7 +1310,33 @@ private struct PluginsView: View {
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                             }
+                        } icon: {
+                            Image(systemName: plugin.symbol)
                         }
+                    }
+                    .disabled(true)
+                case .sensorManager:
+                    HStack {
+                        NavigationLink {
+                            SensorManagerView()
+                        } label: {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(plugin.title)
+                                    Text(String(localized: String.LocalizationValue(plugin.subtitle), table: "WatchSettings"))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+                            } icon: {
+                                Image(systemName: plugin.symbol)
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        Toggle(isOn: $settings.sensorManagerEnabled) { EmptyView() }
+                            .labelsHidden()
+                            .accessibilityLabel(String(localized: "Enable Sensor Manager", table: "WatchSettings"))
                     }
                 }
             }

@@ -12,6 +12,7 @@ struct ManualAlertType: RawRepresentable, Equatable, Hashable, Identifiable, Cas
     }
 
     private init(_ preset: String) { rawValue = preset }
+    fileprivate init(storedValue: String) { rawValue = storedValue }
     static let alert911 = Self("911 Alert")
     static let gateRunner = Self("Gate Runner")
     static let geofenceBreached = Self("Geofence Breached")
@@ -49,13 +50,17 @@ struct ManualAlertType: RawRepresentable, Equatable, Hashable, Identifiable, Cas
 
 struct SavedManualAlerts {
     static let storageKey = "WearTAK.savedManualAlerts"
+    static let maximumCount = 20
+    static let maximumUTF16Length = 60
     private(set) var types: [ManualAlertType]
 
     enum Failure: LocalizedError {
-        case invalidText, unreadable
+        case invalidText, duplicate, full, unreadable
         var errorDescription: String? {
             switch self {
-            case .invalidText: return String(localized: "Enter a single-line alert of 1 to 128 characters.")
+            case .invalidText: return String(localized: "Enter a single-line alert of 1 to 60 UTF-16 characters, without tabs or control characters.")
+            case .duplicate: return String(localized: "That alert already exists.")
+            case .full: return String(localized: "You can save up to 20 custom alerts. Delete one before adding another.")
             case .unreadable: return String(localized: "Saved alerts could not be loaded. Existing data has not been overwritten.")
             }
         }
@@ -64,19 +69,15 @@ struct SavedManualAlerts {
     init(defaults: UserDefaults) throws {
         guard let stored = defaults.object(forKey: Self.storageKey) else { types = []; return }
         guard let names = stored as? [String] else { throw Failure.unreadable }
-        types = []
-        for name in names {
-            guard let type = ManualAlertType(rawValue: name) else { throw Failure.unreadable }
-            if !contains(type) { types.append(type) }
-        }
+        types = names.map { ManualAlertType(storedValue: $0) }
     }
 
     @discardableResult
     mutating func add(_ text: String, defaults: UserDefaults) throws -> ManualAlertType {
-        guard let type = ManualAlertType(rawValue: text) else { throw Failure.invalidText }
-        if let existing = (ManualAlertType.allCases + types).first(where: {
-            $0.rawValue.caseInsensitiveCompare(type.rawValue) == .orderedSame
-        }) { return existing }
+        let normalized = try Self.normalized(text)
+        let type = ManualAlertType(storedValue: normalized)
+        guard !contains(type) else { throw Failure.duplicate }
+        guard types.count < Self.maximumCount else { throw Failure.full }
         types.append(type)
         defaults.set(types.map(\.rawValue), forKey: Self.storageKey)
         return type
@@ -89,8 +90,19 @@ struct SavedManualAlerts {
 
     private func contains(_ type: ManualAlertType) -> Bool {
         (ManualAlertType.allCases + types).contains {
-            $0.rawValue.caseInsensitiveCompare(type.rawValue) == .orderedSame
+            let existing = (try? Self.normalized($0.rawValue)) ?? $0.rawValue
+            return existing.caseInsensitiveCompare(type.rawValue) == .orderedSame
         }
+    }
+
+    static func normalized(_ text: String) throws -> String {
+        guard !text.unicodeScalars.contains(where: { $0.value <= 0x1f || (0x7f...0x9f).contains($0.value) }) else {
+            throw Failure.invalidText
+        }
+        let value = text.unicodeScalars.split(whereSeparator: { $0.properties.isWhitespace })
+            .map(String.init).joined(separator: " ")
+        guard !value.isEmpty, value.utf16.count <= maximumUTF16Length else { throw Failure.invalidText }
+        return value
     }
 }
 

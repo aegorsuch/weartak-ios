@@ -138,6 +138,8 @@ struct ContentView: View {
             } else if !enabled {
                 physiology.stopSensing()
             }
+            model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent,
+                                   measuredAt: physiology.readingDate)
         }
         .onChange(of: settings.batdokCotEnabled) { _, _ in
             model.updateBiometrics(heartRate: physiology.heartRate, exertion: physiology.exertionPercent,
@@ -308,7 +310,7 @@ private struct WatchDashboardView: View {
             }
             Spacer(minLength: 0)
             NavigationLink {
-                DashboardMetricPreferencesView(settings: settings)
+                DashboardMetricPreferencesView(model: model, settings: settings, monitor: physiology)
             } label: {
                 Group {
                     if settings.dashboardMetric.isCoordinate {
@@ -519,7 +521,9 @@ private struct WatchDashboardView: View {
 }
 
 private struct DashboardMetricPreferencesView: View {
+    @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject var monitor: PhysiologyMonitor
     @Environment(\.dismiss) private var dismiss
     @State private var showAlertThresholds = false
 
@@ -548,11 +552,16 @@ private struct DashboardMetricPreferencesView: View {
                         settings.dashboardMetric = metric
                         dismiss()
                     } label: {
-                        HStack(spacing: 6) {
-                            Text(metric.watchMainLabel)
-                            Spacer(minLength: 0)
-                            if settings.dashboardMetric == metric {
-                                Image(systemName: "checkmark")
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            HStack(spacing: 4) {
+                                Text("\(metric.watchMainLabel) \(reading(metric, now: context.date))")
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.35)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                if settings.dashboardMetric == metric {
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
                     }
@@ -564,6 +573,29 @@ private struct DashboardMetricPreferencesView: View {
         .navigationTitle(String(localized: "Metric", table: "WatchMain"))
         .navigationDestination(isPresented: $showAlertThresholds) {
             PhysiologicalAlertsView(settings: settings)
+        }
+        .task { await monitor.startViewing() }
+        .onAppear { model.setLiveLocationRequested(true) }
+        .onDisappear {
+            monitor.stopViewing()
+            model.setLiveLocationRequested(settings.dashboardMetric.isCoordinate)
+        }
+    }
+
+    private func reading(_ metric: DashboardMetric, now: Date) -> String {
+        if metric.isCoordinate {
+            guard let coordinate = model.lastLocation?.coordinate,
+                  let lines = MapCoordinateFormatter.dashboardLines(coordinate, mgrs: metric == .mgrs) else {
+                return String(localized: "No fix", table: "WatchMain")
+            }
+            return metric == .latLon ? "\(lines.0)/\(lines.1)" : "\(lines.0) \(lines.1)"
+        }
+        switch metric.reading(monitoringEnabled: settings.physiologicalMonitoringEnabled,
+            value: metric == .exertion ? monitor.exertionPercent : monitor.heartRate,
+            measuredAt: monitor.readingDate, now: now) {
+        case .disabled: return String(localized: "Disabled", table: "WatchMain")
+        case .unavailable: return String(localized: "Unavailable", table: "WatchMain")
+        case .value(let value): return metric == .exertion ? "\(value)%" : "\(value) BPM"
         }
     }
 }
@@ -2624,6 +2656,9 @@ private struct ManualAlertView: View {
             NavigationStack {
                 List {
                     TextField("Type Custom Alert", text: $customText)
+                    Text("Up to 60 UTF-16 characters; 20 saved alerts. No line breaks or tabs.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     Button("Save") {
                         do {
                             try model.saveManualAlert(customText)

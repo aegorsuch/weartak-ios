@@ -14,6 +14,19 @@ struct WatchPluginEntry: Identifiable, Equatable {
     let title: String
     let content: Content
 
+    /// Native semantic symbols; these are not third-party brand marks.
+    var symbol: String {
+        switch id {
+        case "commands": return "megaphone"
+        case "data-sync": return "arrow.triangle.2.circlepath"
+        case "ditto": return "arrow.triangle.branch"
+        case "everywhere-comms": return "globe"
+        case "gotenna": return "antenna.radiowaves.left.and.right"
+        case "sensor-manager": return "waveform.path"
+        default: return "dot.radiowaves.left.and.right"
+        }
+    }
+
     var subtitle: String {
         switch content {
         case .commands, .dataSync, .ditto, .mopp:

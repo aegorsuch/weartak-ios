@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes, provisionIdentity }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes, provisionIdentity, selfStatus }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -68,6 +68,8 @@ enum BridgeWire {
         var commandSender: String?
         var commandMessageID: String?
         var commandSentAt: Date?
+        var selfStatus: Int?
+        var selfStatusPayload: WatchSelfStatus?
 
         func encoded() throws -> Data {
             let data = try JSONEncoder().encode(self)
@@ -79,6 +81,12 @@ enum BridgeWire {
             guard data.count <= BridgeWire.maximumMessageBytes else { throw Failure.tooLarge }
             let message = try JSONDecoder().decode(Self.self, from: data)
             guard message.version == BridgeWire.version else { throw Failure.unsupportedVersion }
+            if message.kind == .selfStatus {
+                guard let value = message.selfStatusPayload else { throw Failure.invalidCoT }
+                _ = try value.validated()
+            } else if message.selfStatusPayload != nil {
+                throw Failure.invalidCoT
+            }
             if message.kind == .provisionIdentity {
                 guard let text = message.provisioningCommand, text.utf8.count <= 24_000,
                       let sender = message.commandSender, !sender.isEmpty, sender.utf8.count <= 512,

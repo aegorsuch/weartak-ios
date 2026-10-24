@@ -145,6 +145,8 @@ final class AppSettings: ObservableObject {
         static let batdokCotEnabled = "WearTAK.batdokCotEnabled"
         static let sensorManagerEnabled = "WearTAK.sensorManagerEnabled"
         static let dataSyncEnabled = "WearTAK.dataSyncEnabled"
+        static let moppEnabled = "WearTAK.moppEnabled"
+        static let moppSavedAt = "WearTAK.moppSavedAt"
         static let bloodhoundProximityRadius = "WearTAK.bloodhoundProximityRadius"
         static let bloodhoundProximityVibrationEnabled = "WearTAK.bloodhoundProximityVibrationEnabled"
         static let bloodhoundProximityIntensity = "WearTAK.bloodhoundProximityIntensity"
@@ -497,6 +499,19 @@ final class AppSettings: ObservableObject {
         didSet { moppStatus.save(to: defaults) }
     }
 
+    @Published var moppEnabled: Bool {
+        didSet { defaults.set(moppEnabled, forKey: Keys.moppEnabled) }
+    }
+
+    @Published var moppSavedAt: Date? {
+        didSet {
+            if let moppSavedAt { defaults.set(moppSavedAt, forKey: Keys.moppSavedAt) }
+            else { defaults.removeObject(forKey: Keys.moppSavedAt) }
+        }
+    }
+
+    var hasSavedMOPPStatus: Bool { defaults.object(forKey: MOPPStatus.storageKey) != nil }
+
     @Published var bloodhoundProximityRadius: Int {
         didSet {
             let clamped = min(max(bloodhoundProximityRadius, 10), 200)
@@ -658,6 +673,8 @@ final class AppSettings: ObservableObject {
         batdokCotEnabled = defaults.object(forKey: Keys.batdokCotEnabled) as? Bool ?? true
         sensorManagerEnabled = defaults.object(forKey: Keys.sensorManagerEnabled) as? Bool ?? false
         dataSyncEnabled = defaults.object(forKey: Keys.dataSyncEnabled) as? Bool ?? true
+        moppEnabled = defaults.object(forKey: Keys.moppEnabled) as? Bool ?? false
+        moppSavedAt = defaults.object(forKey: Keys.moppSavedAt) as? Date
         moppStatus = MOPPStatus.load(from: defaults)
         bloodhoundProximityRadius = defaults.object(forKey: Keys.bloodhoundProximityRadius) as? Int ?? 50
         bloodhoundProximityVibrationEnabled = defaults.object(forKey: Keys.bloodhoundProximityVibrationEnabled) as? Bool ?? true

@@ -2517,6 +2517,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
 
     /// Latest heart rate/exertion for outbound PLI and alert biometrics on every route.
     func updateBiometrics(heartRate: Int?, exertion: Int?, measuredAt: Date?) {
+        companionClient.setSelfStatusHeartRate(heartRate, exertion: exertion, measuredAt: measuredAt)
         var biometrics = WatchBiometrics(heartRate: heartRate, exertion: exertion, measuredAt: measuredAt)
         #if DEBUG && targetEnvironment(simulator)
         if heartRate == nil {

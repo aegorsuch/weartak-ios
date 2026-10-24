@@ -39,7 +39,10 @@ struct DashboardMetricChecks {
         precondition(selector.contains("showAlertThresholds = true"))
         precondition(selector.contains("PhysiologicalAlertsView(settings: settings)"))
         precondition(!selector.contains(".disabled(") && !selector.contains("settings.physiologicalAlertsEnabled ="))
-        precondition(!selector.contains("Image(systemName: metric.symbol)") && !selector.contains("startViewing"))
+        precondition(!selector.contains("Image(systemName: metric.symbol)"))
+        precondition(selector.contains("TimelineView(.periodic") && selector.contains("minimumScaleFactor"))
+        precondition(selector.contains("await monitor.startViewing()"))
+        precondition(selector.contains("metric.reading(monitoringEnabled:"))
         let locationLink = source.components(separatedBy: "ReportingStrategyView(settings: settings)")[1]
             .components(separatedBy: "dashboard-reporting-rates")[0]
         precondition(locationLink.contains("DashboardLocationIndicator(model: model, small: small)"))

@@ -19,23 +19,22 @@ enum MapCoordinateFormatter {
         return directions[index]
     }
 
-    /// Two short lines for the dashboard slot: lat/lon truncated to 4 decimals (~11 m),
-    /// MGRS truncated to 10 m (4+4 digits) with the grid zone and square on the first line.
+    /// Full display precision: five decimal degrees or one-meter MGRS.
     static func dashboardLines(_ coordinate: CLLocationCoordinate2D, mgrs useMGRS: Bool) -> (String, String)? {
         guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
         if useMGRS {
             guard let full = mgrs(coordinate) else { return nil }
             let parts = full.split(separator: " ")
             guard parts.count == 4 else { return nil }
-            return ("\(parts[0]) \(parts[1])", "\(parts[2].prefix(4)) \(parts[3].prefix(4))")
+            return ("\(parts[0]) \(parts[1])", "\(parts[2]) \(parts[3])")
         }
         return (truncatedDegrees(coordinate.latitude, positive: "N", negative: "S"),
                 truncatedDegrees(coordinate.longitude, positive: "E", negative: "W"))
     }
 
     private static func truncatedDegrees(_ value: Double, positive: String, negative: String) -> String {
-        let scaled = (abs(value) * 10_000).rounded(.towardZero)
-        return String(format: "%.4f%@", scaled / 10_000, value < 0 ? negative : positive)
+        let scaled = (abs(value) * 100_000).rounded(.towardZero)
+        return String(format: "%.5f%@", scaled / 100_000, value < 0 ? negative : positive)
     }
 
     static func mgrs(_ coordinate: CLLocationCoordinate2D) -> String? {

@@ -32,17 +32,19 @@ struct MOPPView: View {
                     .accessibilityIdentifier("mopp-choice-\(status.rawValue)")
                 }
             }
+            .disabled(!settings.moppEnabled)
             Section {
                 Button {
                     settings.moppStatus = selection
+                    settings.moppSavedAt = Date()
                     dismiss()
                 } label: {
                     Label(String(localized: "Save Status", table: "WatchSettings"), systemImage: "checkmark")
                 }
-                .disabled(selection == settings.moppStatus)
+                .disabled(!settings.moppEnabled || (selection == settings.moppStatus && settings.moppSavedAt != nil))
                 .accessibilityIdentifier("mopp-save-status")
             } footer: {
-                Text("Manual status saved on this watch only. Not a command, sensor reading, or network transmission.",
+                Text("Manual saved status. Shared with a connected supported Companion when enabled; not a command or sensor reading.",
                     tableName: "WatchSettings")
             }
         }

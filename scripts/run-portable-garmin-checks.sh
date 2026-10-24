@@ -11,7 +11,14 @@ swiftc -swift-version 5 -parse-as-library Shared/DashboardMetric.swift Tests/Das
   -o "$build_dir/dashboard-metric-checks"
 "$build_dir/dashboard-metric-checks"
 
-swiftc -swift-version 5 -parse-as-library Shared/MOPPStatus.swift Shared/DataSyncRequestGate.swift Tests/PluginPreferenceChecks.swift \
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  swiftc -swift-version 5 -parse-as-library "WearTAK Watch App/MapCoordinateFormatter.swift" \
+    Tests/MapCoordinateFormatterChecks.swift -o "$build_dir/map-coordinate-checks"
+  "$build_dir/map-coordinate-checks"
+fi
+
+swiftc -swift-version 5 -parse-as-library Shared/MOPPStatus.swift Shared/DataSyncRequestGate.swift \
+  "WearTAK Watch App/PluginCatalog.swift" Tests/PluginPreferenceChecks.swift \
   -o "$build_dir/plugin-preference-checks"
 "$build_dir/plugin-preference-checks"
 
@@ -20,13 +27,13 @@ swiftc -swift-version 5 -parse-as-library Shared/ChatCommands.swift Tests/ChatCo
 "$build_dir/chat-command-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Tests/TAKChatChecks.swift \
   -o "$build_dir/tak-chat-checks"
 "$build_dir/tak-chat-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChat.swift Shared/ChatCommands.swift \
   "WearTAK Watch App/WatchChatCommandRuntime.swift" Tests/WatchChatCommandRuntimeChecks.swift \
   -o "$build_dir/watch-command-checks"
@@ -41,7 +48,7 @@ swiftc -swift-version 5 -parse-as-library Shared/ManualAlerts.swift Shared/Offli
 "$build_dir/manual-alert-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift \
   Shared/PhoneLocationReporting.swift Shared/CoTFieldSafety.swift Tests/CoTFieldSafetyChecks.swift \
   -o "$build_dir/cot-field-safety-checks"
@@ -64,6 +71,7 @@ swiftc -swift-version 5 -parse-as-library \
   Shared/PhoneLocationReporting.swift \
   Shared/UserMetrics.swift \
   Shared/BridgeWire.swift \
+  Shared/WatchSelfStatus.swift \
   Shared/GarminRoutes.swift \
   Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift \
@@ -103,7 +111,7 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/route-package-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
   Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
   Shared/DittoPDL.swift Tests/BridgeProtocolChecks.swift \
@@ -111,7 +119,14 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/bridge-checks"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/PhoneLocationReporting.swift \
+  Tests/PhoneLocationReportingChecks.swift Tests/WatchSelfStatusChecks.swift \
+  -o "$build_dir/phone-self-status-checks"
+"$build_dir/phone-self-status-checks"
+
+swiftc -swift-version 5 -parse-as-library \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionEndpoint.swift \
   Shared/CompanionServer.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Shared/TAKChannels.swift \
   Shared/DittoPDL.swift scripts/ValidateDittoPDL.swift \
@@ -119,7 +134,7 @@ swiftc -swift-version 5 -parse-as-library \
 "$build_dir/validate-community-pdl"
 
 swiftc -swift-version 5 -parse-as-library \
-  Shared/BridgeWire.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
+  Shared/BridgeWire.swift Shared/WatchSelfStatus.swift Shared/GarminRoutes.swift Shared/CompanionMapSnapshot.swift \
   Shared/TAKChannelModels.swift Shared/TAKMissionModels.swift Tests/CompanionMapChecks.swift \
   -o "$build_dir/map-checks"
 "$build_dir/map-checks"
