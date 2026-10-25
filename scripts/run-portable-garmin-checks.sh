@@ -11,6 +11,10 @@ swiftc -swift-version 5 -parse-as-library Shared/DiagnosticsLog.swift Tests/Diag
   -o "$build_dir/diagnostics-checks"
 "$build_dir/diagnostics-checks"
 
+swiftc -swift-version 5 -parse-as-library Shared/NetworkTransportChecklist.swift Tests/NetworkTransportChecklistChecks.swift \
+  -o "$build_dir/network-transport-checks"
+"$build_dir/network-transport-checks"
+
 swiftc -swift-version 5 -parse-as-library Shared/DashboardMetric.swift Shared/OutboundRouteReadiness.swift Tests/DashboardMetricChecks.swift \
   -o "$build_dir/dashboard-metric-checks"
 "$build_dir/dashboard-metric-checks"

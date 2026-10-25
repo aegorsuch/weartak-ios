@@ -488,6 +488,15 @@ Network Preferences can be locked from Admin Preferences. Admin Preferences and
 Developer Preferences always appear in Settings but stay disabled until
 developer mode is unlocked; the lock blocks Network Preferences' Settings and
 dashboard shortcuts.
+When unlocked, Network Preferences starts with a Transports checklist sorted by
+label: Ditto, Sit(x) TAK and TAK SA Multicast. Checked means enabled, not
+connected. Unchecking only disables the transport; saved addresses, Sit(x)
+authorization and Ditto PDLs are kept, and the configuration rows stay below.
+Ditto uses the same setting and custom-PDL guard as Tool Preferences > Plugins,
+with a subtitle showing only the configured PDL source (Community, Custom PDL
+or None), never the PDL or a validity claim. Phone-managed Sit(x) stays
+read-only. iPhone TAK servers are status only on the watch; enable or disable
+each server in WearTAK Companion.
 The developer UI unlock and the independent admin network/configuration locks
 are durable preferences, not authentication. Seven version taps toggle the
 developer unlock on or off; the explicit Developer mode switch can also turn

@@ -1,5 +1,28 @@
 import SwiftUI
 
+/// Single Ditto enable path shared by Plugins, Network Preferences, and Ditto settings.
+@MainActor
+enum DittoEnableControl {
+    static func summary(_ settings: AppSettings) -> DittoPDLSourceSummary {
+        DittoPDLSourceSummary(usesCommunity: settings.dittoIdentitySource == .community,
+                              hasCustomPDL: settings.dittoCustomPDL != nil)
+    }
+
+    static func binding(settings: AppSettings, model: WatchSessionModel, error: Binding<String?>) -> Binding<Bool> {
+        Binding(
+            get: { settings.dittoEnabled },
+            set: { enabled in
+                guard summary(settings).allows(enabling: enabled) else {
+                    error.wrappedValue = DittoPDLSourceSummary.missingPDLMessage
+                    return
+                }
+                settings.dittoEnabled = enabled
+                Task { await model.companionClient.updateDittoConfiguration() }
+            }
+        )
+    }
+}
+
 struct DittoSettingsView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
@@ -75,17 +98,7 @@ struct DittoSettingsView: View {
     }
 
     private var enabledBinding: Binding<Bool> {
-        Binding(
-            get: { settings.dittoEnabled },
-            set: { enabled in
-                guard !enabled || settings.dittoIdentitySource == .community || settings.dittoCustomPDL != nil else {
-                    errorText = "Save a custom PDL before enabling Ditto."
-                    return
-                }
-                settings.dittoEnabled = enabled
-                Task { await model.companionClient.updateDittoConfiguration() }
-            }
-        )
+        DittoEnableControl.binding(settings: settings, model: model, error: $errorText)
     }
 
     private var errorPresented: Binding<Bool> {
