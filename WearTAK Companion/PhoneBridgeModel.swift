@@ -102,6 +102,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private var lastPhoneReportAt: Date?
     private var phoneReportsByServer: [UUID: Date] = [:]
     private var latestPhoneFix: PhoneLocationFix?
+    private var phoneReportingTimer: Timer?
+    private var phoneSpeedExpiresAt: Date?
     private var alertLocations = AlertLocationHistory()
     private struct ActivePhoneEmergency {
         let xml: String
@@ -1009,6 +1011,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 lastPhoneReportAt = nil
                 phoneReportsByServer = [:]
                 latestPhoneFix = nil
+                phoneSpeedExpiresAt = nil
                 phoneReporting.lastReportAt = nil
                 phoneReporting.detail = nil
                 phoneReporting.state = String(localized: "Waiting for phone GPS fix", table: "PhoneBridgeStatus")
@@ -1027,11 +1030,22 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             lastPhoneReportAt = nil
             phoneReportsByServer = [:]
             latestPhoneFix = nil
+            phoneSpeedExpiresAt = nil
             phoneReporting.state = String(localized: "Stopped", table: "PhoneBridgeStatus")
             phoneReporting.detail = localizedReportingBlockReason(reason)
             phoneReporting.interval = nil
         }
         phoneReporting.running = reporter.isRunning
+        if reporter.isRunning, case .success(let identity) = watchIdentity, !identity.constantStrategy {
+            if phoneReportingTimer == nil {
+                phoneReportingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    Task { @MainActor [weak self] in self?.reportCachedPhoneFixIfDue() }
+                }
+            }
+        } else {
+            phoneReportingTimer?.invalidate()
+            phoneReportingTimer = nil
+        }
         phoneReporting.permission = reporter.permissionSummary
         let advice = PhoneBackgroundAdvice.message(hasServers: enabledConfigured > 0,
             authorization: reporter.authorization, preciseLocation: reporter.preciseLocation,
@@ -1122,7 +1136,6 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         retryPendingGarminEmergencies()
         refreshGarminMarkers(using: fix)
         guard reporter.isRunning, case .success(let identity) = watchIdentity else { return }
-        latestPhoneFix = fix
         do {
             if allowLastKnown {
                 guard AlertLocationHistory.isUsable(fix, now: fix.timestamp) else {
@@ -1135,13 +1148,44 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             reportingLogger.error("Phone GPS fix rejected: \(error.localizedDescription, privacy: .public)")
             return
         }
+        if latestPhoneFix?.timestamp != fix.timestamp {
+            let selected = identity.alertActive == true
+                ? TimeInterval(identity.alertingInterval ?? identity.constantInterval)
+                : DynamicReportingInterval.interval(speed: fix.speed, stationary: identity.stationaryInterval,
+                    onFoot: identity.onFootInterval, vehicle: identity.vehicleInterval)
+            let observationInterval = DynamicReportingInterval.observationInterval(selectedInterval: selected,
+                onFoot: identity.onFootInterval, vehicle: identity.vehicleInterval)
+            phoneSpeedExpiresAt = fix.timestamp.addingTimeInterval(
+                observationInterval + SelfLocationRefreshPolicy.acquisitionWindow)
+        }
+        latestPhoneFix = fix
         if let requested = selfPositionRequestedAt, fix.timestamp >= requested, !phoneSendInFlight {
             lastPhoneReportAt = nil
             selfPositionRequestedAt = nil
         }
-        let interval = PhoneReportingPolicy.interval(for: identity, speed: fix.speed)
+        sendPhonePositionIfDue(fix, identity: identity)
+    }
+
+    private func reportCachedPhoneFixIfDue() {
+        guard reporter.isRunning, case .success(let identity) = watchIdentity, !identity.constantStrategy,
+              let fix = latestPhoneFix,
+              (try? identity.validated()) != nil,
+              (-PhoneReportingPolicy.maximumFixFutureSkew...PhoneReportingPolicy.maximumFixAge)
+                .contains(Date().timeIntervalSince(fix.timestamp)),
+              fix.horizontalAccuracy >= 0, fix.horizontalAccuracy <= PhoneReportingPolicy.maximumHorizontalAccuracy else { return }
+        let speed = DynamicReportingInterval.validSpeed(fix.speed, measuredAt: fix.timestamp, now: Date(),
+            maximumAge: (phoneSpeedExpiresAt ?? fix.timestamp).timeIntervalSince(fix.timestamp))
+        guard PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt,
+            interval: PhoneReportingPolicy.interval(for: identity, speed: speed)) else { return }
+        sendPhonePositionIfDue(fix, identity: identity)
+    }
+
+    private func sendPhonePositionIfDue(_ fix: PhoneLocationFix, identity: WatchReportingIdentity) {
+        let speed = DynamicReportingInterval.validSpeed(fix.speed, measuredAt: fix.timestamp, now: Date(),
+            maximumAge: (phoneSpeedExpiresAt ?? fix.timestamp).timeIntervalSince(fix.timestamp))
+        let interval = PhoneReportingPolicy.interval(for: identity, speed: speed)
         phoneInterval = interval
-        phoneReporting.interval = interval
+        if phoneReporting.interval != interval { phoneReporting.interval = interval }
         refreshSelfStatusLink()
         let contribution = watchSelfStatus.current()
         let sharedStatus = contribution?.remarks ?? ""
@@ -1821,7 +1865,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private func setWatchIdentity(_ identity: Result<WatchReportingIdentity, WatchReportingIdentity.Failure>) {
         switch (watchIdentity, identity) {
         case (.success(let old), .success(let new)) where old.uid == new.uid: break
-        default: watchSelfStatus.disconnect()
+        default:
+            watchSelfStatus.disconnect()
+            latestPhoneFix = nil
+            phoneSpeedExpiresAt = nil
         }
         var settingsChanged = false
         if case .success(let new) = identity, case .success(let old) = watchIdentity, new.hasSameSettings(as: old) {

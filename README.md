@@ -2036,6 +2036,33 @@ foot, 60 seconds in a vehicle, and 10 seconds while alerting. Constant Reporting
 defaults to 60 seconds. Save Battery on WiFi multiplies the selected interval
 by six on qualifying WiFi connections.
 
+Dynamic Reporting uses the current location input's valid speed, not a motion
+activity profile. Below 0.44704 m/s it uses the saved Stationary interval.
+From 0.44704 to 13.4112 m/s it linearly interpolates the saved On Foot and
+Vehicle intervals, rounding positive half-seconds upward; at or above the upper
+endpoint it uses Vehicle. Reversed saved rates remain valid and are not changed.
+Missing, negative, nonfinite, future or expired speed is Unknown and uses the
+larger saved On Foot/Vehicle interval, never an invented zero speed.
+Active alerts retain the native override, including Constant Reporting.
+Companion still reports only the watch identity and bounds its interval to
+10–600 seconds; the watch retains its existing WiFi power multiplier.
+Observing location and evaluating the due interval are separate: neither
+speed changes nor speed expiry bypasses the last-successful-report due gate.
+The desired Dynamic observation interval is the minimum of 60 seconds, saved
+On Foot, saved Vehicle and the currently selected reporting/alert interval,
+then the watch's incumbent WiFi power policy applies. A stationary 3600-second
+report rate with On Foot 30/Vehicle 60 therefore observes at 30 seconds before
+power adjustments, without sending a routine stationary PLI every 30 seconds.
+Existing faster CoreLocation streams are reused; no second continuous stream
+is added. The watch's active-app/permission gates and iOS background delivery
+constraints remain in force, so this is not a wall-clock or battery guarantee.
+Speed remains valid only through that observation's expected next deadline
+plus the existing five-second acquisition window. Expiry changes only the
+send selector: it never requests GPS or resets a pending acquisition.
+Companion evaluates cached, still-valid positions once a second without
+re-running navigation or redrawing coordinates; observations and due checks
+do not clear the successful-send anchor. Existing user-action refreshes remain.
+
 PLI also carries the watch's vitals in the same format as WearTAK for WearOS:
 `<remarks>Exert:47%;HR:88</remarks>` plus
 `<biometrics><device><model>WATCHOS</model><uid/><hr/><exert/></device></biometrics>`.

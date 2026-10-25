@@ -344,6 +344,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private let settings: AppSettings
     private var connectionTask: Task<Void, Never>?
     private var reportingTimer: Timer?
+    private var nextDynamicObservationAt: Date?
+    private var watchSpeedExpiresAt: Date?
     private var identitySubscription: AnyCancellable?
     private var sitxRelaySubscriptions: Set<AnyCancellable> = []
     private var isSendingPLI = false
@@ -661,10 +663,12 @@ final class WatchSessionModel: NSObject, ObservableObject {
             Task { @MainActor [weak self] in
                 self?.forwardOfflineEvents()
                 guard let self, self.isAppActive else { return }
+                self.refreshDynamicObservationIfDue()
                 if self.needsWatchDittoTrack {
                     if let location = self.lastLocation, abs(location.timestamp.timeIntervalSinceNow) < 120 {
                         self.publishDittoTrackIfDue(for: location)
-                    } else if self.lastFixRequestAt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
+                    } else if self.settings.reportingStrategy != .dynamic,
+                              self.lastFixRequestAt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
                         self.lastFixRequestAt = Date()
                         self.requestLocation()
                     }
@@ -673,7 +677,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
                       self.transport.pliReportingRoute == .standaloneSitx else { return }
                 if let location = self.lastLocation, abs(location.timestamp.timeIntervalSinceNow) < 120 {
                     self.sendPLIIfDue(for: location)
-                } else if self.lastFixRequestAt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
+                } else if self.settings.reportingStrategy != .dynamic,
+                          self.lastFixRequestAt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true {
                     self.lastFixRequestAt = Date()
                     self.requestLocation()
                 }
@@ -721,10 +726,10 @@ final class WatchSessionModel: NSObject, ObservableObject {
         locationManager.stopUpdatingLocation()
     }
 
-    func requestLocation() {
+    func requestLocation(refreshCompanion: Bool = true) {
         updateLocationAvailability()
         guard isAppActive, locationRefresh.request() else { return }
-        companionClient.requestLocationRefresh()
+        if refreshCompanion { companionClient.requestLocationRefresh() }
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
             locationManager.desiredAccuracy = kCLLocationAccuracyBest
@@ -2427,6 +2432,8 @@ extension WatchSessionModel: CLLocationManagerDelegate {
                 !($0.coordinate.latitude == 0 && $0.coordinate.longitude == 0)
         }), lastLocation.map({ location.timestamp > $0.timestamp }) ?? true else { return }
         lastLocation = location
+        nextDynamicObservationAt = location.timestamp.addingTimeInterval(dynamicObservationInterval(for: location))
+        watchSpeedExpiresAt = nextDynamicObservationAt?.addingTimeInterval(SelfLocationRefreshPolicy.acquisitionWindow)
         sitxClient.currentLocation = location
         if let requestedAt = identityFixRequestedAt, location.timestamp >= requestedAt {
             identityFixRequestedAt = nil
@@ -2493,6 +2500,24 @@ extension WatchSessionModel: CLLocationManagerDelegate {
         }
     }
 
+    private func dynamicObservationInterval(for location: CLLocation?) -> TimeInterval {
+        let selected = DynamicReportingInterval.interval(speed: location?.speed,
+            stationary: settings.stationaryReportingInterval, onFoot: settings.onFootReportingInterval,
+            vehicle: settings.vehicleReportingInterval)
+        let interval = hasActiveEmergency ? TimeInterval(settings.alertingReportingInterval) : selected
+        return settings.reportingInterval(
+            base: DynamicReportingInterval.observationInterval(selectedInterval: interval,
+                onFoot: settings.onFootReportingInterval, vehicle: settings.vehicleReportingInterval), isOnWiFi: isOnWiFi)
+    }
+
+    private func refreshDynamicObservationIfDue() {
+        guard settings.reportingStrategy == .dynamic, watchLocationEnabled, locationRefreshTask == nil,
+              needsWatchDittoTrack || connectionState == .connected && transport.pliReportingRoute == .standaloneSitx,
+              nextDynamicObservationAt.map({ Date() >= $0 }) ?? true else { return }
+        nextDynamicObservationAt = Date().addingTimeInterval(dynamicObservationInterval(for: lastLocation))
+        requestLocation(refreshCompanion: false)
+    }
+
     private func pliReportingInterval(for location: CLLocation) -> TimeInterval {
         let hasActiveAlert = activeAlertType != nil || activeAutomaticAlert != nil || !activeEnvironmentalAlerts.isEmpty
         let interval: TimeInterval
@@ -2500,12 +2525,13 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             interval = TimeInterval(settings.alertingReportingInterval)
         } else if settings.reportingStrategy == .constant {
             interval = TimeInterval(settings.constantReportingInterval)
-        } else if location.speed < 0.5 {
-            interval = TimeInterval(settings.stationaryReportingInterval)
-        } else if location.speed < 2.5 {
-            interval = TimeInterval(settings.onFootReportingInterval)
         } else {
-            interval = TimeInterval(settings.vehicleReportingInterval)
+            let speed = watchLocationEnabled
+                ? DynamicReportingInterval.validSpeed(location.speed, measuredAt: location.timestamp, now: Date(),
+                    maximumAge: (watchSpeedExpiresAt ?? location.timestamp).timeIntervalSince(location.timestamp))
+                : nil
+            interval = DynamicReportingInterval.interval(speed: speed, stationary: settings.stationaryReportingInterval,
+                onFoot: settings.onFootReportingInterval, vehicle: settings.vehicleReportingInterval)
         }
         return settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)
     }
