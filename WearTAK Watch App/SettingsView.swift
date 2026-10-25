@@ -1000,13 +1000,16 @@ struct PhysiologicalControlsView: View {
     var editThresholds: (() -> Void)? = nil
 
     var body: some View {
-        Toggle(String(localized: "Physiological Monitoring", table: "WatchSettings"),
-            isOn: $settings.physiologicalMonitoringEnabled)
-            .accessibilityIdentifier("physiological-monitoring-enabled")
         HStack(spacing: 8) {
-            Toggle(String(localized: "Physiological Alerts", table: "WatchSettings"),
-                isOn: $settings.physiologicalAlertsEnabled)
-                .accessibilityIdentifier("physiological-alerts-enabled")
+            Toggle(isOn: $settings.physiologicalAlertsEnabled) {
+                Text("Physiological Alerts", tableName: "WatchSettings")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
+                    .allowsTightening(true)
+            }
+            .frame(minHeight: 44)
+            .accessibilityLabel(String(localized: "Physiological Alerts", table: "WatchSettings"))
+            .accessibilityIdentifier("physiological-alerts-enabled")
             if let editThresholds {
                 Button(action: editThresholds) {
                     Image(systemName: "chevron.right")
@@ -1018,6 +1021,15 @@ struct PhysiologicalControlsView: View {
                 .accessibilityIdentifier("physiological-alert-thresholds")
             }
         }
+        Toggle(isOn: $settings.physiologicalMonitoringEnabled) {
+            Text("Physiological Monitoring", tableName: "WatchSettings")
+                .lineLimit(1)
+                .minimumScaleFactor(0.4)
+                .allowsTightening(true)
+        }
+        .frame(minHeight: 44)
+        .accessibilityLabel(String(localized: "Physiological Monitoring", table: "WatchSettings"))
+        .accessibilityIdentifier("physiological-monitoring-enabled")
     }
 }
 

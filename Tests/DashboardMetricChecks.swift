@@ -47,8 +47,13 @@ struct DashboardMetricChecks {
             .components(separatedBy: "struct PhysiologicalAlertsView: View {")[0]
         precondition(controls.contains("isOn: $settings.physiologicalMonitoringEnabled"))
         precondition(controls.contains("isOn: $settings.physiologicalAlertsEnabled"))
-        precondition(controls.range(of: "physiologicalMonitoringEnabled")!.lowerBound <
-            controls.range(of: "physiologicalAlertsEnabled")!.lowerBound)
+        precondition(controls.range(of: "physiologicalAlertsEnabled")!.lowerBound <
+            controls.range(of: "physiologicalMonitoringEnabled")!.lowerBound)
+        precondition(controls.components(separatedBy: ".lineLimit(1)").count == 3)
+        precondition(controls.components(separatedBy: ".minimumScaleFactor(0.4)").count == 3)
+        precondition(controls.components(separatedBy: ".frame(minHeight: 44)").count == 3)
+        precondition(controls.components(separatedBy: ".accessibilityLabel(").count == 4)
+        precondition(!controls.contains(".truncationMode") && !controls.contains(".dynamicTypeSize"))
         precondition(!controls.contains(".disabled(") && controls.contains("44, height: 44"))
         precondition(settings.components(separatedBy: "PhysiologicalControlsView(settings: settings)").count == 3)
         let coordinates = source.components(separatedBy: "if settings.dashboardMetric.isCoordinate {")[1]
