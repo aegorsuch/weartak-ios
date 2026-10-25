@@ -530,6 +530,9 @@ The separate chevron beside Alerts opens the existing threshold editor even
 when alerts are off; it does not toggle alerts. Switching alerts off does not
 stop on-screen sensing, and switching sensing back on resumes live readings
 without enabling alerts. Existing threshold values are preserved.
+Alerting Preferences and its Environmental/Physiological alert-category menus
+sort by their localized visible labels. Associated switches, thresholds and
+submenus remain together; there is no new environmental master or top-metric control.
 With monitoring off, Exertion/Heart Rate show Disabled before considering old
 readings. With monitoring on, stale, missing, or future-dated readings show
 Unavailable. Lat/Long and MGRS remain location-driven and show their existing

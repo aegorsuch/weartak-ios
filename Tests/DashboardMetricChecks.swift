@@ -56,6 +56,28 @@ struct DashboardMetricChecks {
         precondition(!controls.contains(".truncationMode") && !controls.contains(".dynamicTypeSize"))
         precondition(!controls.contains(".disabled(") && controls.contains("44, height: 44"))
         precondition(settings.components(separatedBy: "PhysiologicalControlsView(settings: settings)").count == 3)
+        let physiologicalMenu = settings.components(separatedBy: "struct PhysiologicalAlertsView: View {")[1]
+            .components(separatedBy: "private struct RestingHeartRateAlertsView: View {")[0]
+        precondition(physiologicalMenu.contains("AlertMenuItem.sorted([.exertion, .restingHeartRate])"))
+        precondition(physiologicalMenu.contains("ExertionAlertsView(settings: settings)") &&
+            physiologicalMenu.contains("RestingHeartRateAlertsView(settings: settings)"))
+        let environmentalMenu = settings.components(separatedBy: "private struct EnvironmentalAlertsView: View {")[1]
+            .components(separatedBy: "private struct AtmosphericPressureAlertsView: View {")[0]
+        precondition(environmentalMenu.contains("AlertMenuItem.sorted([.atmosphericPressure, .immersion])"))
+        precondition(environmentalMenu.contains("AtmosphericPressureAlertsView(settings: settings)") &&
+            environmentalMenu.contains("isOn: $settings.immersionAlertsEnabled"))
+        precondition(!controls.contains("environmental") && !selector.contains("Environmental"))
+        let alertingMenu = settings.components(separatedBy: "private struct AlertingPreferencesView: View {")[1]
+            .components(separatedBy: "struct PhysiologicalControlsView: View {")[0]
+        precondition(alertingMenu.contains("AlertMenuItem.sorted([.battery, .environmental, .physiological])"))
+        precondition(alertingMenu.contains("isOn: $settings.batteryAlertsEnabled") &&
+            alertingMenu.contains("EnvironmentalAlertsView(settings: settings)") &&
+            alertingMenu.contains("PhysiologicalAlertsView(settings: settings)"))
+        let alertOrder = settings.components(separatedBy: "private enum AlertMenuItem:")[1]
+            .components(separatedBy: "private struct AlertingPreferencesView:")[0]
+        precondition(alertOrder.contains("String.LocalizationValue(rawValue)") &&
+            alertOrder.contains("table: \"WatchSettings\"") &&
+            alertOrder.contains("title.localizedStandardCompare($1.title) == .orderedAscending"))
         let coordinates = source.components(separatedBy: "if settings.dashboardMetric.isCoordinate {")[1]
             .components(separatedBy: "} else {")[0]
         precondition(!coordinates.contains("Image(") && coordinates.contains("dashboardValue"))

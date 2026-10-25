@@ -971,23 +971,49 @@ private struct SitxAddressView: View {
     }
 }
 
+private enum AlertMenuItem: String, Identifiable {
+    case battery = "Battery Alerts"
+    case environmental = "Environmental Alerts"
+    case physiological = "Physiological Alerts"
+    case exertion = "Exertion Alerts"
+    case restingHeartRate = "Resting Heart Rate Alerts"
+    case atmosphericPressure = "Atm Pressure Alerts"
+    case immersion = "Immersion Alerts"
+
+    var id: String { rawValue }
+    var title: String { String(localized: String.LocalizationValue(rawValue), table: "WatchSettings") }
+
+    static func sorted(_ items: [Self]) -> [Self] {
+        items.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+}
+
 private struct AlertingPreferencesView: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
         List {
-            NavigationLink(String(localized: "Physiological Alerts", table: "WatchSettings")) {
-                PhysiologicalAlertsView(settings: settings)
-            }
-            NavigationLink(String(localized: "Environmental Alerts", table: "WatchSettings")) {
-                EnvironmentalAlertsView(settings: settings)
-            }
-            Toggle(isOn: $settings.batteryAlertsEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(String(localized: "Battery Alerts", table: "WatchSettings"))
-                    Text(settings.batteryAlertsEnabled ? String(localized: "On (\(50)%, \(25)%)", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            ForEach(AlertMenuItem.sorted([.battery, .environmental, .physiological])) { item in
+                switch item {
+                case .battery:
+                    Toggle(isOn: $settings.batteryAlertsEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title)
+                            Text(settings.batteryAlertsEnabled ? String(localized: "On (\(50)%, \(25)%)", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                case .environmental:
+                    NavigationLink(item.title) {
+                        EnvironmentalAlertsView(settings: settings)
+                    }
+                case .physiological:
+                    NavigationLink(item.title) {
+                        PhysiologicalAlertsView(settings: settings)
+                    }
+                default:
+                    EmptyView()
                 }
             }
         }
@@ -1039,11 +1065,14 @@ struct PhysiologicalAlertsView: View {
     var body: some View {
         List {
             PhysiologicalControlsView(settings: settings)
-            NavigationLink(String(localized: "Resting Heart Rate Alerts", table: "WatchSettings")) {
-                RestingHeartRateAlertsView(settings: settings)
-            }
-            NavigationLink(String(localized: "Exertion Alerts", table: "WatchSettings")) {
-                ExertionAlertsView(settings: settings)
+            ForEach(AlertMenuItem.sorted([.exertion, .restingHeartRate])) { item in
+                NavigationLink(item.title) {
+                    if item == .exertion {
+                        ExertionAlertsView(settings: settings)
+                    } else {
+                        RestingHeartRateAlertsView(settings: settings)
+                    }
+                }
             }
         }
         .navigationTitle(String(localized: "Physiological Alerts", table: "WatchSettings"))
@@ -1159,16 +1188,21 @@ private struct EnvironmentalAlertsView: View {
 
     var body: some View {
         List {
-            Toggle(isOn: $settings.immersionAlertsEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(String(localized: "Immersion Alerts", table: "WatchSettings"))
-                    Text(settings.immersionAlertsEnabled ? String(localized: "On", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            ForEach(AlertMenuItem.sorted([.atmosphericPressure, .immersion])) { item in
+                if item == .atmosphericPressure {
+                    NavigationLink(item.title) {
+                        AtmosphericPressureAlertsView(settings: settings)
+                    }
+                } else {
+                    Toggle(isOn: $settings.immersionAlertsEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title)
+                            Text(settings.immersionAlertsEnabled ? String(localized: "On", table: "WatchSettings") : String(localized: "Off", table: "WatchSettings"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
-            }
-            NavigationLink(String(localized: "Atm Pressure Alerts", table: "WatchSettings")) {
-                AtmosphericPressureAlertsView(settings: settings)
             }
         }
         .navigationTitle(String(localized: "Environmental Alerts", table: "WatchSettings"))
