@@ -403,6 +403,7 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     }
 
     private func apply(_ message: BridgeWire.Message) {
+        DiagnosticsLog.shared.record(.syncUpdated)
         applySession(message)
         if let ids = message.remoteAlertSourceIDs { onRemoteAlertSources?(ids) }
         if let configured = message.configured { self.configured = configured }
@@ -887,6 +888,22 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let data = message[RouteNavigationState.contextKey] as? Data else { return }
         Task { @MainActor [weak self] in self?.onRouteNavigation?(data) }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any],
+                            replyHandler: @escaping ([String: Any]) -> Void) {
+        let requested = message[DiagnosticsLog.requestKey] as? Bool == true
+        Task { @MainActor [weak self] in
+            guard requested, let self, self.active, self.settings.developerMode else {
+                replyHandler([:])
+                return
+            }
+            do { replyHandler(["diagnostics": try DiagnosticsLog.shared.export()]) }
+            catch {
+                self.selfStatusLogger.error("Manual diagnostics collection failed.")
+                replyHandler(["diagnosticsStorageFailed": true])
+            }
+        }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessageData data: Data) {

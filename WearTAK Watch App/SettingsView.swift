@@ -75,7 +75,9 @@ struct SettingsView: View {
         }
         .navigationTitle(String(localized: "Settings", table: "WatchSettings"))
         .onDisappear { settings.resetVersionTaps() }
-        .alert(String(localized: "Developer mode enabled", table: "WatchSettings"), isPresented: $showDeveloperModeEnabled) {
+        .alert(settings.developerMode
+            ? String(localized: "Developer mode enabled", table: "WatchSettings")
+            : String(localized: "Developer mode disabled", table: "Diagnostics"), isPresented: $showDeveloperModeEnabled) {
             Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) {}
         }
     }
@@ -95,12 +97,63 @@ private struct AdminPreferencesView: View {
 
 private struct DeveloperPreferencesView: View {
     @ObservedObject var settings: AppSettings
+    @State private var diagnosticsEnabled = DiagnosticsLog.shared.isEnabled
+    @State private var errorText: String?
+
+    private func title(_ item: DeveloperPreference) -> String {
+        String(localized: String.LocalizationValue(item.rawValue),
+               table: item == .developerMode ? "WatchSettings" : "Diagnostics")
+    }
 
     var body: some View {
         List {
-            Toggle(String(localized: "Developer mode", table: "WatchSettings"), isOn: $settings.developerMode)
+            ForEach(DeveloperPreference.sorted([.developerMode, .diagnostics, .viewDiagnostics], title: title)) { item in
+                switch item {
+                case .developerMode:
+                    Toggle(title(item), isOn: $settings.developerMode)
+                case .diagnostics:
+                    Toggle(title(item), isOn: Binding(get: { diagnosticsEnabled }, set: { enabled in
+                        do {
+                            try DiagnosticsLog.shared.setEnabled(enabled)
+                            diagnosticsEnabled = enabled
+                        } catch { errorText = error.localizedDescription }
+                    }))
+                case .viewDiagnostics:
+                    NavigationLink(title(item)) { WatchDiagnosticsView() }
+                default:
+                    EmptyView()
+                }
+            }
+            if DiagnosticsLog.shared.hasStorageFailure {
+                Text(String(localized: "Diagnostics storage is unavailable. Check available storage and try again.", table: "Diagnostics"))
+            }
         }
         .navigationTitle(String(localized: "Developer Preferences", table: "WatchSettings"))
+        .alert(String(localized: "Diagnostics", table: "Diagnostics"),
+               isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
+            Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) { errorText = nil }
+        } message: { Text(errorText ?? "") }
+    }
+}
+
+private struct WatchDiagnosticsView: View {
+    @State private var text = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading) {
+                Text(String(localized: "Collect watch logs from Companion > Developer Preferences > Collect Watch Diagnostics while the watch app is open.", table: "Diagnostics"))
+                Text(text).font(.caption2)
+            }
+        }
+        .navigationTitle(String(localized: "View Diagnostics", table: "Diagnostics"))
+        .task {
+            do {
+                let data = try DiagnosticsLog.shared.export()
+                guard let value = String(data: data, encoding: .utf8) else { throw DiagnosticsLog.Failure.invalidArchive }
+                text = value
+            } catch { text = error.localizedDescription }
+        }
     }
 }
 

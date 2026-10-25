@@ -98,9 +98,11 @@ final class PhysiologyMonitor: ObservableObject {
 
     private func startObservingSamples() {
         guard observerQuery == nil else { return }
+        DiagnosticsLog.shared.record(.sensorStarted)
         let query = HKObserverQuery(sampleType: heartRateType, predicate: nil) { [weak self] _, completion, error in
             Task { @MainActor [weak self] in
                 if error != nil {
+                    DiagnosticsLog.shared.record(.sensorUnavailable)
                     self?.stopMonitoring()
                     self?.stopViewing()
                     self?.status = "Heart rate updates unavailable"
@@ -132,6 +134,7 @@ final class PhysiologyMonitor: ObservableObject {
     }
 
     private func stopObservingSamples() {
+        DiagnosticsLog.shared.record(.sensorStopped)
         monitoringGeneration += 1
         if let observerQuery {
             healthStore.stop(observerQuery)
@@ -174,6 +177,7 @@ final class PhysiologyMonitor: ObservableObject {
             if let sample {
                 let beatsPerMinute = sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
                 heartRate = Int(beatsPerMinute.rounded())
+                DiagnosticsLog.shared.record(.sensorSample)
                 readingDate = sample.endDate
                 status = automaticEnabled
                     ? (Date().timeIntervalSince(sample.endDate) <= 60 ? "Monitoring for new readings" : "Waiting for fresh heart rate")

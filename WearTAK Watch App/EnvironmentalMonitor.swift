@@ -25,10 +25,12 @@ final class EnvironmentalMonitor: ObservableObject {
     func startMonitoring() {
         guard !isMonitoring else { return }
         guard CMAltimeter.isRelativeAltitudeAvailable() else {
+            DiagnosticsLog.shared.record(.sensorUnavailable)
             status = "Barometer unavailable"
             return
         }
         isMonitoring = true
+        DiagnosticsLog.shared.record(.sensorStarted)
         status = "Monitoring pressure"
         monitoringStartedAt = Date()
         lastReadingAt = nil
@@ -52,6 +54,7 @@ final class EnvironmentalMonitor: ObservableObject {
     }
 
     func stopMonitoring() {
+        DiagnosticsLog.shared.record(.sensorStopped)
         altimeter.stopRelativeAltitudeUpdates()
         freshnessTimer?.invalidate()
         freshnessTimer = nil
@@ -72,6 +75,7 @@ final class EnvironmentalMonitor: ObservableObject {
             return
         }
         lastReadingAt = Date()
+        DiagnosticsLog.shared.record(.sensorSample)
         status = "Monitoring pressure"
         pressureHpa = hpa
         self.relativeAltitudeMeters = relativeAltitudeMeters

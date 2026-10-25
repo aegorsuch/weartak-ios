@@ -488,6 +488,39 @@ Network Preferences can be locked from Admin Preferences. Admin Preferences and
 Developer Preferences always appear in Settings but stay disabled until
 developer mode is unlocked; the lock blocks Network Preferences' Settings and
 dashboard shortcuts.
+The developer UI unlock and the independent admin network/configuration locks
+are durable preferences, not authentication. Seven version taps toggle the
+developer unlock on or off; the explicit Developer mode switch can also turn
+it off. Navigation/relaunch/in-place updates do not reset a completed unlock.
+Disabling it never clears a network/admin lock or extends certificate,
+authorization or server-session lifetimes.
+
+Developer Preferences sorts its existing controls by localized visible labels.
+Its single **Diagnostics** switch is opt-in/default off on each native app and
+stays set until explicitly disabled. It records only allowlisted event names
+and times for lifecycle, existing power/battery availability, reporting,
+location acceptance/rejection, sensors, connectivity, sync, map updates and
+failures. It never records raw coordinates, identities, biometrics, messages,
+credentials, server addresses or transport payloads, and does not export the
+existing unrestricted OSLog stream. Logs retain at most 256 entries/48 KB,
+with each event kind limited to one per 30 seconds and storage-failure retries
+backed off. Events use existing callbacks: no new GPS/sensor subscription,
+wakelock, high-frequency polling or automatic upload is added. Battery/power
+snapshots are taken on existing foreground transitions; unavailable battery
+data stays absent and phone battery monitoring is not enabled for diagnostics.
+
+On iPhone, Developer Preferences > **Export Diagnostics** prepares the bounded
+local JSON for the native share sheet. **Collect Watch Diagnostics** manually
+retrieves the paired Apple Watch's same allowlisted log while the watch app
+is open and developer mode is enabled there, then offers the same share sheet.
+Diagnostics must be enabled separately on each app to capture its events.
+Watch Developer Preferences > **View Diagnostics** also shows its local log.
+Collection never enables logging remotely or sends logs to a TAK/Ditto server.
+Filesystem/collection failures are surfaced in the UI and/or a fixed OSLog
+diagnostic without copying error payloads into the export. Apple has no
+Wireless ADB equivalent here; no ADB, sysdiagnose or unrelated device capture
+is performed. Persistence checks reconstruct the native preferences/store;
+no physical reboot or hardware export has been claimed.
 
 The watch Info.plist includes both HealthKit read and update purpose strings
 required by App Store validation. The current monitor requests read access only
@@ -721,7 +754,8 @@ and local multicast without Companion.
   and Copy Details, which copies a plain-text report to paste into a chat or
   ticket.
   An optional developer mode is enabled by tapping the version at the bottom
-  of the main screen seven times. Its Beta Features page can lock server
+  of the main screen seven times (tap seven again to disable). Its
+  Developer Preferences > Beta Features page can lock server
   configuration, including Sit(x), while keeping connection status and
   reconnect controls available. This is an in-app editing safeguard, not
   authentication against someone with access to the phone.
@@ -1850,8 +1884,8 @@ emergencies using their shared lifecycle. Enabled means the
 preference is on, not that delivery is confirmed. UDP has no receiver
 acknowledgment. Runtime diagnostics are hidden by default. Tap the version
 number at the bottom of watch Settings seven times to enable Developer mode.
-The unlock shows only "Developer mode enabled" and persists across launches; turn off
-Developer mode in Settings or at the bottom of the multicast diagnostics to
+The unlock shows "Developer mode enabled" and persists across launches; tap
+seven times again or turn off Developer mode in Settings or at the bottom of the multicast diagnostics to
 hide diagnostics again. Leaving Settings resets an unfinished tap sequence.
 Developer-only controls appear at the bottom of their respective menus, below
 normal settings. In multicast, the Runtime Status section shows readiness/errors, local

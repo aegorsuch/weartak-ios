@@ -186,10 +186,9 @@ final class AppSettings: ObservableObject {
 
     @discardableResult
     func registerVersionTap() -> Bool {
-        guard !developerMode else { return false }
         developerUnlockTaps += 1
         guard developerUnlockTaps == 7 else { return false }
-        developerMode = true
+        developerMode.toggle()
         return true
     }
 

@@ -117,6 +117,24 @@ final class XMLFields: NSObject, XMLParserDelegate {
 struct SitxProtocolChecks {
     @MainActor
     static func main() async throws {
+        if CommandLine.arguments.contains("--developer-persistence") {
+            let suite = "WearTAK.DeveloperChecks.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let settings = AppSettings(defaults: defaults)
+            precondition(!settings.developerMode)
+            settings.networkPreferencesLocked = true
+            for _ in 0..<6 { precondition(!settings.registerVersionTap()) }
+            precondition(settings.registerVersionTap() && settings.developerMode)
+            settings.resetVersionTaps()
+            precondition(AppSettings(defaults: defaults).developerMode)
+            for _ in 0..<6 { precondition(!settings.registerVersionTap()) }
+            precondition(settings.registerVersionTap() && !settings.developerMode)
+            let restored = AppSettings(defaults: defaults)
+            precondition(!restored.developerMode && restored.networkPreferencesLocked)
+            print("PASS: durable developer unlock, seven-tap explicit disable and independent admin network lock")
+            return
+        }
         if CommandLine.arguments.contains("--own-pin-deletion") {
             try await checkOwnPinDeletion()
             return
