@@ -496,7 +496,7 @@ Disabling it never clears a network/admin lock or extends certificate,
 authorization or server-session lifetimes.
 
 Developer Preferences sorts its existing controls by localized visible labels.
-Its single **Diagnostics** switch is opt-in/default off on each native app and
+Its single **Logging** switch is opt-in/default off on each native app and
 stays set until explicitly disabled. It records only allowlisted event names
 and times for lifecycle, existing power/battery availability, reporting,
 location acceptance/rejection, sensors, connectivity, sync, map updates and
@@ -507,14 +507,16 @@ with each event kind limited to one per 30 seconds and storage-failure retries
 backed off. Events use existing callbacks: no new GPS/sensor subscription,
 wakelock, high-frequency polling or automatic upload is added. Battery/power
 snapshots are taken on existing foreground transitions; unavailable battery
-data stays absent and phone battery monitoring is not enabled for diagnostics.
+data stays absent and phone battery monitoring is not enabled for logging.
 
-On iPhone, Developer Preferences > **Export Diagnostics** prepares the bounded
-local JSON for the native share sheet. **Collect Watch Diagnostics** manually
+On iPhone, Developer Preferences > **Export Logs** prepares the bounded
+local JSON for the native share sheet. **Collect Watch Logs** manually
 retrieves the paired Apple Watch's same allowlisted log while the watch app
 is open and developer mode is enabled there, then offers the same share sheet.
-Diagnostics must be enabled separately on each app to capture its events.
-Watch Developer Preferences > **View Diagnostics** also shows its local log.
+Logging must be enabled separately on each app to capture its events.
+The Logging label preserves the existing Diagnostics consent preference and
+stored journal; this naming change does not reset either.
+Watch Developer Preferences > **View Logs** also shows its local log.
 Collection never enables logging remotely or sends logs to a TAK/Ditto server.
 Filesystem/collection failures are surfaced in the UI and/or a fixed OSLog
 diagnostic without copying error payloads into the export. Apple has no

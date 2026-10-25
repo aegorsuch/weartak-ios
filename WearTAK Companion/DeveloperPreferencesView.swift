@@ -56,17 +56,17 @@ struct CompanionDeveloperPreferencesView: View {
                 }
             }
             if DiagnosticsLog.shared.hasStorageFailure {
-                Text(String(localized: "Diagnostics storage is unavailable. Check available storage and try again.", table: "Diagnostics"))
+                Text(String(localized: "Logging storage is unavailable. Check available storage and try again.", table: "Diagnostics"))
             }
         }
         .navigationTitle(String(localized: "Developer Preferences", table: "Diagnostics"))
         .sheet(item: $export) { file in
             ShareLink(item: file.url) {
-                Label(String(localized: "Share Diagnostics", table: "Diagnostics"), systemImage: "square.and.arrow.up")
+                Label(String(localized: "Share Logs", table: "Diagnostics"), systemImage: "square.and.arrow.up")
             }
             .padding()
         }
-        .alert(String(localized: "Diagnostics", table: "Diagnostics"),
+        .alert(String(localized: "Logging", table: "Diagnostics"),
                isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
             Button(String(localized: "OK", table: "CompanionApp"), role: .cancel) { errorText = nil }
         } message: { Text(errorText ?? "") }

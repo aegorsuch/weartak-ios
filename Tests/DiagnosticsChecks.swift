@@ -47,6 +47,11 @@ struct DiagnosticsChecks {
         precondition(!DiagnosticsLog(defaults: defaults, directory: directory).isEnabled)
         relaunched.record(.operationFailed, at: now.addingTimeInterval(50_000))
         try expectExport(relaunched, equals: data)
+        defaults.set(true, forKey: "WearTAK.diagnostics.enabled")
+        let previouslyEnabled = DiagnosticsLog(defaults: defaults, directory: directory)
+        precondition(previouslyEnabled.isEnabled)
+        try expectExport(previouslyEnabled, equals: data)
+        try previouslyEnabled.setEnabled(false)
         var injected = archive
         injected["coordinates"] = "must never export unknown fields"
         let cleaned = try DiagnosticsLog.validatedExport(JSONSerialization.data(withJSONObject: injected))
@@ -65,6 +70,16 @@ struct DiagnosticsChecks {
             title: \.rawValue) == [.developerMode, .diagnostics, .viewDiagnostics])
         precondition(DeveloperPreference.sorted([.diagnostics, .developerMode],
             title: { $0 == .diagnostics ? "A" : "Z" }) == [.diagnostics, .developerMode])
+        precondition(DeveloperPreference.diagnostics.rawValue == "Logging")
+        precondition(DeveloperPreference.sorted([.diagnostics, .exportDiagnostics, .developerMode, .collectWatch, .betaFeatures],
+            title: \.rawValue).map(\.rawValue) ==
+            ["Beta Features", "Collect Watch Logs", "Developer mode", "Export Logs", "Logging"])
+        precondition(DeveloperPreference.viewDiagnostics.rawValue == "View Logs")
+        let catalog = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: "Shared/Diagnostics.xcstrings"))) as! [String: Any]
+        let strings = catalog["strings"] as! [String: Any]
+        for label in ["Logging", "Collect Watch Logs", "Export Logs", "Share Logs", "View Logs"] {
+            precondition(strings[label] != nil)
+        }
 
         let watch = try String(contentsOfFile: "WearTAK Watch App/SettingsView.swift", encoding: .utf8)
         precondition(watch.contains("DeveloperPreference.sorted([.developerMode, .diagnostics, .viewDiagnostics]"))
