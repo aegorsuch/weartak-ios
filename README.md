@@ -518,8 +518,10 @@ falling back to Exertion. Per the user's iOS-specific decision, Skin Temp and
 Steps are not added: this app has no existing live display source for either.
 Companion has no equivalent top-metric surface.
 
-The same screen starts with matching native Physiological Alerts and
-Physiological Monitoring switches, in that order. Each complete label stays
+The same screen starts with an Environmental Alerts navigation row, followed
+by matching native Physiological Alerts and Physiological Monitoring switches.
+The environmental row only opens the existing configuration; it has no switch
+and does not change alert settings. Each complete label stays
 on one line with local native fitting; switches, 44-point-high rows and full
 accessibility labels remain intact. Device preferences and the
 physiological threshold screen reuse the same top controls. Heart Rate uses
@@ -532,7 +534,7 @@ stop on-screen sensing, and switching sensing back on resumes live readings
 without enabling alerts. Existing threshold values are preserved.
 Alerting Preferences and its Environmental/Physiological alert-category menus
 sort by their localized visible labels. Associated switches, thresholds and
-submenus remain together; there is no new environmental master or top-metric control.
+submenus remain together; there is no new environmental master switch.
 With monitoring off, Exertion/Heart Rate show Disabled before considering old
 readings. With monitoring on, stale, missing, or future-dated readings show
 Unavailable. Lat/Long and MGRS remain location-driven and show their existing
