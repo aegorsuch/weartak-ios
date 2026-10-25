@@ -518,8 +518,10 @@ falling back to Exertion. Per the user's iOS-specific decision, Skin Temp and
 Steps are not added: this app has no existing live display source for either.
 Companion has no equivalent top-metric surface.
 
-The same screen starts with matching native Physiological Monitoring and
-Physiological Alerts switches, in that order. Device preferences and the
+The same screen starts with matching native Physiological Alerts and
+Physiological Monitoring switches, in that order. Each complete label stays
+on one line with local native fitting; switches, 44-point-high rows and full
+accessibility labels remain intact. Device preferences and the
 physiological threshold screen reuse the same top controls. Heart Rate uses
 the same filled-heart symbol as the physiology dashboard. The selected MGRS
 home value is already text-only (no coordinate glyph); full precision and the
