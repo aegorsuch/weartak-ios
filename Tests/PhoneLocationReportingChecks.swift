@@ -43,10 +43,78 @@ struct PhoneLocationReportingChecks {
         changed = identity; changed.callSign = "  "; changed.role = ""
         precondition(changed.resolvedCallSign == "WEARTAK-3f2b8c1e" && changed.resolvedRole == "Team Member")
 
+        // Shared ATAK-style moving interpolation preserves saved endpoint order.
+        let lower = DynamicReportingInterval.stationarySpeed
+        let upper = DynamicReportingInterval.vehicleSpeed
+        let middle = lower + (upper - lower) / 2
+        precondition(DynamicReportingInterval.observationInterval(selectedInterval: 3600, onFoot: 60, vehicle: 60) == 60)
+        precondition(DynamicReportingInterval.observationInterval(selectedInterval: 3600, onFoot: 30, vehicle: 60) == 30)
+        precondition(DynamicReportingInterval.observationInterval(selectedInterval: 3600, onFoot: 60, vehicle: 30) == 30)
+        precondition(DynamicReportingInterval.observationInterval(selectedInterval: 10, onFoot: 30, vehicle: 60) == 10)
+        precondition(DynamicReportingInterval.observationInterval(selectedInterval: 1, onFoot: 60, vehicle: 60) == 1)
+        for interval in [1.0, 10, 30, 60, 3600] {
+            for multiplier in [1.0, 6] {
+                let lifetime = DynamicReportingInterval.observationInterval(
+                    selectedInterval: interval, onFoot: 30, vehicle: 60) * multiplier + 5
+                precondition(DynamicReportingInterval.validSpeed(1, measuredAt: now, now: now.addingTimeInterval(lifetime),
+                    maximumAge: lifetime) == 1)
+                precondition(DynamicReportingInterval.validSpeed(1, measuredAt: now,
+                    now: now.addingTimeInterval(lifetime + 0.001), maximumAge: lifetime) == nil)
+            }
+        }
+        for speed: Double? in [nil, -1, .nan, .infinity, -.infinity] {
+            precondition(DynamicReportingInterval.validSpeed(speed, measuredAt: now, now: now, maximumAge: 60) == nil)
+        }
+        for age in [0.0, 1, 60] {
+            precondition(DynamicReportingInterval.validSpeed(0, measuredAt: now.addingTimeInterval(-age),
+                now: now, maximumAge: 60) == 0)
+        }
+        for age in [-0.001, 60.001] {
+            precondition(DynamicReportingInterval.validSpeed(1, measuredAt: now.addingTimeInterval(-age),
+                now: now, maximumAge: 60) == nil)
+        }
+        for speed: Double? in [nil, -1, .nan, .infinity, -.infinity] {
+            precondition(DynamicReportingInterval.interval(speed: speed, stationary: 3600,
+                onFoot: 60, vehicle: 10) == 60)
+        }
+        precondition(DynamicReportingInterval.interval(speed: 0, stationary: 3600,
+            onFoot: 60, vehicle: 10) == 3600)
+        precondition(DynamicReportingInterval.interval(speed: lower.nextDown, stationary: 3600,
+            onFoot: 60, vehicle: 10) == 3600)
+        precondition(DynamicReportingInterval.interval(speed: lower, stationary: 3600,
+            onFoot: 60, vehicle: 10) == 60)
+        for (foot, vehicle) in [(60, 10), (10, 60), (30, 30), (1, 86_400), (86_400, 1)] {
+            precondition(DynamicReportingInterval.moving(speed: lower, onFoot: foot, vehicle: vehicle) == Double(foot))
+            precondition(DynamicReportingInterval.moving(speed: upper, onFoot: foot, vehicle: vehicle) == Double(vehicle))
+            precondition(DynamicReportingInterval.moving(speed: upper + 100, onFoot: foot, vehicle: vehicle) == Double(vehicle))
+            precondition(DynamicReportingInterval.moving(speed: middle, onFoot: foot, vehicle: vehicle) ==
+                floor(Double(foot + vehicle) / 2 + 0.5))
+            var previous = Double(foot)
+            for step in 0...1_000 {
+                let speed = lower + (upper - lower) * Double(step) / 1_000
+                let result = DynamicReportingInterval.moving(speed: speed, onFoot: foot, vehicle: vehicle)
+                precondition(result >= Double(min(foot, vehicle)) && result <= Double(max(foot, vehicle)))
+                precondition(result.rounded() == result)
+                precondition(vehicle >= foot ? result >= previous : result <= previous)
+                previous = result
+            }
+        }
+
         // Bounded intervals follow the watch's strategy.
         precondition(PhoneReportingPolicy.interval(for: identity, speed: 0) == 600)
-        precondition(PhoneReportingPolicy.interval(for: identity, speed: 1) == 30)
-        precondition(PhoneReportingPolicy.interval(for: identity, speed: 10) == 10)
+        precondition(PhoneReportingPolicy.interval(for: identity, speed: 1) == 29)
+        precondition(PhoneReportingPolicy.interval(for: identity, speed: 10) == 12)
+        precondition(PhoneReportingPolicy.interval(for: identity, speed: nil) == 30)
+        for invalid: Double? in [nil, -1, .nan, .infinity, -.infinity] {
+            precondition(PhoneReportingPolicy.interval(for: identity, speed: invalid) == 30)
+        }
+        var reversed = identity
+        reversed.onFootInterval = 10
+        reversed.vehicleInterval = 100
+        precondition(PhoneReportingPolicy.interval(for: reversed, speed: nil) == 100)
+        precondition(PhoneReportingPolicy.interval(for: reversed, speed: middle) == 55)
+        precondition(PhoneReportingPolicy.interval(for: reversed, speed: upper) == 100)
+        precondition(reversed.onFootInterval == 10 && reversed.vehicleInterval == 100)
         changed = identity; changed.constantStrategy = true
         precondition(PhoneReportingPolicy.interval(for: changed, speed: 0) == 60)
         var alerting = identity
@@ -57,7 +125,7 @@ struct PhoneLocationReportingChecks {
         precondition(decodedAlert == alerting && !identity.hasSameSettings(as: alerting))
         for constant in [false, true] {
             alerting.constantStrategy = constant
-            for speed in [0.0, 1.0, 10.0] {
+            for speed: Double? in [nil, -1, .nan, 0, 1, 10, 100] {
                 precondition(PhoneReportingPolicy.interval(for: alerting, speed: speed) == 15)
             }
         }
@@ -72,9 +140,10 @@ struct PhoneLocationReportingChecks {
         alerting = identity
         alerting.alertingInterval = 15
         alerting.alertActive = false
-        precondition(PhoneReportingPolicy.interval(for: alerting, speed: 1) == 30)
+        precondition(PhoneReportingPolicy.interval(for: alerting, speed: 1) == 29)
         alerting.constantStrategy = true
         precondition(PhoneReportingPolicy.interval(for: alerting, speed: 1) == 60)
+        precondition(PhoneReportingPolicy.interval(for: alerting, speed: nil) == 60)
         var legacyPayload = try JSONSerialization.jsonObject(with: identity.contextValue()) as! [String: Any]
         legacyPayload.removeValue(forKey: "alertingInterval")
         legacyPayload.removeValue(forKey: "alertActive")
@@ -87,6 +156,39 @@ struct PhoneLocationReportingChecks {
         precondition(!PhoneReportingPolicy.isDue(lastSentAt: now.addingTimeInterval(-29), interval: 30, now: now))
         precondition(PhoneReportingPolicy.isDue(lastSentAt: now.addingTimeInterval(-30), interval: 30, now: now))
         precondition(PhoneReportingPolicy.isDue(lastSentAt: now.addingTimeInterval(60), interval: 30, now: now))
+        let anchor = now.addingTimeInterval(-5)
+        for speed: Double? in [nil, 0, lower, middle, upper] {
+            let interval = PhoneReportingPolicy.interval(for: reversed, speed: speed)
+            precondition(!PhoneReportingPolicy.isDue(lastSentAt: anchor, interval: interval, now: now))
+            precondition(PhoneReportingPolicy.isDue(lastSentAt: anchor, interval: interval,
+                now: anchor.addingTimeInterval(interval)))
+        }
+        let watchSource = try String(contentsOfFile: "WearTAK Watch App/WatchSessionModel.swift", encoding: .utf8)
+        let watchSelector = watchSource.components(separatedBy: "private func pliReportingInterval(for location: CLLocation)")[1]
+            .components(separatedBy: "private func sendPLIIfDue")[0]
+        precondition(watchSelector.contains("DynamicReportingInterval.interval(") &&
+            watchSelector.contains("DynamicReportingInterval.validSpeed(") &&
+            watchSelector.contains("settings.reportingInterval(base: interval, isOnWiFi: isOnWiFi)"))
+        precondition(!watchSelector.contains("requestLocation(") && !watchSelector.contains("lastPLISentAt =") &&
+            !watchSelector.contains("startUpdatingLocation("))
+        precondition(watchSource.contains("Date().timeIntervalSince($0) >= effectiveInterval"))
+        let phoneSource = try String(contentsOfFile: "WearTAK Companion/PhoneBridgeModel.swift", encoding: .utf8)
+        precondition(phoneSource.contains("PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt, interval: interval)") &&
+            phoneSource.contains("DynamicReportingInterval.validSpeed(fix.speed, measuredAt: fix.timestamp"))
+        let watchObservation = watchSource.components(separatedBy: "private func refreshDynamicObservationIfDue()")[1]
+            .components(separatedBy: "private func pliReportingInterval")[0]
+        precondition(watchObservation.contains("locationRefreshTask == nil") &&
+            watchObservation.contains("nextDynamicObservationAt") &&
+            watchObservation.contains("requestLocation(refreshCompanion: false)"))
+        precondition(!watchObservation.contains("sendPLI") && !watchObservation.contains("watchSpeedExpiresAt") &&
+            !watchObservation.contains("lastPLISentAt"))
+        let cachedPhone = phoneSource.components(separatedBy: "private func reportCachedPhoneFixIfDue()")[1]
+            .components(separatedBy: "private func sendPhonePositionIfDue")[0]
+        precondition(cachedPhone.contains("reporter.isRunning") && cachedPhone.contains("identity.validated()") &&
+            cachedPhone.contains("PhoneReportingPolicy.maximumFixAge") &&
+            cachedPhone.contains("PhoneReportingPolicy.isDue(lastSentAt: lastPhoneReportAt"))
+        precondition(!cachedPhone.contains("requestFreshLocation") && !cachedPhone.contains("navigationLocation =") &&
+            !cachedPhone.contains("lastPhoneReportAt ="))
 
         // Accuracy and time guards.
         let fix = PhoneLocationFix(latitude: 38.8977, longitude: -77.0365, horizontalAccuracy: 8, altitude: 21.5,

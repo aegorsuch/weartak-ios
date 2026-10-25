@@ -175,6 +175,36 @@ struct PhoneLocationFix: Codable, Equatable {
     var timestamp: Date
 }
 
+enum DynamicReportingInterval {
+    static let stationarySpeed = 0.44704
+    static let vehicleSpeed = 13.4112
+    static let maximumObservationInterval: TimeInterval = 60
+
+    static func observationInterval(selectedInterval: TimeInterval, onFoot: Int, vehicle: Int) -> TimeInterval {
+        max(min(selectedInterval, maximumObservationInterval, TimeInterval(onFoot), TimeInterval(vehicle)), 1)
+    }
+
+    static func validSpeed(_ speed: Double?, measuredAt: Date, now: Date,
+                           maximumAge: TimeInterval) -> Double? {
+        guard let speed, speed.isFinite, speed >= 0, maximumAge.isFinite, maximumAge >= 0 else { return nil }
+        let age = now.timeIntervalSince(measuredAt)
+        guard age.isFinite, age >= 0, age <= maximumAge else { return nil }
+        return speed
+    }
+
+    static func interval(speed: Double?, stationary: Int, onFoot: Int, vehicle: Int) -> TimeInterval {
+        guard let speed, speed.isFinite, speed >= 0 else { return TimeInterval(max(onFoot, vehicle)) }
+        if speed < stationarySpeed { return TimeInterval(stationary) }
+        return moving(speed: speed, onFoot: onFoot, vehicle: vehicle)
+    }
+
+    static func moving(speed: Double, onFoot: Int, vehicle: Int) -> TimeInterval {
+        let fraction = min(max((speed - stationarySpeed) / (vehicleSpeed - stationarySpeed), 0), 1)
+        let seconds = floor(Double(onFoot) + (Double(vehicle) - Double(onFoot)) * fraction + 0.5)
+        return min(max(seconds, Double(min(onFoot, vehicle))), Double(max(onFoot, vehicle)))
+    }
+}
+
 enum PhoneReportingPolicy {
     static let minimumInterval: TimeInterval = 10
     static let maximumInterval: TimeInterval = 600
@@ -184,15 +214,16 @@ enum PhoneReportingPolicy {
     static let suppressionGrace: TimeInterval = 90
 
     /// Uses the watch's reporting strategy, bounded so the phone neither floods servers nor goes silent.
-    static func interval(for identity: WatchReportingIdentity, speed: Double) -> TimeInterval {
-        let base: Int
+    static func interval(for identity: WatchReportingIdentity, speed: Double?) -> TimeInterval {
+        let base: TimeInterval
         if identity.alertActive == true, let alertingInterval = identity.alertingInterval {
-            base = alertingInterval
-        } else if identity.constantStrategy { base = identity.constantInterval }
-        else if speed < 0.5 { base = identity.stationaryInterval }
-        else if speed < 2.5 { base = identity.onFootInterval }
-        else { base = identity.vehicleInterval }
-        return min(max(TimeInterval(base), minimumInterval), maximumInterval)
+            base = TimeInterval(alertingInterval)
+        } else if identity.constantStrategy { base = TimeInterval(identity.constantInterval) }
+        else {
+            base = DynamicReportingInterval.interval(speed: speed, stationary: identity.stationaryInterval,
+                onFoot: identity.onFootInterval, vehicle: identity.vehicleInterval)
+        }
+        return min(max(base, minimumInterval), maximumInterval)
     }
 
     static func staleLifetime(interval: TimeInterval) -> TimeInterval {
