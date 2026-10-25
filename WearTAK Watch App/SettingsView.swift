@@ -1026,6 +1026,17 @@ struct PhysiologicalControlsView: View {
     var editThresholds: (() -> Void)? = nil
 
     var body: some View {
+        NavigationLink {
+            EnvironmentalAlertsView(settings: settings)
+        } label: {
+            Text("Environmental Alerts", tableName: "WatchSettings")
+                .lineLimit(1)
+                .minimumScaleFactor(0.4)
+                .allowsTightening(true)
+                .frame(minHeight: 44)
+        }
+        .accessibilityLabel(String(localized: "Environmental Alerts", table: "WatchSettings"))
+        .accessibilityIdentifier("environmental-alert-settings")
         HStack(spacing: 8) {
             Toggle(isOn: $settings.physiologicalAlertsEnabled) {
                 Text("Physiological Alerts", tableName: "WatchSettings")

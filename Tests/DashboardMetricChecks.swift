@@ -49,10 +49,10 @@ struct DashboardMetricChecks {
         precondition(controls.contains("isOn: $settings.physiologicalAlertsEnabled"))
         precondition(controls.range(of: "physiologicalAlertsEnabled")!.lowerBound <
             controls.range(of: "physiologicalMonitoringEnabled")!.lowerBound)
-        precondition(controls.components(separatedBy: ".lineLimit(1)").count == 3)
-        precondition(controls.components(separatedBy: ".minimumScaleFactor(0.4)").count == 3)
-        precondition(controls.components(separatedBy: ".frame(minHeight: 44)").count == 3)
-        precondition(controls.components(separatedBy: ".accessibilityLabel(").count == 4)
+        precondition(controls.components(separatedBy: ".lineLimit(1)").count == 4)
+        precondition(controls.components(separatedBy: ".minimumScaleFactor(0.4)").count == 4)
+        precondition(controls.components(separatedBy: ".frame(minHeight: 44)").count == 4)
+        precondition(controls.components(separatedBy: ".accessibilityLabel(").count == 5)
         precondition(!controls.contains(".truncationMode") && !controls.contains(".dynamicTypeSize"))
         precondition(!controls.contains(".disabled(") && controls.contains("44, height: 44"))
         precondition(settings.components(separatedBy: "PhysiologicalControlsView(settings: settings)").count == 3)
@@ -66,7 +66,12 @@ struct DashboardMetricChecks {
         precondition(environmentalMenu.contains("AlertMenuItem.sorted([.atmosphericPressure, .immersion])"))
         precondition(environmentalMenu.contains("AtmosphericPressureAlertsView(settings: settings)") &&
             environmentalMenu.contains("isOn: $settings.immersionAlertsEnabled"))
-        precondition(!controls.contains("environmental") && !selector.contains("Environmental"))
+        precondition(controls.contains("EnvironmentalAlertsView(settings: settings)") &&
+            controls.contains("environmental-alert-settings"))
+        precondition(controls.range(of: "environmental-alert-settings")!.lowerBound <
+            controls.range(of: "physiological-alerts-enabled")!.lowerBound)
+        precondition(!controls.contains("$settings.environmental") &&
+            !controls.contains("settings.immersionAlertsEnabled ="))
         let alertingMenu = settings.components(separatedBy: "private struct AlertingPreferencesView: View {")[1]
             .components(separatedBy: "struct PhysiologicalControlsView: View {")[0]
         precondition(alertingMenu.contains("AlertMenuItem.sorted([.battery, .environmental, .physiological])"))
