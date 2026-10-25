@@ -613,6 +613,7 @@ struct NetworkPreferencesView: View {
     @ObservedObject var model: WatchSessionModel
     @ObservedObject var settings: AppSettings
     @ObservedObject var sitxClient: SitxClient
+    @State private var dittoError: String?
 
     var body: some View {
         List {
@@ -620,39 +621,110 @@ struct NetworkPreferencesView: View {
                 Label(String(localized: "Network settings locked", table: "WatchSettings"), systemImage: "lock.fill")
                     .foregroundStyle(.secondary)
             } else {
-                NavigationLink {
-                    RelayProviderView(model: model, settings: settings)
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "TAK Relay (\(settings.relayProvider.localizedName))", table: "WatchSettings", comment: "Settings row. The argument is the selected relay provider name."))
-                        if settings.relayProvider == .companion {
-                            CompanionLinkCaption(client: model.companionClient)
-                        }
+                Section(String(localized: "Transports", table: "WatchSettings")) {
+                    ForEach(NetworkTransport.sorted(title: \.rawValue)) { transport in
+                        transportToggle(transport)
                     }
+                    LabeledContent(String(localized: "TAK Servers", table: "WatchSettings")) {
+                        Text(model.companionServerConfigured
+                             ? String(localized: "Managed in Companion", table: "WatchSettings")
+                             : String(localized: "Configure on phone", table: "WatchSettings"))
+                    }
+                    .accessibilityElement(children: .combine)
                 }
-                NavigationLink {
-                    MulticastPreferencesView(settings: settings, client: model.multicastClient, model: model)
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("TAK SA Multicast")
-                        Text(settings.multicastEnabled ? String(localized: "Enabled", table: "WatchSettings") : String(localized: "Disabled", table: "WatchSettings"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                NavigationLink {
-                    SitxDeviceAPIView(settings: settings, client: sitxClient)
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Sit(x) TAK")
-                        Text(WatchSettingsStatusText.sitx(sitxClient.status))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                Section {
+                    networkConfigurationLinks
                 }
             }
         }
         .navigationTitle(String(localized: "Network Preferences", table: "WatchSettings"))
+        .alert("Ditto settings", isPresented: Binding(
+            get: { dittoError != nil },
+            set: { if !$0 { dittoError = nil } }
+        )) {
+            Button("OK", role: .cancel) { dittoError = nil }
+        } message: {
+            Text(dittoError ?? "")
+        }
+    }
+
+    @ViewBuilder
+    private func transportToggle(_ transport: NetworkTransport) -> some View {
+        switch transport {
+        case .ditto:
+            Toggle(isOn: DittoEnableControl.binding(settings: settings, model: model, error: $dittoError)) {
+                transportLabel(transport.rawValue, detail: DittoEnableControl.summary(settings).localizedLabel)
+            }
+        case .multicast:
+            Toggle(isOn: $settings.multicastEnabled) {
+                Text(transport.rawValue)
+            }
+            .disabled(!AppSettings.isMulticastAddress(settings.multicastAddress))
+        case .sitx:
+            if let phone = sitxClient.phoneManagedSettings {
+                Toggle(isOn: .constant(phone.enabled)) {
+                    transportLabel(transport.rawValue, detail: String(localized: "Managed in Companion", table: "WatchSettings"))
+                }
+                .disabled(true)
+            } else {
+                Toggle(isOn: Binding(get: { settings.sitxEnabled }, set: { sitxClient.setTAKEnabled($0) })) {
+                    Text(transport.rawValue)
+                }
+            }
+        }
+    }
+
+    private func transportLabel(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var networkConfigurationLinks: some View {
+        NavigationLink {
+            RelayProviderView(model: model, settings: settings)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(localized: "TAK Relay (\(settings.relayProvider.localizedName))", table: "WatchSettings", comment: "Settings row. The argument is the selected relay provider name."))
+                if settings.relayProvider == .companion {
+                    CompanionLinkCaption(client: model.companionClient)
+                }
+            }
+        }
+        NavigationLink {
+            MulticastPreferencesView(settings: settings, client: model.multicastClient, model: model)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("TAK SA Multicast")
+                Text(settings.multicastEnabled ? String(localized: "Enabled", table: "WatchSettings") : String(localized: "Disabled", table: "WatchSettings"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        NavigationLink {
+            SitxDeviceAPIView(settings: settings, client: sitxClient)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Sit(x) TAK")
+                Text(WatchSettingsStatusText.sitx(sitxClient.status))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+extension DittoPDLSourceSummary {
+    var localizedLabel: String {
+        switch self {
+        case .community: return String(localized: "Community", table: "WatchSettings")
+        case .customPDL: return String(localized: "Custom PDL", table: "WatchSettings")
+        case .none: return String(localized: "None", table: "WatchSettings")
+        }
     }
 }
 
@@ -1491,26 +1563,11 @@ private struct PluginsView: View {
     }
 
     private var dittoSubtitle: String {
-        switch settings.dittoIdentitySource {
-        case .community:
-            return "Community"
-        case .custom:
-            return "Custom"
-        }
+        DittoEnableControl.summary(settings).localizedLabel
     }
 
     private var dittoEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { settings.dittoEnabled },
-            set: { enabled in
-                guard !enabled || settings.dittoIdentitySource == .community || settings.dittoCustomPDL != nil else {
-                    dittoError = "Save a custom PDL before enabling Ditto."
-                    return
-                }
-                settings.dittoEnabled = enabled
-                Task { await model.companionClient.updateDittoConfiguration() }
-            }
-        )
+        DittoEnableControl.binding(settings: settings, model: model, error: $dittoError)
     }
 }
 

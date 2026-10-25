@@ -1,6 +1,18 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Community" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Community" } } }
+    },
+    "Custom PDL" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Custom PDL" } } }
+    },
+    "TAK Servers" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TAK Servers" } } }
+    },
+    "Transports" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Transports" } } }
+    },
     "None" : {
       "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "None" } } }
     },
