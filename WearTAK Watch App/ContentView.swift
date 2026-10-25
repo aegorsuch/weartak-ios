@@ -308,24 +308,20 @@ private struct WatchDashboardView: View {
                     }
                 }
             }
-            Spacer(minLength: 0)
             NavigationLink {
                 DashboardMetricPreferencesView(model: model, settings: settings, monitor: physiology)
             } label: {
                 Group {
                     if settings.dashboardMetric.isCoordinate {
-                        let lines = model.lastLocation.flatMap {
-                            MapCoordinateFormatter.dashboardLines($0.coordinate, mgrs: settings.dashboardMetric == .mgrs)
+                        let value = model.lastLocation.flatMap {
+                            MapCoordinateFormatter.dashboardValue($0.coordinate, mgrs: settings.dashboardMetric == .mgrs)
                         }
-                        VStack(spacing: 1) {
-                            Text(lines?.0 ?? settings.dashboardMetric.watchMainLabel)
-                                .font(.system(size: small ? 13 : 15, weight: .semibold))
-                            Text(lines?.1 ?? "--")
-                                .font(.system(size: small ? 13 : 15, weight: .semibold))
-                        }
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                        Text(value ?? "\(settings.dashboardMetric.watchMainLabel) --")
+                            .font(.system(size: small ? 13 : 15, weight: .semibold))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.2)
+                            .allowsTightening(true)
                     } else {
                         VStack(spacing: 2) {
                             Text(settings.dashboardMetric.watchMainLabel)
@@ -347,10 +343,11 @@ private struct WatchDashboardView: View {
                 }
                 .padding(.horizontal, 4)
                 .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(physiologyBorderColor, lineWidth: 2))
             }
             .accessibilityLabel(String(localized: "Select metric. \(metricAccessibilityText)", table: "WatchMain"))
-            Spacer(minLength: 0)
             VStack(spacing: small ? 2 : 3) {
                 NavigationLink {
                     ReportingStrategyView(settings: settings)

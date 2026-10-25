@@ -53,7 +53,17 @@ struct DashboardMetricChecks {
         precondition(settings.components(separatedBy: "PhysiologicalControlsView(settings: settings)").count == 3)
         let coordinates = source.components(separatedBy: "if settings.dashboardMetric.isCoordinate {")[1]
             .components(separatedBy: "} else {")[0]
-        precondition(!coordinates.contains("Image(") && coordinates.contains("dashboardLines"))
+        precondition(!coordinates.contains("Image(") && coordinates.contains("dashboardValue"))
+        precondition(!coordinates.contains("VStack("))
+        precondition(coordinates.contains(".lineLimit(1)") && coordinates.contains(".minimumScaleFactor(0.2)"))
+        precondition(!coordinates.contains(".truncationMode") && !coordinates.contains(".dynamicTypeSize"))
+        let header = source.components(separatedBy: "private func statusHeader(small: Bool) -> some View {")[1]
+            .components(separatedBy: "private var actionRow:")[0]
+        precondition(header.contains(".frame(maxWidth: .infinity, minHeight: 44)"))
+        precondition(header.contains(".contentShape(Rectangle())") && !header.contains("Spacer("))
+        precondition(header.range(of: "DashboardMetricPreferencesView(")!.lowerBound <
+            header.range(of: "if settings.dashboardMetric.isCoordinate")!.lowerBound)
+        precondition(header.contains("Select metric. \\(metricAccessibilityText)"))
         var readiness = OutboundRouteReadiness()
         precondition(!readiness.update([]))
         precondition(readiness.update(["server"]))
