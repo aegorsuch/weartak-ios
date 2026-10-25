@@ -2,18 +2,18 @@
   "sourceLanguage": "en",
   "strings": {
     "Beta Features": {},
-    "Collect Watch Diagnostics": {},
-    "Collect watch logs from Companion > Developer Preferences > Collect Watch Diagnostics while the watch app is open.": {},
+    "Collect Watch Logs": {},
+    "Collect watch logs from Companion > Developer Preferences > Collect Watch Logs while the watch app is open.": {},
     "Developer Preferences": {},
     "Developer mode": {},
     "Developer mode disabled": {},
-    "Diagnostics": {},
-    "Diagnostics storage is unavailable. Check available storage and try again.": {},
-    "Enable developer mode on the watch to collect its diagnostics.": {},
-    "Export Diagnostics": {},
-    "Open the paired Apple Watch app to collect its diagnostics.": {},
-    "Share Diagnostics": {},
-    "View Diagnostics": {}
+    "Enable developer mode on the watch to collect its logs.": {},
+    "Export Logs": {},
+    "Logging": {},
+    "Logging storage is unavailable. Check available storage and try again.": {},
+    "Open the paired Apple Watch app to collect its logs.": {},
+    "Share Logs": {},
+    "View Logs": {}
   },
   "version": "1.0"
 }

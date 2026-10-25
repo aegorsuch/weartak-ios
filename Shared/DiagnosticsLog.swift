@@ -39,8 +39,8 @@ nonisolated final class DiagnosticsLog: @unchecked Sendable {
         case storage, invalidArchive
         var errorDescription: String? {
             switch self {
-            case .storage: return "Diagnostics storage is unavailable. Check available storage and try again."
-            case .invalidArchive: return "The diagnostics file could not be read safely."
+            case .storage: return "Logging storage is unavailable. Check available storage and try again."
+            case .invalidArchive: return "The log file could not be read safely."
             }
         }
     }
@@ -171,11 +171,11 @@ nonisolated final class DiagnosticsLog: @unchecked Sendable {
 
 nonisolated enum DeveloperPreference: String, Identifiable, CaseIterable {
     case betaFeatures = "Beta Features"
-    case collectWatch = "Collect Watch Diagnostics"
+    case collectWatch = "Collect Watch Logs"
     case developerMode = "Developer mode"
-    case diagnostics = "Diagnostics"
-    case exportDiagnostics = "Export Diagnostics"
-    case viewDiagnostics = "View Diagnostics"
+    case diagnostics = "Logging"
+    case exportDiagnostics = "Export Logs"
+    case viewDiagnostics = "View Logs"
 
     var id: String { rawValue }
     static func sorted(_ items: [Self], title: (Self) -> String) -> [Self] {

@@ -503,14 +503,14 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     func collectWatchDiagnostics() async throws -> Data {
         guard developerMode, watchRoute == .apple, WCSession.default.activationState == .activated,
               WCSession.default.isReachable else {
-            throw CompanionFailure.message(String(localized: "Open the paired Apple Watch app to collect its diagnostics.", table: "Diagnostics"))
+            throw CompanionFailure.message(String(localized: "Open the paired Apple Watch app to collect its logs.", table: "Diagnostics"))
         }
         return try await withCheckedThrowingContinuation { continuation in
             WCSession.default.sendMessage([DiagnosticsLog.requestKey: true], replyHandler: { reply in
                 do {
                     if reply["diagnosticsStorageFailed"] as? Bool == true { throw DiagnosticsLog.Failure.storage }
                     guard let data = reply["diagnostics"] as? Data else {
-                        throw CompanionFailure.message(String(localized: "Enable developer mode on the watch to collect its diagnostics.", table: "Diagnostics"))
+                        throw CompanionFailure.message(String(localized: "Enable developer mode on the watch to collect its logs.", table: "Diagnostics"))
                     }
                     continuation.resume(returning: try DiagnosticsLog.validatedExport(data))
                 } catch { continuation.resume(throwing: error) }

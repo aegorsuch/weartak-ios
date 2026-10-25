@@ -125,11 +125,11 @@ private struct DeveloperPreferencesView: View {
                 }
             }
             if DiagnosticsLog.shared.hasStorageFailure {
-                Text(String(localized: "Diagnostics storage is unavailable. Check available storage and try again.", table: "Diagnostics"))
+                Text(String(localized: "Logging storage is unavailable. Check available storage and try again.", table: "Diagnostics"))
             }
         }
         .navigationTitle(String(localized: "Developer Preferences", table: "WatchSettings"))
-        .alert(String(localized: "Diagnostics", table: "Diagnostics"),
+        .alert(String(localized: "Logging", table: "Diagnostics"),
                isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
             Button(String(localized: "OK", table: "WatchSettings"), role: .cancel) { errorText = nil }
         } message: { Text(errorText ?? "") }
@@ -142,11 +142,11 @@ private struct WatchDiagnosticsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading) {
-                Text(String(localized: "Collect watch logs from Companion > Developer Preferences > Collect Watch Diagnostics while the watch app is open.", table: "Diagnostics"))
+                Text(String(localized: "Collect watch logs from Companion > Developer Preferences > Collect Watch Logs while the watch app is open.", table: "Diagnostics"))
                 Text(text).font(.caption2)
             }
         }
-        .navigationTitle(String(localized: "View Diagnostics", table: "Diagnostics"))
+        .navigationTitle(String(localized: "View Logs", table: "Diagnostics"))
         .task {
             do {
                 let data = try DiagnosticsLog.shared.export()
