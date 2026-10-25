@@ -183,6 +183,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             pdlStore: SecurePDLStore(service: "com.aegorsuch.weartak.ditto"))
         sitx = CompanionSitxSession(defaults: defaults)
         super.init()
+        DiagnosticsLog.shared.record(.launched)
         if let data = defaults.data(forKey: AlertLocationHistory.storageKey) {
             do { alertLocations.receive(try JSONDecoder().decode(PhoneLocationFix.self, from: data)) }
             catch { reportingLogger.error("Last-known GPS could not be restored: \(error.localizedDescription, privacy: .public)") }
@@ -251,6 +252,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         reporter.onFix = { [weak self] fix in self?.reportPhoneFix(fix) }
         reporter.onAuthorizationChange = { [weak self] in self?.publishState() }
         reporter.onError = { [weak self] message in
+            DiagnosticsLog.shared.record(.locationRejected)
             self?.phoneReporting.detail = message
             if self?.routeNavigationState?.phase == .active { self?.routeNavigationError = message }
             self?.reportingLogger.error("Phone GPS: \(message, privacy: .public)")
@@ -488,15 +490,32 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
 
     @discardableResult
     func registerDeveloperModeTap() -> Bool {
-        guard !developerMode else { return false }
         developerModeTaps += 1
         guard developerModeTaps == 7 else { return false }
-        developerMode = true
+        developerMode.toggle()
         return true
     }
 
     func resetDeveloperModeTaps() {
         developerModeTaps = 0
+    }
+
+    func collectWatchDiagnostics() async throws -> Data {
+        guard developerMode, watchRoute == .apple, WCSession.default.activationState == .activated,
+              WCSession.default.isReachable else {
+            throw CompanionFailure.message(String(localized: "Open the paired Apple Watch app to collect its diagnostics.", table: "Diagnostics"))
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            WCSession.default.sendMessage([DiagnosticsLog.requestKey: true], replyHandler: { reply in
+                do {
+                    if reply["diagnosticsStorageFailed"] as? Bool == true { throw DiagnosticsLog.Failure.storage }
+                    guard let data = reply["diagnostics"] as? Data else {
+                        throw CompanionFailure.message(String(localized: "Enable developer mode on the watch to collect its diagnostics.", table: "Diagnostics"))
+                    }
+                    continuation.resume(returning: try DiagnosticsLog.validatedExport(data))
+                } catch { continuation.resume(throwing: error) }
+            }, errorHandler: { continuation.resume(throwing: $0) })
+        }
     }
 
     func save(_ server: CompanionServer) throws {
@@ -536,6 +555,15 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     func setActive(_ active: Bool) {
+        DiagnosticsLog.shared.record(active ? .foreground : .background)
+        if active {
+            DiagnosticsLog.shared.record(ProcessInfo.processInfo.isLowPowerModeEnabled ? .lowPower : .normalPower)
+            DiagnosticsLog.shared.record(ProcessInfo.processInfo.thermalState == .nominal ? .thermalNormal : .thermalElevated)
+            if UIDevice.current.isBatteryMonitoringEnabled {
+                let battery = UIDevice.current.batteryLevel
+                if battery >= 0 { DiagnosticsLog.shared.record(battery < 0.2 ? .batteryLow : .batteryNormal) }
+            }
+        }
         let foregroundChanged = self.active != active
         self.active = active
         if foregroundChanged {
@@ -1016,6 +1044,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 phoneReporting.detail = nil
                 phoneReporting.state = String(localized: "Waiting for phone GPS fix", table: "PhoneBridgeStatus")
                 reporter.start(appActive: active)
+                DiagnosticsLog.shared.record(.reportingStarted)
             }
         case .requestWhenInUse:
             reporter.stop()
@@ -1027,6 +1056,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             }
         case .blocked(let reason):
             reporter.stop()
+            DiagnosticsLog.shared.record(.reportingStopped)
             lastPhoneReportAt = nil
             phoneReportsByServer = [:]
             latestPhoneFix = nil
@@ -1106,6 +1136,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         var routes = Set(readyOutputs().keys.map(\.uuidString))
         if watchRoute == .apple, dittoStatus.state == .syncing { routes.insert("ditto") }
         guard outboundReadiness.update(routes) else { return }
+        DiagnosticsLog.shared.record(.connectivityChanged)
         connectivityAnnouncementPending = true
         dittoAnnouncementRevision += 1
         lastPhoneDittoTrackAt = nil
@@ -1145,6 +1176,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
         catch {
             phoneReporting.detail = error.localizedDescription
+            DiagnosticsLog.shared.record(.locationRejected)
             reportingLogger.error("Phone GPS fix rejected: \(error.localizedDescription, privacy: .public)")
             return
         }
@@ -1159,6 +1191,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 observationInterval + SelfLocationRefreshPolicy.acquisitionWindow)
         }
         latestPhoneFix = fix
+        DiagnosticsLog.shared.record(.locationAccepted)
         if let requested = selfPositionRequestedAt, fix.timestamp >= requested, !phoneSendInFlight {
             lastPhoneReportAt = nil
             selfPositionRequestedAt = nil
@@ -1230,11 +1263,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                   current.hasSameSettings(as: identity) else { return }
             self.phoneReportsByServer.merge(delivered) { _, latest in latest }
             if !delivered.isEmpty {
+                DiagnosticsLog.shared.record(.reportSent)
                 self.reportingLogger.notice("Watch-identity PLI accepted by \(delivered.count) TAK server(s); live watch status included: \(contribution != nil, privacy: .public)")
                 self.lastSharedSelfStatus = sharedStatus
                 self.lastPhoneReportAt = Date()
                 self.phoneReporting.lastReportAt = self.lastPhoneReportAt
             }
+            if !failures.isEmpty { DiagnosticsLog.shared.record(.reportFailed) }
             self.updatePhoneReportingState(!delivered.isEmpty
                 ? String(localized: "Reporting phone GPS", table: "PhoneBridgeStatus")
                 : String(localized: "Report failed; reconnecting", table: "PhoneBridgeStatus"),
@@ -1953,6 +1988,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             }
         } else {
             mapCache.receive(event)
+            DiagnosticsLog.shared.record(.mapUpdated)
             mapCacheWrites.schedule()
         }
         guard WCSession.default.isReachable, incomingInFlight < 16 else { return }
@@ -2046,6 +2082,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func forward(_ xml: String, sourceID: UUID) {
+        DiagnosticsLog.shared.record(.syncUpdated)
         if receiveRoutePackage(xml, sourceID: sourceID) { return }
         let event = CompanionMapEvent(xml: xml, sourceServerID: sourceID,
                                       sourceGeneration: sourceGenerations[sourceID, default: 0], receivedAt: Date())

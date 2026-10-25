@@ -224,7 +224,11 @@ final class WatchSessionModel: NSObject, ObservableObject {
     private var companionMapCache = CompanionMapCache()
     @Published private(set) var mapCacheError: String?
 
-    @Published private(set) var connectionState: ConnectionState = .disconnected
+    @Published private(set) var connectionState: ConnectionState = .disconnected {
+        didSet {
+            if oldValue != connectionState { DiagnosticsLog.shared.record(.connectivityChanged) }
+        }
+    }
     @Published private(set) var companionServerConfigured = false
     @Published private(set) var lastLocation: CLLocation?
     @Published private(set) var markers: [WatchMarker] = []
@@ -389,6 +393,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         self.transport = transport ?? client
         self.settings = settings
         super.init()
+        DiagnosticsLog.shared.record(.launched)
         if let data = UserDefaults.standard.data(forKey: AlertLocationHistory.storageKey) {
             do {
                 let fix = try JSONDecoder().decode(PhoneLocationFix.self, from: data)
@@ -687,6 +692,13 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func setAppActive(_ active: Bool) {
+        DiagnosticsLog.shared.record(active ? .foreground : .background)
+        if active {
+            DiagnosticsLog.shared.record(ProcessInfo.processInfo.isLowPowerModeEnabled ? .lowPower : .normalPower)
+            DiagnosticsLog.shared.record(ProcessInfo.processInfo.thermalState == .nominal ? .thermalNormal : .thermalElevated)
+            let battery = WKInterfaceDevice.current().batteryLevel
+            if battery >= 0 { DiagnosticsLog.shared.record(battery < 0.2 ? .batteryLow : .batteryNormal) }
+        }
         isAppActive = active
         if !active { companionMapCacheWrites.flush() }
         if active {
@@ -1546,6 +1558,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
             incomingEntities.append(entity)
             isNew = true
         }
+        DiagnosticsLog.shared.record(.mapUpdated)
         if !entity.isUser, entity.missionName == nil {
             // Only live traffic notifies; cache restores and snapshots repopulate silently.
             let shouldNotify = isNew ? (payload.sentAt == nil || isNewerSend) : isResend
@@ -2245,6 +2258,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     private func reportOfflineError(_ error: Error) {
+        DiagnosticsLog.shared.record(.operationFailed)
         offlineNotice = error.localizedDescription
         offlineError = error.localizedDescription
         chatLogger.error("Offline forwarding: \(error.localizedDescription, privacy: .public)")
@@ -2432,6 +2446,7 @@ extension WatchSessionModel: CLLocationManagerDelegate {
                 !($0.coordinate.latitude == 0 && $0.coordinate.longitude == 0)
         }), lastLocation.map({ location.timestamp > $0.timestamp }) ?? true else { return }
         lastLocation = location
+        DiagnosticsLog.shared.record(.locationAccepted)
         nextDynamicObservationAt = location.timestamp.addingTimeInterval(dynamicObservationInterval(for: location))
         watchSpeedExpiresAt = nextDynamicObservationAt?.addingTimeInterval(SelfLocationRefreshPolicy.acquisitionWindow)
         sitxClient.currentLocation = location
@@ -2556,7 +2571,9 @@ extension WatchSessionModel: CLLocationManagerDelegate {
             do {
                 try await transport.sendPLI(coordinate: location.coordinate, reportingInterval: effectiveInterval)
                 lastPLISentAt = Date()
+                DiagnosticsLog.shared.record(.reportSent)
             } catch {
+                DiagnosticsLog.shared.record(.reportFailed)
                 if !sitxClient.hasReadyOutput { connectionState = .failed }
             }
         }

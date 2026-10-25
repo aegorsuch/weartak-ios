@@ -268,14 +268,13 @@ struct CompanionSetupView: View {
                         Text("Version \(appVersion)")
                             .foregroundStyle(.secondary)
                     }
-                    .accessibilityHint("Tap seven times to enable developer mode.")
-                    .alert("Developer mode enabled", isPresented: $showDeveloperModeEnabled) {
+                    .accessibilityHint("Tap seven times to toggle developer mode.")
+                    .alert(bridge.developerMode ? "Developer mode enabled" : "Developer mode disabled", isPresented: $showDeveloperModeEnabled) {
                         Button(String(localized: "OK", table: "CompanionApp"), role: .cancel) {}
                     }
                     if bridge.developerMode {
-                        Toggle("Developer mode", isOn: $bridge.developerMode)
-                        NavigationLink("Beta Features") {
-                            CompanionBetaFeaturesView(bridge: bridge)
+                        NavigationLink(String(localized: "Developer Preferences", table: "Diagnostics")) {
+                            CompanionDeveloperPreferencesView(bridge: bridge)
                         }
                     }
                 }
@@ -371,7 +370,7 @@ struct CompanionSetupView: View {
     }
 }
 
-private struct CompanionBetaFeaturesView: View {
+struct CompanionBetaFeaturesView: View {
     @ObservedObject var bridge: PhoneBridgeModel
 
     var body: some View {

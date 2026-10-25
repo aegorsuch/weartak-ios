@@ -7,6 +7,10 @@ trap 'rm -rf "$build_dir"' EXIT
 
 cd "$repo_root"
 
+swiftc -swift-version 5 -parse-as-library Shared/DiagnosticsLog.swift Tests/DiagnosticsChecks.swift \
+  -o "$build_dir/diagnostics-checks"
+"$build_dir/diagnostics-checks"
+
 swiftc -swift-version 5 -parse-as-library Shared/DashboardMetric.swift Shared/OutboundRouteReadiness.swift Tests/DashboardMetricChecks.swift \
   -o "$build_dir/dashboard-metric-checks"
 "$build_dir/dashboard-metric-checks"
@@ -158,6 +162,7 @@ if [[ "$(uname -s)" == Darwin ]]; then
     Shared/MOPPStatus.swift Shared/SecurePDLStore.swift Shared/ChatCommands.swift \
     Tests/SitxProtocolChecks.swift -o "$build_dir/sitx-protocol-checks"
   "$build_dir/sitx-protocol-checks" --own-pin-deletion
+  "$build_dir/sitx-protocol-checks" --developer-persistence
 fi
 
 swiftc -swift-version 5 -parse-as-library \
