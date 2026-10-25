@@ -505,7 +505,13 @@ metric never changes monitoring or alerts. Each row shows its name and actual
 live value/status on one scaling line without changing the selected metric
 when readings refresh. Lat/Long retains five decimal places (latitude/longitude
 separated by a slash); MGRS retains five easting/northing digits (one meter).
-These full-precision values also remain available in the dashboard's two lines.
+The home top metric shows these full-precision coordinates on one line,
+shrinking locally to fit the width between the existing status shortcuts.
+MGRS retains the complete zone/square and five-digit easting/northing; Lat/Long
+retains both five-decimal values separated by a slash. No digits are truncated
+or replaced by ellipses. The center slot keeps a 44-point-high metric-picker
+target and the full-coordinate accessibility label; Reporting remains separate.
+Detail/map coordinate presentation and global text-size settings are unchanged.
 Exertion is the default; selections
 and the existing `Lat/Lon` storage value are preserved, with unknown old choices
 falling back to Exertion. Per the user's iOS-specific decision, Skin Temp and

@@ -20,6 +20,12 @@ enum MapCoordinateFormatter {
     }
 
     /// Full display precision: five decimal degrees or one-meter MGRS.
+    static func dashboardValue(_ coordinate: CLLocationCoordinate2D, mgrs useMGRS: Bool) -> String? {
+        guard let lines = dashboardLines(coordinate, mgrs: useMGRS) else { return nil }
+        return useMGRS ? "\(lines.0) \(lines.1)" : "\(lines.0) / \(lines.1)"
+    }
+
+    /// Coordinate components retain their precision on detail and picker surfaces.
     static func dashboardLines(_ coordinate: CLLocationCoordinate2D, mgrs useMGRS: Bool) -> (String, String)? {
         guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
         if useMGRS {
