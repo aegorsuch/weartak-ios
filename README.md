@@ -2289,6 +2289,11 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 /tmp/weartak-sitx-checks
 ```
 
+Watch Sit(x) tokens use `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, so
+they are excluded from backups and device migration. Existing items are
+re-protected in place on launch; after restoring to a new device the user
+signs in to Sit(x) again. `sitx-protocol-checks --token-keychain` verifies this.
+
 The Sit(x) protocol checks include mocked connection loss during device
 authorization, successful group discovery after retry, visible retry status,
 and expiry/cancellation while waiting to retry.

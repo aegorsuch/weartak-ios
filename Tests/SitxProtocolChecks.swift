@@ -113,8 +113,51 @@ final class XMLFields: NSObject, XMLParserDelegate {
     }
 }
 
+import Security
+
 @main
 struct SitxProtocolChecks {
+    static func checkTokenKeychainDeviceOnly() {
+        precondition((KeychainSitxTokenStore.accessibility as String)
+            == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+        let service = "com.aegorsuch.weartak.sitx.checks.\(UUID().uuidString)"
+        func query(_ account: String) -> [String: Any] {
+            [kSecClass as String: kSecClassGenericPassword,
+             kSecAttrService as String: service, kSecAttrAccount as String: account]
+        }
+        func accessibility(_ account: String) -> String? {
+            var request = query(account)
+            request[kSecReturnAttributes as String] = true
+            request[kSecMatchLimit as String] = kSecMatchLimitAll
+            var result: CFTypeRef?
+            guard SecItemCopyMatching(request as CFDictionary, &result) == errSecSuccess,
+                  let items = result as? [[String: Any]], items.count == 1 else { return nil }
+            return items[0][kSecAttrAccessible as String] as? String
+        }
+        defer { for account in ["access", "refresh", "host"] { SecItemDelete(query(account) as CFDictionary) } }
+
+        var legacy = query("refresh")
+        legacy[kSecValueData as String] = Data("legacy-refresh".utf8)
+        legacy[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        guard SecItemAdd(legacy as CFDictionary, nil) == errSecSuccess else {
+            print("SKIP: Keychain unavailable in this environment")
+            return
+        }
+        precondition(accessibility("refresh") == (kSecAttrAccessibleAfterFirstUnlock as String))
+
+        let store = KeychainSitxTokenStore(service: service)
+        precondition(store.read(account: "refresh") == "legacy-refresh")
+        precondition(accessibility("refresh") == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+
+        try? store.save("new-access", account: "access")
+        precondition(store.read(account: "access") == "new-access")
+        precondition(accessibility("access") == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+        try? store.save("rotated-refresh", account: "refresh")
+        precondition(store.read(account: "refresh") == "rotated-refresh")
+        precondition(accessibility("refresh") != nil)
+        print("PASS: Sit(x) tokens are device-only; legacy items migrate in place without loss or duplication")
+    }
+
     @MainActor
     static func main() async throws {
         if CommandLine.arguments.contains("--developer-persistence") {
@@ -133,6 +176,10 @@ struct SitxProtocolChecks {
             let restored = AppSettings(defaults: defaults)
             precondition(!restored.developerMode && restored.networkPreferencesLocked)
             print("PASS: durable developer unlock, seven-tap explicit disable and independent admin network lock")
+            return
+        }
+        if CommandLine.arguments.contains("--token-keychain") {
+            checkTokenKeychainDeviceOnly()
             return
         }
         if CommandLine.arguments.contains("--own-pin-deletion") {
