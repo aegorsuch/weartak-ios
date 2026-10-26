@@ -230,7 +230,10 @@ struct CompanionSetupView: View {
                         return hostOrder == .orderedSame ? $0.port < $1.port : hostOrder == .orderedAscending
                     }) { server in
                         HStack(spacing: 12) {
-                            Button { editor = ServerEditorRoute(server: server) } label: {
+                            Button {
+                                bridge.setServerEnrollmentEditorActive(true)
+                                editor = ServerEditorRoute(server: server)
+                            } label: {
                                 CompanionServerRowStatus(
                                     title: server.displayName,
                                     address: server.displayName == server.addressLabel ? nil : server.addressLabel,
@@ -271,7 +274,10 @@ struct CompanionSetupView: View {
                         }
                     }
                     if !bridge.adminLockEnabled {
-                        Button { editor = ServerEditorRoute(server: nil) } label: {
+                        Button {
+                            bridge.setServerEnrollmentEditorActive(true)
+                            editor = ServerEditorRoute(server: nil)
+                        } label: {
                             Label(String(localized: "Add Server", table: "CompanionApp"), systemImage: "plus")
                         }
                     }
@@ -302,10 +308,14 @@ struct CompanionSetupView: View {
                 }
             }
             .navigationTitle("WearTAK Companion")
-            .sheet(item: $editor) { route in
-                CompanionServerEditor(bridge: bridge, server: route.server)
+            .sheet(item: $editor, onDismiss: {
+                bridge.setServerEnrollmentEditorActive(false)
+            }) { route in
+                CompanionServerEditor(bridge: bridge, server: route.server, prefill: route.prefill)
             }
-            .sheet(item: $metricsPreview) { preview in
+            .sheet(item: $metricsPreview, onDismiss: {
+                presentPendingServerEnrollment()
+            }) { preview in
                 MetricsImportSheet(preview: preview, selectedFields: $selectedMetricFields) {
                     do {
                         try bridge.applyImportedMetrics(preview, fields: selectedMetricFields)
@@ -314,6 +324,10 @@ struct CompanionSetupView: View {
                         errorText = error.localizedDescription
                     }
                 }
+            }
+            .onChange(of: bridge.pendingServerEnrollment) { _, request in
+                guard request != nil else { return }
+                presentPendingServerEnrollment()
             }
             .confirmationDialog(String(localized: "Remove server and its certificate?", table: "CompanionApp"), isPresented: $confirmRemove) {
                 Button(String(localized: "Remove Server", table: "CompanionApp"), role: .destructive) {
@@ -326,16 +340,29 @@ struct CompanionSetupView: View {
             .alert(String(localized: "Server settings", table: "CompanionApp"), isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
                 Button(String(localized: "OK", table: "CompanionApp"), role: .cancel) { errorText = nil }
             } message: { Text(errorText ?? "") }
-            .onAppear { bridge.setActive(scenePhase == .active) }
+            .onAppear {
+                bridge.setActive(scenePhase == .active)
+                presentPendingServerEnrollment()
+            }
             .onDisappear { bridge.resetDeveloperModeTaps() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { bridge.setActive(false) }
-                else if phase == .active { bridge.setActive(true) }
+                else if phase == .active {
+                    bridge.setActive(true)
+                    presentPendingServerEnrollment()
+                }
             }
             .onOpenURL { url in
                 bridge.handleGarminURL(url)
             }
         }
+    }
+
+    private func presentPendingServerEnrollment() {
+        guard scenePhase == .active, case nil = editor, case nil = metricsPreview,
+              !bridge.takServersPolicyLocked,
+              let pending = bridge.takePendingServerEnrollment() else { return }
+        editor = ServerEditorRoute(server: nil, prefill: pending)
     }
 
     private var appVersion: String {
@@ -557,6 +584,12 @@ private extension CompanionServerStatus.Level {
 private struct ServerEditorRoute: Identifiable {
     let id = UUID()
     let server: CompanionServer?
+    let prefill: ServerEnrollmentCommand?
+
+    init(server: CompanionServer?, prefill: ServerEnrollmentCommand? = nil) {
+        self.server = server
+        self.prefill = prefill
+    }
 }
 
 private let enrollmentLogger = Logger(subsystem: "com.aegorsuch.weartak", category: "Enrollment")
@@ -587,13 +620,13 @@ private struct CompanionServerEditor: View {
     @State private var saved = false
     @State private var connectionError: String?
 
-    init(bridge: PhoneBridgeModel, server: CompanionServer?) {
+    init(bridge: PhoneBridgeModel, server: CompanionServer?, prefill: ServerEnrollmentCommand? = nil) {
         self.bridge = bridge
         original = server
         serverID = server?.id ?? UUID()
-        _name = State(initialValue: server?.name ?? "")
-        _host = State(initialValue: server?.host ?? "")
-        _port = State(initialValue: "\(server?.port ?? 8089)")
+        _name = State(initialValue: prefill?.name ?? server?.name ?? "")
+        _host = State(initialValue: prefill?.url ?? server?.host ?? "")
+        _port = State(initialValue: "\(prefill?.port ?? server?.port ?? 8089)")
         _enrollmentPort = State(initialValue: "\(server?.enrollmentPort ?? 8446)")
     }
 
@@ -700,7 +733,9 @@ private struct CompanionServerEditor: View {
                 } header: {
                     Text("Authentication", tableName: "CompanionApp")
                 } footer: {
-                    if bridge.adminLockEnabled {
+                    if prefill != nil {
+                        Text("Server details came from chat. Enter enrollment credentials on this iPhone; credentials are never sent through chat.", tableName: "CompanionApp")
+                    } else if bridge.adminLockEnabled {
                         Label("Server admin lock is on.", systemImage: "lock.fill")
                     } else if settingsLocked {
                         Label(String(localized: "Disable server to edit", table: "CompanionApp"), systemImage: "lock.fill")

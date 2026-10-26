@@ -8,7 +8,7 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes, provisionIdentity, takServerMasterCommand, selfStatus }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes, provisionIdentity, takServerMasterCommand, enrollServer, selfStatus }
         enum NetworkCommandPhase: String, Codable { case prepare, commit }
         let kind: Kind
         var version: Int = BridgeWire.version
@@ -71,6 +71,9 @@ enum BridgeWire {
         var commandSentAt: Date?
         var takServersEnabled: Bool?
         var networkCommandPhase: NetworkCommandPhase?
+        var enrollmentServerName: String?
+        var enrollmentServerURL: String?
+        var enrollmentServerPort: Int?
         var selfStatus: Int?
         var selfStatusPayload: WatchSelfStatus?
 
@@ -106,9 +109,25 @@ enum BridgeWire {
                       message.takServersEnabled != nil, message.networkCommandPhase != nil else {
                     throw Failure.invalidCoT
                 }
+            } else if message.kind == .enrollServer {
+                guard message.provisioningCommand == nil,
+                      let sender = message.commandSender, !sender.isEmpty, sender.utf8.count <= 512,
+                      let id = message.commandMessageID, !id.isEmpty, id.utf8.count <= 512,
+                      let sentAt = message.commandSentAt, sentAt.timeIntervalSince1970.isFinite,
+                      let name = message.enrollmentServerName, let url = message.enrollmentServerURL,
+                      let port = message.enrollmentServerPort,
+                      message.takServersEnabled == nil, message.networkCommandPhase == nil,
+                      message.xml == nil, message.sitxConfig == nil, message.dittoConfig == nil,
+                      message.dittoStatus == nil, message.provisioningCommand == nil,
+                      message.latitude == nil, message.longitude == nil,
+                      Self.isValidEnrollmentRequest(name: name, url: url, port: port) else {
+                    throw Failure.invalidCoT
+                }
             } else if message.provisioningCommand != nil || message.commandSender != nil ||
                         message.commandMessageID != nil || message.commandSentAt != nil ||
-                        message.takServersEnabled != nil || message.networkCommandPhase != nil {
+                        message.takServersEnabled != nil || message.networkCommandPhase != nil ||
+                        message.enrollmentServerName != nil || message.enrollmentServerURL != nil ||
+                        message.enrollmentServerPort != nil {
                 throw Failure.invalidCoT
             }
             if let routes = message.routes {
@@ -163,6 +182,21 @@ enum BridgeWire {
                       events.allSatisfy({ CompanionChatBuffer.isValid($0) }) else { throw Failure.invalidCoT }
             }
             return message
+        }
+
+        private static func isValidEnrollmentRequest(name: String, url: String, port: Int) -> Bool {
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  name.utf8.count <= 128,
+                  !name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+                  !url.isEmpty, url.utf8.count <= 128, (1...65535).contains(port) else { return false }
+            let input = url.contains("://") ? url : "https://" + url
+            guard let components = URLComponents(string: input), components.scheme == "https",
+                  components.port == nil, components.user == nil, components.password == nil,
+                  components.query == nil, components.fragment == nil,
+                  components.path.isEmpty || components.path == "/",
+                  let host = components.host, !host.isEmpty,
+                  !host.contains(where: { $0.isWhitespace }) else { return false }
+            return true
         }
     }
 

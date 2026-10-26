@@ -1328,7 +1328,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
             throw ContactChatFailure.message("Unable to record the outgoing chat message.")
         }
-        if TAKChatMessage.isProvisioningCommand(text) || requireTransportAcceptance {
+        if TAKChatMessage.isCommandOnly(text) || requireTransportAcceptance {
             guard !isGroup else { throw ContactChatFailure.message("Provisioning requires a direct chat.") }
             switch route {
             case .companion(let server):
@@ -1389,6 +1389,23 @@ final class WatchSessionModel: NSObject, ObservableObject {
                         allowUnknownDirectRecipient: true, originatingRouteOnly: true)
                 } catch {
                     chatLogger.error("Provisioning acknowledgement could not be sent.")
+                }
+            }
+            return
+        case .phoneServerEnrollment(let request):
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let response: String
+                do {
+                    response = try await companionClient.requestServerEnrollment(request, from: message)
+                } catch {
+                    response = "Server enrollment request rejected: \(error.localizedDescription)"
+                }
+                do {
+                    try await sendContactChat(uid: message.senderUID, route: route, text: response,
+                        allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                } catch {
+                    chatLogger.error("Server enrollment command response could not be sent on its originating route: \(error.localizedDescription, privacy: .public)")
                 }
             }
             return

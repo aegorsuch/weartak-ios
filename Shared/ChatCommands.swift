@@ -6,6 +6,42 @@ struct ChatCommand: Equatable {
     var positional: [String] = []
 }
 
+struct ServerEnrollmentCommand: Equatable {
+    let name: String
+    let url: String
+    let port: Int
+
+    init(_ command: ChatCommand) throws {
+        guard command.name == "enrollserver", command.positional.isEmpty,
+              Set(command.arguments.keys).isSubset(of: ["name", "url", "port"]),
+              let name = command.arguments["name"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty, name.utf8.count <= 128,
+              !name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+              let address = command.arguments["url"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !address.isEmpty else { throw Failure.invalid }
+        let port: Int
+        if let value = command.arguments["port"] {
+            guard let parsed = Int(value), (1...65535).contains(parsed) else { throw Failure.invalid }
+            port = parsed
+        } else {
+            port = 8089
+        }
+        let input = address.contains("://") ? address : "https://" + address
+        guard let components = URLComponents(string: input), components.scheme == "https",
+              components.port == nil, components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil,
+              components.path.isEmpty || components.path == "/", let host = components.host,
+              !host.isEmpty, !host.contains(where: { $0.isWhitespace }) else {
+            throw Failure.invalid
+        }
+        self.name = name
+        url = host
+        self.port = port
+    }
+
+    enum Failure: Error { case invalid }
+}
+
 enum ChatCommandParse: Equatable {
     case notCommand
     case malformed(String)

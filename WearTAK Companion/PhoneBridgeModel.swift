@@ -51,6 +51,8 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         didSet { defaults.set(adminLockEnabled, forKey: Self.adminLockKey) }
     }
     @Published private(set) var takServersEnabled: Bool
+    @Published private(set) var pendingServerEnrollment: ServerEnrollmentCommand?
+    private var serverEnrollmentEditorActive = false
     private var developerModeTaps = 0
 
     struct ServerState {
@@ -94,6 +96,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private static let managedConfigurationKey = "com.apple.configuration.managed"
     private static let managedTakServersEnabledKey = "enable_tak_endpoint"
     private static let takServerMasterCommandReceiptsKey = "WearTAK.companion.takServerMasterCommandReceipts"
+    private static let serverEnrollmentCommandReceiptsKey = "WearTAK.companion.serverEnrollmentCommandReceipts"
     // An active phone location session keeps Companion running, so server sessions stay up while it reports.
     private var canRelay: Bool { active || backgroundTask != .invalid || reporter.isRunning }
     private let reporter: PhoneLocationReporter
@@ -576,6 +579,18 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         defaults.set(enabled, forKey: Self.takServersEnabledKey)
         takServersEnabled = enabled
         synchronize()
+    }
+
+    func takePendingServerEnrollment() -> ServerEnrollmentCommand? {
+        guard !takServersPolicyLocked, !serverEnrollmentEditorActive,
+              let request = pendingServerEnrollment else { return nil }
+        pendingServerEnrollment = nil
+        serverEnrollmentEditorActive = true
+        return request
+    }
+
+    func setServerEnrollmentEditorActive(_ active: Bool) {
+        serverEnrollmentEditorActive = active
     }
 
     func remove(id: UUID) throws {
@@ -1808,6 +1823,53 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
     }
 
+    private func serverEnrollmentCommand(_ message: BridgeWire.Message) -> BridgeWire.Message {
+        func reply(_ text: String, ready: Bool = false) -> BridgeWire.Message {
+            BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: ready, detail: text)
+        }
+        guard watchRoute == .apple, let sender = message.commandSender, !sender.isEmpty,
+              let id = message.commandMessageID, !id.isEmpty,
+              let sentAt = message.commandSentAt, abs(Date().timeIntervalSince(sentAt)) <= 300,
+              let name = message.enrollmentServerName, let url = message.enrollmentServerURL,
+              let port = message.enrollmentServerPort else {
+            return reply("Server enrollment request rejected: invalid or expired request.")
+        }
+        guard !takServersPolicyLocked else {
+            return reply("Server enrollment request rejected: \(takServersPolicyReason ?? "server settings are administrator-locked").")
+        }
+        guard !serverEnrollmentEditorActive, pendingServerEnrollment == nil else {
+            return reply("Server enrollment request rejected: finish the open server editor first.")
+        }
+        let request: ServerEnrollmentCommand
+        do {
+            request = try ServerEnrollmentCommand(ChatCommand(name: "enrollserver",
+                arguments: ["name": name, "url": url, "port": String(port)]))
+        } catch {
+            return reply("Server enrollment request rejected: invalid server name, URL, or port.")
+        }
+        let key = Self.serverEnrollmentCommandReceiptsKey
+        let now = Date().timeIntervalSince1970
+        var receipts: [String: Double] = [:]
+        if let stored = defaults.object(forKey: key) {
+            guard let decoded = stored as? [String: Double], decoded.values.allSatisfy(\.isFinite) else {
+                return reply("Server enrollment request rejected: replay storage is unreadable.")
+            }
+            receipts = decoded.filter { now - $0.value <= 600 }
+        }
+        let receipt = "\(sender.utf8.count):\(sender)\(id)"
+        guard receipts[receipt] == nil else {
+            return reply("Server enrollment request already processed.")
+        }
+        guard receipts.count < 1_024 else {
+            return reply("Server enrollment request rejected: command rate limit.")
+        }
+        receipts[receipt] = now
+        defaults.set(receipts, forKey: key)
+        pendingServerEnrollment = request
+        return reply("Server details are ready in iPhone Companion. Enter enrollment credentials there; credentials are never sent in chat.",
+                     ready: true)
+    }
+
     private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
         if message.kind == .selfStatus {
             guard watchRoute == .apple, let value = message.selfStatusPayload else {
@@ -1821,6 +1883,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
         if message.kind == .provisionIdentity { return provisionIdentity(message) }
         if message.kind == .takServerMasterCommand { return takServerMasterCommand(message) }
+        if message.kind == .enrollServer { return serverEnrollmentCommand(message) }
         if message.locationRefresh == true || message.kind == .mapSnapshot {
             requestSelfPosition()
         }
@@ -2079,7 +2142,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let source = DittoCoTDocument.sourceID
         let event = CompanionMapEvent(xml: xml, sourceServerID: source, sourceGeneration: 0, receivedAt: Date())
         if event.header?.type == "b-t-f" {
-            if !TAKChatMessage.containsProvisioningCommand(in: xml), chatBuffer.receive(event) {
+            if !TAKChatMessage.containsCommandOnly(in: xml), chatBuffer.receive(event) {
                 chatLogger.warning("Ditto chat buffer evicted oldest messages")
             }
         } else {
@@ -2183,13 +2246,16 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         let event = CompanionMapEvent(xml: xml, sourceServerID: sourceID,
                                       sourceGeneration: sourceGenerations[sourceID, default: 0], receivedAt: Date())
         let isChat = event.header?.type == "b-t-f"
+        let commandOnly = isChat && TAKChatMessage.containsCommandOnly(in: xml)
         if isChat { chatLogger.notice("Server GeoChat received") }
-        if isChat, !TAKChatMessage.containsProvisioningCommand(in: xml), chatBuffer.receive(event) {
+        if isChat, !commandOnly, chatBuffer.receive(event) {
             chatLogger.warning("GeoChat buffer limit reached; oldest messages evicted")
         }
         if event.isValid { lastMapEventReceivedAt = event.receivedAt }
-        mapCache.receive(event)
-        mapCacheWrites.schedule()
+        if !commandOnly {
+            mapCache.receive(event)
+            mapCacheWrites.schedule()
+        }
         // Delete events and routes need not contain a valid anchor point, unlike entity-cache headers.
         let isRoute = receiveGarminRoutes(xml, sourceID: sourceID)
         if isRoute { return }

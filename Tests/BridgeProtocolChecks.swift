@@ -19,6 +19,14 @@ struct BridgeProtocolChecks {
         let decodedServerCommand = try BridgeWire.Message.decode(serverCommand.encoded())
         precondition(decodedServerCommand.takServersEnabled == false &&
             decodedServerCommand.networkCommandPhase == .prepare)
+        let enrollmentCommand = BridgeWire.Message(kind: .enrollServer,
+            commandSender: "authorized", commandMessageID: "add-server",
+            commandSentAt: Date(), enrollmentServerName: "Operations",
+            enrollmentServerURL: "tak.example", enrollmentServerPort: 8089)
+        let decodedEnrollmentCommand = try BridgeWire.Message.decode(enrollmentCommand.encoded())
+        precondition(decodedEnrollmentCommand.enrollmentServerName == "Operations" &&
+            decodedEnrollmentCommand.enrollmentServerURL == "tak.example" &&
+            decodedEnrollmentCommand.enrollmentServerPort == 8089)
         for malformed in [
             BridgeWire.Message(kind: .provisionIdentity, provisioningCommand: "missing metadata"),
             BridgeWire.Message(kind: .status, provisioningCommand: "never in status"),
@@ -27,7 +35,12 @@ struct BridgeProtocolChecks {
                 networkCommandPhase: .commit),
             BridgeWire.Message(kind: .status, commandSender: "metadata on unrelated message",
                 commandMessageID: "invalid", commandSentAt: Date(),
-                takServersEnabled: true, networkCommandPhase: .commit)
+                takServersEnabled: true, networkCommandPhase: .commit),
+            BridgeWire.Message(kind: .enrollServer, commandSender: "authorized",
+                commandMessageID: "invalid-host", commandSentAt: Date(),
+                enrollmentServerName: "Operations", enrollmentServerURL: "https://user:pass@tak.example",
+                enrollmentServerPort: 8089),
+            BridgeWire.Message(kind: .status, enrollmentServerName: "not-an-enrollment")
         ] {
             do {
                 _ = try BridgeWire.Message.decode(malformed.encoded())

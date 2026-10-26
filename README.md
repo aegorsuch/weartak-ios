@@ -1659,8 +1659,13 @@ Placeholder” and an inert Scan button; no scanning or pairing is performed.
 
 Commands are off until enabled in Settings → Tool Preferences → Plugins →
 Commands. Save exact sender CoT UIDs in the allow-list; allowed direct-chat
-commands can update callsign, team, role and profile metrics. Unsupported
-`enrollserver` and `loadprofile` requests receive an explicit rejection.
+commands can update callsign, team, role and profile metrics. `#weartakcommand enrollserver name=North url=tak.example [port=8089]` is
+allowlisted, replay-protected, and opens the paired iPhone's New Server screen
+with the server name, host, and TAK stream port prefilled. The port defaults to
+8089; enrollment uses the existing 8446 default. Username and password must be
+entered on the iPhone and are never accepted in chat. The command is refused
+when the watch network lock, iPhone administrator lock, or managed server policy
+is active. `loadprofile` remains unsupported and receives an explicit rejection.
 Unknown command names are rejected, while ordinary chat remains unchanged.
 UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
 impersonate an allowed sender.

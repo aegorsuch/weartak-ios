@@ -115,6 +115,19 @@ struct WatchChatCommandRuntimeChecks {
                 fatalError("TAK server command arguments must be rejected")
             }
         }
+        let enrollServer = message("#weartakcommand enrollserver name=North url=tak.example port=8443")
+        guard case .phoneServerEnrollment(let enrollment) = runtime.handle(
+            enrollServer, ownUID: "watch", settings: settings, now: now) else {
+            fatalError("Authorized server enrollment command was not forwarded to Companion")
+        }
+        precondition(enrollment.name == "North" && enrollment.url == "tak.example" && enrollment.port == 8443)
+        guard case .reply = runtime.handle(
+            message("#weartakcommand enrollserver name=North url=tak.example password=\"\""),
+            ownUID: "watch", settings: settings, now: now) else {
+            fatalError("Server enrollment must reject credential arguments")
+        }
+        precondition(runtime.handle(message("#weartakcommand enrollserver name=North url=tak.example",
+            sender: "untrusted"), ownUID: "watch", settings: settings, now: now) == .consumed)
         settings.networkPreferencesLocked = true
         guard case .reply = runtime.handle(message("#weartakcommandtoggleditto on"),
             ownUID: "watch", settings: settings, now: now) else { fatalError("Locked Ditto mutation accepted") }
@@ -124,6 +137,12 @@ struct WatchChatCommandRuntimeChecks {
                 fatalError("Network command must respect the admin network lock")
             }
         }
+        guard case .reply(let enrollmentLock) = runtime.handle(
+            message("#weartakcommand enrollserver name=North url=tak.example"),
+            ownUID: "watch", settings: settings, now: now) else {
+            fatalError("Server enrollment must respect the network lock")
+        }
+        precondition(enrollmentLock.contains("network settings are locked"))
         print("PASS: direct-only command authorization, cross-route dedup, credential redaction, locks and positional PDL")
     }
 }

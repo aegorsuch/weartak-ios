@@ -14,6 +14,37 @@ struct ChatCommandChecks {
             }
             precondition(networkCommand.name == name && networkCommand.arguments.isEmpty)
         }
+        guard case .parsed(let enrollment) = ChatCommandParser.parse(
+            #"#weartakcommand enrollserver name="Operations Team" url=tak.example"#) else {
+            fatalError("Valid server enrollment command was rejected")
+        }
+        let enrollmentRequest = try ServerEnrollmentCommand(enrollment)
+        precondition(enrollmentRequest.name == "Operations Team" && enrollmentRequest.url == "tak.example" &&
+            enrollmentRequest.port == 8089)
+        guard case .parsed(let customPortCommand) = ChatCommandParser.parse(
+            "#weartakcommand enrollserver name=North url=https://tak.example port=8443") else {
+            fatalError("Server enrollment command with port was rejected")
+        }
+        let customPortRequest = try ServerEnrollmentCommand(customPortCommand)
+        precondition(customPortRequest.port == 8443)
+        for invalidText in [
+            "#weartakcommand enrollserver name= url=tak.example",
+            "#weartakcommand enrollserver name=Ops url=tak.example port=0",
+            "#weartakcommand enrollserver name=Ops url=https://user:pass@tak.example",
+            "#weartakcommand enrollserver name=Ops url=tak.example:8446",
+            "#weartakcommand enrollserver name=Ops url=tak.example password=\"\"",
+            "#weartakcommand enrollserver Ops"
+        ] {
+            let parsed = ChatCommandParser.parse(invalidText)
+            if case .malformed = parsed { continue }
+            guard case .parsed(let invalidCommand) = parsed else {
+                fatalError("Server enrollment command was not recognized")
+            }
+            do {
+                _ = try ServerEnrollmentCommand(invalidCommand)
+                fatalError("Invalid server enrollment command accepted")
+            } catch ServerEnrollmentCommand.Failure.invalid {}
+        }
         precondition(ChatCommandParser.parse("ordinary chat") == .notCommand)
         for malformed in [
             "#weartakcommand", "#weartakcommandsetcallsign callsign",

@@ -43,6 +43,15 @@ struct TAKChatMessage: Identifiable, Equatable {
         return name == "#weartakcommandusep12" || name == "#weartakcommandsetpdl"
     }
 
+    static func isCommandOnly(_ text: String) -> Bool {
+        guard !isProvisioningCommand(text) else { return true }
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let prefix = "#weartakcommand"
+        guard body.hasPrefix(prefix) else { return false }
+        return body.dropFirst(prefix.count)
+            .split(whereSeparator: \.isWhitespace).first == "enrollserver"
+    }
+
     // Only provisioning commands may exceed the ordinary chat budget.
     static func acceptsTextLength(_ text: String) -> Bool {
         text.utf8.count <= (isProvisioningCommand(text) ? 24_000 : maximumTextBytes)
@@ -109,6 +118,11 @@ struct TAKChatMessage: Identifiable, Equatable {
     static func containsProvisioningCommand(in xml: String) -> Bool {
         guard let delegate = parsedXML(xml), delegate.type == "b-t-f" else { return false }
         return isProvisioningCommand(delegate.text)
+    }
+
+    static func containsCommandOnly(in xml: String) -> Bool {
+        guard let delegate = parsedXML(xml), delegate.type == "b-t-f" else { return false }
+        return isCommandOnly(delegate.text)
     }
 
     static func parse(_ xml: String, ownUID: String) -> Self? {

@@ -16780,6 +16780,16 @@
           }
         }
       }
+    },
+    "Server details came from chat. Enter enrollment credentials on this iPhone; credentials are never sent through chat." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server details came from chat. Enter enrollment credentials on this iPhone; credentials are never sent through chat."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
