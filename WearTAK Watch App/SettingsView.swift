@@ -625,10 +625,14 @@ struct NetworkPreferencesView: View {
                     ForEach(NetworkTransport.sorted(title: \.rawValue)) { transport in
                         transportToggle(transport)
                     }
-                    LabeledContent(String(localized: "TAK Servers", table: "WatchSettings")) {
-                        Text(model.companionServerConfigured
-                             ? String(localized: "Managed in Companion", table: "WatchSettings")
-                             : String(localized: "Configure on phone", table: "WatchSettings"))
+                    NavigationLink {
+                        RelayProviderView(model: model, settings: settings)
+                    } label: {
+                        LabeledContent(String(localized: "TAK Servers", table: "WatchSettings")) {
+                            Text(model.companionServerConfigured
+                                 ? String(localized: "Managed in Companion", table: "WatchSettings")
+                                 : String(localized: "Configure on phone", table: "WatchSettings"))
+                        }
                     }
                     .accessibilityElement(children: .combine)
                 }
@@ -648,38 +652,47 @@ struct NetworkPreferencesView: View {
         }
     }
 
+    /// The row opens the transport's settings; only the trailing toggle changes its enabled state.
+    private func transportRow<Destination: View>(_ transport: NetworkTransport, isOn: Binding<Bool>,
+                                                 disabled: Bool = false,
+                                                 @ViewBuilder destination: () -> Destination) -> some View {
+        HStack {
+            NavigationLink {
+                destination()
+            } label: {
+                Text(transport.rawValue)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.borderless)
+            Toggle(isOn: isOn) { EmptyView() }
+                .labelsHidden()
+                .accessibilityLabel(transport.rawValue)
+                .disabled(disabled)
+        }
+    }
+
     @ViewBuilder
     private func transportToggle(_ transport: NetworkTransport) -> some View {
         switch transport {
         case .ditto:
-            Toggle(isOn: DittoEnableControl.binding(settings: settings, model: model, error: $dittoError)) {
-                transportLabel(transport.rawValue, detail: DittoEnableControl.summary(settings).localizedLabel)
+            transportRow(transport, isOn: DittoEnableControl.binding(settings: settings, model: model, error: $dittoError)) {
+                DittoSettingsView(model: model, settings: settings)
             }
         case .multicast:
-            Toggle(isOn: $settings.multicastEnabled) {
-                Text(transport.rawValue)
+            transportRow(transport, isOn: $settings.multicastEnabled,
+                         disabled: !AppSettings.isMulticastAddress(settings.multicastAddress)) {
+                MulticastPreferencesView(settings: settings, client: model.multicastClient, model: model)
             }
-            .disabled(!AppSettings.isMulticastAddress(settings.multicastAddress))
         case .sitx:
             if let phone = sitxClient.phoneManagedSettings {
-                Toggle(isOn: .constant(phone.enabled)) {
-                    transportLabel(transport.rawValue, detail: String(localized: "Managed in Companion", table: "WatchSettings"))
+                transportRow(transport, isOn: .constant(phone.enabled), disabled: true) {
+                    SitxDeviceAPIView(settings: settings, client: sitxClient)
                 }
-                .disabled(true)
             } else {
-                Toggle(isOn: Binding(get: { settings.sitxEnabled }, set: { sitxClient.setTAKEnabled($0) })) {
-                    Text(transport.rawValue)
+                transportRow(transport, isOn: Binding(get: { settings.sitxEnabled }, set: { sitxClient.setTAKEnabled($0) })) {
+                    SitxDeviceAPIView(settings: settings, client: sitxClient)
                 }
             }
-        }
-    }
-
-    private func transportLabel(_ title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-            Text(detail)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
 
