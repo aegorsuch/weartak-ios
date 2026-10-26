@@ -175,8 +175,22 @@ struct ChatCommandChecks {
             } catch AtomicRecordReplacement.Failure.readbackMismatch {}
             precondition(record == previous)
         }
+        // A failed server-record commit must restore the previous certificate; success keeps the new one.
+        for previous in ["old" as String?, nil] {
+            record = previous
+            do {
+                try AtomicRecordReplacement.apply("new", read: { record }, write: { record = $0 },
+                    remove: { record = nil }, commit: { throw Fault.write })
+                fatalError("Commit failure accepted")
+            } catch Fault.write {}
+            precondition(record == previous)
+        }
         record = "old"
-        var reads = 0
+        var committed = false
+        try AtomicRecordReplacement.apply("new", read: { record }, write: { record = $0 },
+            remove: { record = nil }, commit: { committed = true })
+        precondition(record == "new" && committed)
+        record = "old"
         do {
             try AtomicRecordReplacement.apply("new", read: {
                 reads += 1

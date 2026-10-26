@@ -1933,12 +1933,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             CertificateStore.discardUncommitted(stored)
             return ("Command rejected: configuration changed during enrollment; nothing changed.", false)
         }
-        let hadCertificate = ((try? CertificateStore.read(endpoint: endpoint.key)) ?? nil) != nil
         do {
-            try CertificateStore.save(stored, endpoint: endpoint.key)
-            try save(record)
+            try CertificateStore.replaceEnrolled(stored, endpoint: endpoint.key) { try save(record) }
         } catch {
-            if !hadCertificate { try? CertificateStore.remove(endpoint: endpoint.key) }
             return ("Server could not be saved on iPhone; check its secure storage.", false)
         }
         sessions[record.id]?.reconnect()

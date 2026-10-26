@@ -186,12 +186,15 @@ struct ChatCommandAuthorizer: Codable {
 enum AtomicRecordReplacement {
     enum Failure: Error { case readbackMismatch }
 
+    /// `commit` runs after the readback; if it throws, the previous record is restored.
     static func apply<Value: Equatable>(_ candidate: Value,
-        read: () throws -> Value?, write: (Value) throws -> Void, remove: () throws -> Void) throws {
+        read: () throws -> Value?, write: (Value) throws -> Void, remove: () throws -> Void,
+        commit: () throws -> Void = {}) throws {
         let previous = try read()
         try write(candidate)
         do {
             guard try read() == candidate else { throw Failure.readbackMismatch }
+            try commit()
         } catch {
             if let previous { try write(previous) } else { try remove() }
             throw error
