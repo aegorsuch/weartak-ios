@@ -40,7 +40,13 @@ struct TAKChatMessage: Identifiable, Equatable {
     static func isProvisioningCommand(_ text: String) -> Bool {
         let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .split(whereSeparator: \.isWhitespace).first?.lowercased()
-        return name == "#weartakcommandusep12" || name == "#weartakcommandsetpdl"
+        return name == "#weartakcommandusep12" || name == "#weartakcommandsetpdl" ||
+            name == "#weartakcommandenrollserver"
+    }
+
+    static func isEnrollServerCommand(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace).first?.lowercased() == "#weartakcommandenrollserver"
     }
 
     static func isCommandOnly(_ text: String) -> Bool {

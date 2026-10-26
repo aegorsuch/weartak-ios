@@ -1662,13 +1662,24 @@ Commands. Save exact sender CoT UIDs in the allow-list; allowed direct-chat
 commands can update callsign, team, role and profile metrics. `#weartakcommand enrollserver name=North url=tak.example [port=8089]` is
 allowlisted, replay-protected, and opens the paired iPhone's New Server screen
 with the server name, host, and TAK stream port prefilled. The port defaults to
-8089; enrollment uses the existing 8446 default. Username and password must be
-entered on the iPhone and are never accepted in chat. The command is refused
+8089; enrollment uses the existing 8446 default. For this key/value form,
+username and password must be entered on the iPhone. The command is refused
 when the watch network lock, iPhone administrator lock, or managed server policy
 is active. `loadprofile` remains unsupported and receives an explicit rejection.
 Unknown command names are rejected, while ordinary chat remains unchanged.
 UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
 impersonate an allowed sender.
+
+`loadprofile` requests receive an explicit rejection. `enrollserver name,address,port,username,password`
+(the password is everything after the fourth comma) adds a TAK server, or updates the credentials of an
+existing server matched by name or address and port, replying “Server <name> added” or “Server <name> updated”.
+It is accepted from any allow-listed sender on any channel, keeps the freshness, replay and rate limits, and is
+refused when network preferences are locked (the admin lock stands in for MDM). It needs the paired iPhone
+bridge, which enrolls and stores only the resulting client certificate in the Keychain; the password is never
+stored, logged, echoed or exported, and is purged on a best-effort basis (residual mesh, peer and server copies
+may remain). If the name and the address/port match different servers, nothing changes. Enrollment fails with
+“server trust not established” unless the server certificate chains to a trusted CA; installing a custom CA
+from the command is not supported. Like `usep12`, it is not relayed through phone-forwarded server chat.
 
 The same authorization applies to native ATAK Ditto 1.1.1 chat, TAK server chat
 through Companion, Sit(x), watch multicast, and their WatchConnectivity ingress.

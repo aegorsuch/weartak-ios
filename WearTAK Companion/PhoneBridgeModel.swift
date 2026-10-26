@@ -1727,7 +1727,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             dittoStatus: dittoRuntime.status)
     }
 
-    private func provisionIdentity(_ message: BridgeWire.Message) -> BridgeWire.Message {
+    private func provisionIdentity(_ message: BridgeWire.Message) async -> BridgeWire.Message {
         func reply(_ text: String, ready: Bool = false) -> BridgeWire.Message {
             BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: ready, detail: text)
         }
@@ -1737,17 +1737,26 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
               abs(Date().timeIntervalSince(sentAt)) <= 300 else {
             return reply("Command rejected: phone configuration locked or request expired.")
         }
+        let enrolling = TAKChatMessage.isEnrollServerCommand(text)
         guard case .parsed(let command) = ChatCommandParser.parse(text) else {
-            return reply("Command rejected: invalid P12 command.")
+            return reply(enrolling ? "Command rejected: invalid enrollserver command." : "Command rejected: invalid P12 command.")
         }
-        let request: ChatP12Request
-        do { request = try ChatP12Request(command) }
-        catch ChatP12Request.Failure.server {
-            return reply("Command rejected: server=<configured-server-UUID> is required; nothing changed.")
-        }
-        catch { return reply("Command rejected: invalid P12 command.") }
-        guard let target = servers.first(where: { $0.id == request.server }) else {
-            return reply("Command rejected: server ID is not configured; nothing changed.")
+        var p12Request: ChatP12Request?
+        var enrollRequest: EnrollServerRequest?
+        if enrolling {
+            guard let parsed = try? EnrollServerRequest(command) else {
+                return reply("Use enrollserver name,address,port,username,password; nothing changed.")
+            }
+            enrollRequest = parsed
+        } else {
+            do { p12Request = try ChatP12Request(command) }
+            catch ChatP12Request.Failure.server {
+                return reply("Command rejected: server=<configured-server-UUID> is required; nothing changed.")
+            }
+            catch { return reply("Command rejected: invalid P12 command.") }
+            guard servers.contains(where: { $0.id == p12Request?.server }) else {
+                return reply("Command rejected: server ID is not configured; nothing changed.")
+            }
         }
         let key = "WearTAK.companion.provisioningReceipts"
         let now = Date().timeIntervalSince1970
@@ -1764,6 +1773,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         // Claim before touching credentials; a crash must not replay a provisioning operation.
         receipts[receipt] = now
         defaults.set(receipts, forKey: key)
+        if let enrollRequest {
+            let result = await enrollServer(enrollRequest)
+            return reply(result.text, ready: result.ready)
+        }
+        guard let request = p12Request, let target = servers.first(where: { $0.id == request.server }) else {
+            return reply("Command rejected: server ID is not configured; nothing changed.")
+        }
         do {
             try CertificateStore.replaceP12(request.data, password: request.password, endpoint: target.endpoint.key)
             sessions[target.id]?.reconnect()
@@ -1870,6 +1886,66 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                      ready: true)
     }
 
+    /// Replies never contain the username, password, or any enrollment error text.
+    private func enrollServer(_ request: EnrollServerRequest) async -> (text: String, ready: Bool) {
+        let invalid = "Command rejected: invalid server address or port; nothing changed."
+        guard var endpoint = try? CompanionEndpoint.parse(
+            address: request.address, streamPort: String(request.port), enrollmentPort: "8446") else {
+            return (invalid, false)
+        }
+        let match = CompanionServer.enrollmentMatch(name: request.name, endpoint: endpoint, in: servers)
+        if match == .conflict {
+            return ("Command rejected: name and address match different servers; nothing changed.", false)
+        }
+        var existing: CompanionServer?
+        if case .existing(let id) = match {
+            existing = servers.first { $0.id == id }
+            if let existing, let kept = try? CompanionEndpoint.parse(
+                address: request.address, streamPort: String(request.port),
+                enrollmentPort: String(existing.enrollmentPort)) { endpoint = kept }
+        }
+        let record = CompanionServer(
+            id: existing?.id ?? UUID(), endpoint: endpoint, enabled: existing?.enabled ?? true,
+            streamTLSName: existing?.endpoint.key == endpoint.key ? existing?.streamTLSName : nil,
+            apiTLSName: existing?.endpoint.key == endpoint.key ? existing?.apiTLSName : nil,
+            name: existing?.name ?? request.name)
+        // Validate before contacting the server so a duplicate cannot leave a new certificate behind.
+        guard (try? CompanionServer.saving(record, into: servers)) != nil else {
+            return ("Command rejected: server could not be saved; nothing changed.", false)
+        }
+        if defaults.string(forKey: "WearTAK.bridge.deviceID")?.isEmpty != false {
+            defaults.set(UUID().uuidString.lowercased(), forKey: "WearTAK.bridge.deviceID")
+        }
+        let deviceID = defaults.string(forKey: "WearTAK.bridge.deviceID") ?? ""
+        let stored: StoredIdentity
+        do {
+            stored = try await EnrollmentClient.enroll(
+                host: endpoint.host, port: endpoint.enrollmentPort, username: request.username,
+                password: request.password, deviceID: deviceID,
+                trustedCA: defaults.data(forKey: "WearTAK.bridge.serverCA.\(endpoint.key)"))
+        } catch is EnrollmentClient.TrustFailure {
+            return ("Command rejected: server trust not established; nothing changed.", false)
+        } catch {
+            return ("Enrollment failed; check the address, ports, username and password. Nothing changed.", false)
+        }
+        // Enrollment awaited a network call, so re-check that the server list did not change meanwhile.
+        guard !adminLockEnabled, (try? CompanionServer.saving(record, into: servers)) != nil else {
+            CertificateStore.discardUncommitted(stored)
+            return ("Command rejected: configuration changed during enrollment; nothing changed.", false)
+        }
+        let hadCertificate = ((try? CertificateStore.read(endpoint: endpoint.key)) ?? nil) != nil
+        do {
+            try CertificateStore.save(stored, endpoint: endpoint.key)
+            try save(record)
+        } catch {
+            if !hadCertificate { try? CertificateStore.remove(endpoint: endpoint.key) }
+            return ("Server could not be saved on iPhone; check its secure storage.", false)
+        }
+        sessions[record.id]?.reconnect()
+        let label = record.displayName
+        return ("Server \(label) \(existing == nil ? "added" : "updated")", true)
+    }
+
     private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
         if message.kind == .selfStatus {
             guard watchRoute == .apple, let value = message.selfStatusPayload else {
@@ -1881,7 +1957,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             return BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: true,
                                       selfStatus: WatchSelfStatus.supportedVersion)
         }
-        if message.kind == .provisionIdentity { return provisionIdentity(message) }
+        if message.kind == .provisionIdentity { return await provisionIdentity(message) }
         if message.kind == .takServerMasterCommand { return takServerMasterCommand(message) }
         if message.kind == .enrollServer { return serverEnrollmentCommand(message) }
         if message.locationRefresh == true || message.kind == .mapSnapshot {

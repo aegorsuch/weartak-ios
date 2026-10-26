@@ -7,6 +7,13 @@ struct CompanionServerChecks {
         let original = CompanionServer(endpoint: endpoint)
         precondition(original.displayName == "tak.example.gov:8089")
         precondition(original.displayLabel == original.addressLabel)
+        let other = CompanionEndpoint(host: "other.example.gov", streamPort: 8089, enrollmentPort: 8446)
+        let training = CompanionServer(endpoint: endpoint, name: "Training")
+        let spare = CompanionServer(endpoint: other, name: "Spare")
+        precondition(CompanionServer.enrollmentMatch(name: "X", endpoint: endpoint, in: []) == .new)
+        precondition(CompanionServer.enrollmentMatch(name: "X", endpoint: endpoint, in: [training, spare]) == .existing(training.id))
+        precondition(CompanionServer.enrollmentMatch(name: " spare ", endpoint: other, in: [training, spare]) == .existing(spare.id))
+        precondition(CompanionServer.enrollmentMatch(name: "Spare", endpoint: endpoint, in: [training, spare]) == .conflict)
         let named = try CompanionServer.saving(
             CompanionServer(id: original.id, endpoint: endpoint, name: " Training \n"), into: [original])
         precondition(named[0].name == "Training")

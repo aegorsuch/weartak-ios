@@ -72,6 +72,27 @@ struct WatchChatCommandRuntimeChecks {
         else { fatalError("Locked credential command accepted") }
         precondition(!locked.contains("abab"))
         settings.networkPreferencesLocked = false
+        let enroll = "#weartakcommandenrollserver Training,tak.example.gov,8089,alice,s3cret,pw"
+        precondition(TAKChatMessage.isProvisioningCommand(enroll) && TAKChatMessage.isEnrollServerCommand(enroll))
+        precondition(!TAKChatMessage.isEnrollServerCommand(credential))
+        precondition(runtime.handle(message(enroll, group: true), ownUID: "watch", settings: settings, now: now) == .phoneProvisioning)
+        precondition(runtime.handle(message(enroll, sender: "untrusted", group: true), ownUID: "watch",
+            settings: settings, now: now) == .consumed)
+        precondition(runtime.handle(message(enroll, sender: "watch", group: true), ownUID: "watch",
+            settings: settings, now: now) == .consumed)
+        precondition(runtime.handle(message(credential, group: true), ownUID: "watch", settings: settings, now: now) == .consumed)
+        settings.networkPreferencesLocked = true
+        guard case .reply(let enrollLocked) = runtime.handle(message(enroll), ownUID: "watch", settings: settings, now: now)
+        else { fatalError("Locked enrollserver accepted") }
+        precondition(enrollLocked == "Command rejected: network settings are locked." && !enrollLocked.contains("s3cret"))
+        settings.networkPreferencesLocked = false
+        guard case .reply(let badEnroll) = runtime.handle(
+            message("#weartakcommandenrollserver Training,tak.example.gov,nope,alice,s3cret"),
+            ownUID: "watch", settings: settings, now: now) else { fatalError("Malformed enrollserver accepted") }
+        precondition(!badEnroll.contains("s3cret") && !badEnroll.contains("alice"))
+        settings.commandsEnabled = false
+        precondition(runtime.handle(message(enroll), ownUID: "watch", settings: settings, now: now) == .consumed)
+        settings.commandsEnabled = true
         let missingServer = message("#weartakcommandusep12 00")
         precondition(runtime.handle(missingServer, ownUID: "watch", settings: settings, now: now) ==
             .reply("Command rejected: server=<configured-server-UUID> is required; nothing changed."))
@@ -143,6 +164,6 @@ struct WatchChatCommandRuntimeChecks {
             fatalError("Server enrollment must respect the network lock")
         }
         precondition(enrollmentLock.contains("network settings are locked"))
-        print("PASS: direct-only command authorization, cross-route dedup, credential redaction, locks and positional PDL")
+        print("PASS: direct-only command authorization (enrollserver any channel), cross-route dedup, credential redaction, locks and positional PDL")
     }
 }

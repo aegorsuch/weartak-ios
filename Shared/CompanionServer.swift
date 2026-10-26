@@ -63,6 +63,26 @@ struct CompanionServer: Codable, Identifiable, Equatable {
         return updated
     }
 
+    enum EnrollmentMatch: Equatable {
+        case new
+        case existing(UUID)
+        case conflict
+    }
+
+    /// Same name or same host and port updates that server; a name and an address that point at
+    /// different servers is ambiguous, so nothing is changed.
+    static func enrollmentMatch(name: String, endpoint: CompanionEndpoint, in servers: [Self]) -> EnrollmentMatch {
+        let wanted = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let byAddress = servers.first { $0.endpoint.key == endpoint.key }
+        let byName = servers.first {
+            guard let existing = $0.name?.trimmingCharacters(in: .whitespacesAndNewlines), !existing.isEmpty else { return false }
+            return existing.caseInsensitiveCompare(wanted) == .orderedSame
+        }
+        if let byAddress, let byName, byAddress.id != byName.id { return .conflict }
+        if let match = byAddress ?? byName { return .existing(match.id) }
+        return .new
+    }
+
     enum ServerError: LocalizedError {
         case duplicate, invalidTLSName
         var errorDescription: String? {

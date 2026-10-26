@@ -80,7 +80,9 @@ final class WatchChatCommandRuntime {
                 now: Date = Date()) -> WatchChatCommandOutcome {
         let parsed = ChatCommandParser.parse(message.text)
         let sensitive = TAKChatMessage.isCommandOnly(message.text)
-        guard message.senderUID != ownUID, !message.isGroup, settings.commandsEnabled else {
+        // enrollserver is accepted from any allowlisted sender on any channel; other commands stay direct-only.
+        let acceptsGroup = TAKChatMessage.isEnrollServerCommand(message.text)
+        guard message.senderUID != ownUID, !message.isGroup || acceptsGroup, settings.commandsEnabled else {
             return sensitive ? .consumed : .notCommand
         }
         guard parsed != .notCommand else { return .notCommand }
@@ -152,6 +154,13 @@ final class WatchChatCommandRuntime {
                     return .reply("Command rejected: server=<configured-server-UUID> is required; nothing changed.")
                 }
                 catch { return .reply("Command rejected: invalid P12 command.") }
+                return .phoneProvisioning
+            }
+            if command.name == "enrollserver" {
+                guard !settings.networkPreferencesLocked else { return .reply("Command rejected: network settings are locked.") }
+                guard (try? EnrollServerRequest(command)) != nil else {
+                    return .reply("Use enrollserver name,address,port,username,password; nothing changed.")
+                }
                 return .phoneProvisioning
             }
             return .reply(execute(command, settings: settings))

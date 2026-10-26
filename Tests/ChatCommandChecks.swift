@@ -67,6 +67,7 @@ struct ChatCommandChecks {
             messageID: "3", sentAt: now.addingTimeInterval(-301), now: now) == .stale)
         precondition(ChatCommandAuthorizer.parseAllowList(" one, two\none ,, three ") == ["one", "two", "three"])
         try checkProvisioning()
+        try checkEnrollServer()
         try checkAtomicReplacement()
         var limited = ChatCommandAuthorizer(maximumRemembered: 1)
         precondition(limited.authorize(senderUID: "trusted", allowedUIDs: ["trusted"],
@@ -121,6 +122,32 @@ struct ChatCommandChecks {
             "#weartakcommandsetcallsign callsign=" + String(repeating: "x", count: 769)
         ] {
             guard case .malformed = ChatCommandParser.parse(text) else { fatalError("Oversize or duplicate accepted") }
+        }
+    }
+
+    static func checkEnrollServer() throws {
+        func request(_ text: String) throws -> EnrollServerRequest {
+            guard case .parsed(let command) = ChatCommandParser.parse(text) else { throw EnrollServerRequest.Failure.syntax }
+            return try EnrollServerRequest(command)
+        }
+        let valid = try request("#weartakcommandenrollserver Training, tak.example.gov ,8089, alice ,pa,ss word,=\"x\"")
+        precondition(valid.name == "Training" && valid.address == "tak.example.gov" && valid.port == 8089)
+        precondition(valid.username == "alice" && valid.password == "pa,ss word,=\"x\"")
+        precondition(try request("#WEARTAKCOMMANDENROLLSERVER a,b,1,u,p").password == "p")
+        for text in [
+            "#weartakcommandenrollserver a,b,8089,u", "#weartakcommandenrollserver a,b,0,u,p",
+            "#weartakcommandenrollserver a,b,65536,u,p", "#weartakcommandenrollserver a,b,x,u,p",
+            "#weartakcommandenrollserver ,b,8089,u,p", "#weartakcommandenrollserver a,,8089,u,p",
+            "#weartakcommandenrollserver a,b,8089,,p", "#weartakcommandenrollserver a,b,8089,u:v,p",
+            "#weartakcommandenrollserver a,b c,8089,u,p", "#weartakcommandenrollserver a,b,8089,u,",
+            "#weartakcommandenrollserver a,b,8089,u," + String(repeating: "x", count: 513),
+            "#weartakcommandenrollserver a,b,8089,u,p\u{7}q"
+        ] {
+            do { _ = try request(text); fatalError("Invalid enrollserver accepted") }
+            catch EnrollServerRequest.Failure.syntax {}
+        }
+        guard case .malformed = ChatCommandParser.parse("#weartakcommandenrollserver " + String(repeating: "x", count: 1_100)) else {
+            fatalError("Oversize enrollserver accepted")
         }
     }
 
