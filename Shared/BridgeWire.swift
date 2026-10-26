@@ -8,7 +8,8 @@ enum BridgeWire {
     static let maximumMessageBytes = 60_000
 
     struct Message: Codable {
-        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes, provisionIdentity, selfStatus }
+        enum Kind: String, Codable { case hello, cot, status, acknowledgement, channels, channelUpdate, mapSnapshot, sitxConfig, dittoConfig, dittoTrack, dittoEvent, missions, missionUpdate, routes, provisionIdentity, takServerMasterCommand, selfStatus }
+        enum NetworkCommandPhase: String, Codable { case prepare, commit }
         let kind: Kind
         var version: Int = BridgeWire.version
         var id: UUID = UUID()
@@ -68,6 +69,8 @@ enum BridgeWire {
         var commandSender: String?
         var commandMessageID: String?
         var commandSentAt: Date?
+        var takServersEnabled: Bool?
+        var networkCommandPhase: NetworkCommandPhase?
         var selfStatus: Int?
         var selfStatusPayload: WatchSelfStatus?
 
@@ -91,11 +94,21 @@ enum BridgeWire {
                 guard let text = message.provisioningCommand, text.utf8.count <= 24_000,
                       let sender = message.commandSender, !sender.isEmpty, sender.utf8.count <= 512,
                       let id = message.commandMessageID, !id.isEmpty, id.utf8.count <= 512,
-                      let sentAt = message.commandSentAt, sentAt.timeIntervalSince1970.isFinite else {
+                      let sentAt = message.commandSentAt, sentAt.timeIntervalSince1970.isFinite,
+                      message.takServersEnabled == nil, message.networkCommandPhase == nil else {
+                    throw Failure.invalidCoT
+                }
+            } else if message.kind == .takServerMasterCommand {
+                guard message.provisioningCommand == nil,
+                      let sender = message.commandSender, !sender.isEmpty, sender.utf8.count <= 512,
+                      let id = message.commandMessageID, !id.isEmpty, id.utf8.count <= 512,
+                      let sentAt = message.commandSentAt, sentAt.timeIntervalSince1970.isFinite,
+                      message.takServersEnabled != nil, message.networkCommandPhase != nil else {
                     throw Failure.invalidCoT
                 }
             } else if message.provisioningCommand != nil || message.commandSender != nil ||
-                        message.commandMessageID != nil || message.commandSentAt != nil {
+                        message.commandMessageID != nil || message.commandSentAt != nil ||
+                        message.takServersEnabled != nil || message.networkCommandPhase != nil {
                 throw Failure.invalidCoT
             }
             if let routes = message.routes {

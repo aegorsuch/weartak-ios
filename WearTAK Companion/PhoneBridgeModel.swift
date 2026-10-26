@@ -50,6 +50,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     @Published var adminLockEnabled: Bool {
         didSet { defaults.set(adminLockEnabled, forKey: Self.adminLockKey) }
     }
+    @Published private(set) var takServersEnabled: Bool
     private var developerModeTaps = 0
 
     struct ServerState {
@@ -89,6 +90,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     private static let mapStorageKey = "WearTAK.companion.mapCache"
     private static let developerModeKey = "WearTAK.companion.developerMode"
     private static let adminLockKey = "WearTAK.companion.adminLock"
+    private static let takServersEnabledKey = "WearTAK.companion.takServersEnabled"
+    private static let managedConfigurationKey = "com.apple.configuration.managed"
+    private static let managedTakServersEnabledKey = "enable_tak_endpoint"
+    private static let takServerMasterCommandReceiptsKey = "WearTAK.companion.takServerMasterCommandReceipts"
     // An active phone location session keeps Companion running, so server sessions stay up while it reports.
     private var canRelay: Bool { active || backgroundTask != .invalid || reporter.isRunning }
     private let reporter: PhoneLocationReporter
@@ -177,6 +182,10 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         watchRoute = WatchRoute(rawValue: defaults.string(forKey: Self.watchRouteKey) ?? "") ?? .apple
         developerMode = defaults.bool(forKey: Self.developerModeKey)
         adminLockEnabled = defaults.bool(forKey: Self.adminLockKey)
+        takServersEnabled = defaults.dictionary(forKey: Self.managedConfigurationKey)?
+            [Self.managedTakServersEnabledKey] as? Bool
+            ?? defaults.object(forKey: Self.takServersEnabledKey) as? Bool
+            ?? true
         reporter = PhoneLocationReporter(defaults: defaults)
         dittoRuntime = DittoPeerRuntime(defaults: defaults,
             communityPDL: Bundle.main.object(forInfoDictionaryKey: "DITTO_COMMUNITY_PDL") as? String,
@@ -541,6 +550,34 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         try save(server)
     }
 
+    var managedTakServersEnabled: Bool? {
+        defaults.dictionary(forKey: Self.managedConfigurationKey)?
+            [Self.managedTakServersEnabledKey] as? Bool
+    }
+
+    var takServersPolicyLocked: Bool {
+        adminLockEnabled || managedTakServersEnabled != nil
+    }
+
+    var takServersPolicyReason: String? {
+        if let managed = managedTakServersEnabled {
+            return "TAK servers are controlled by administrator policy and are currently \(managed ? "enabled" : "disabled")."
+        }
+        return adminLockEnabled ? "TAK server settings are locked by the administrator." : nil
+    }
+
+    func setTakServersEnabled(_ enabled: Bool) throws {
+        guard !adminLockEnabled else {
+            throw CompanionFailure.message("TAK server settings are locked by the administrator.")
+        }
+        guard managedTakServersEnabled == nil else {
+            throw CompanionFailure.message(takServersPolicyReason ?? "TAK servers are controlled by administrator policy.")
+        }
+        defaults.set(enabled, forKey: Self.takServersEnabledKey)
+        takServersEnabled = enabled
+        synchronize()
+    }
+
     func remove(id: UUID) throws {
         guard let server = servers.first(where: { $0.id == id }) else { return }
         cancelTLSApprovals(serverID: id)
@@ -901,6 +938,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func synchronize() {
+        refreshTakServersPreference()
         let validIDs = Set(servers.map(\.id))
         mapCache.prune(enabledServerIDs: enabledSourceIDs)
         try? updateGarminRoutes { $0.retainServers(Set(enabledSourceIDs.map(\.uuidString))) }
@@ -931,7 +969,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                 }
                 sessions[server.id] = session
             }
-            session.configure(server, active: canRelay)
+            session.configure(server, active: canRelay && takServersEnabled)
         }
         sitx.setActive(canRelay)
         publishState()
@@ -939,7 +977,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
 
     /// TAK server IDs plus the watch-provided Sit(x) relay, used to scope cached map and chat events.
     private var enabledSourceIDs: Set<UUID> {
-        var ids = Set(servers.filter(\.enabled).map(\.id))
+        var ids = Set(servers.filter { $0.enabled && takServersEnabled }.map(\.id))
         if sitx.isConfigured { ids.insert(SitxRelayConfig.serverID) }
         if dittoStatus.enabled { ids.insert(DittoCoTDocument.sourceID) }
         return ids
@@ -947,7 +985,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
 
     /// Connected outputs (TAK servers and Sit(x)) keyed by source ID.
     private func readyOutputs() -> [UUID: (String) async throws -> Void] {
-        let enabled = Set(servers.filter(\.enabled).map(\.id))
+        let enabled = Set(servers.filter { $0.enabled && takServersEnabled }.map(\.id))
         var outputs: [UUID: (String) async throws -> Void] = [:]
         for (id, session) in sessions where enabled.contains(id) && session.state.connected {
             outputs[id] = { xml in try await session.send(xml) }
@@ -957,6 +995,13 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             outputs[SitxRelayConfig.serverID] = { xml in try await sitx.send(xml) }
         }
         return outputs
+    }
+
+    private func refreshTakServersPreference() {
+        let selected = defaults.object(forKey: Self.takServersEnabledKey) as? Bool ?? true
+        let effective = managedTakServersEnabled ?? selected
+        guard effective != takServersEnabled else { return }
+        takServersEnabled = effective
     }
 
     private func applySitx(_ config: SitxRelayConfig) throws {
@@ -1028,7 +1073,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             catch let failure as WatchReportingIdentity.Failure { watchIdentity = .failure(failure) }
             catch { watchIdentity = .failure(.invalidField("identity payload")) }
         }
-        let enabledConfigured = servers.filter { $0.enabled && serverStates[$0.id]?.configured == true }.count
+        let enabledConfigured = servers.filter {
+            $0.enabled && takServersEnabled && serverStates[$0.id]?.configured == true
+        }.count
             + (sitx.isConfigured ? 1 : 0)
         let decision = PhoneReportingGate.decide(enabledConfiguredServers: enabledConfigured, identity: watchIdentity,
             authorization: reporter.authorization, preciseLocation: reporter.preciseLocation,
@@ -1713,6 +1760,54 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
     }
 
+    private func takServerMasterCommand(_ message: BridgeWire.Message) -> BridgeWire.Message {
+        func reply(_ text: String, ready: Bool = false) -> BridgeWire.Message {
+            BridgeWire.Message(kind: .acknowledgement, id: message.id, ready: ready, detail: text)
+        }
+        guard watchRoute == .apple, let sender = message.commandSender,
+              !sender.isEmpty, let id = message.commandMessageID, !id.isEmpty,
+              let sentAt = message.commandSentAt,
+              abs(Date().timeIntervalSince(sentAt)) <= 300,
+              let enabled = message.takServersEnabled, let phase = message.networkCommandPhase else {
+            return reply("Command rejected: invalid or expired TAK server request; nothing changed.")
+        }
+        if let managed = managedTakServersEnabled {
+            return reply("Command rejected: TAK servers are controlled by administrator policy and are currently \(managed ? "enabled" : "disabled"); nothing changed.")
+        }
+        if adminLockEnabled {
+            return reply("Command rejected: TAK server settings are locked by the administrator; nothing changed.")
+        }
+        switch phase {
+        case .prepare:
+            return reply("TAK server change approved; no settings changed yet.", ready: true)
+        case .commit:
+            let receipt = "\(sender.utf8.count):\(sender)\(id)"
+            let now = Date().timeIntervalSince1970
+            var receipts: [String: Double] = [:]
+            if let stored = defaults.object(forKey: Self.takServerMasterCommandReceiptsKey) {
+                guard let decoded = stored as? [String: Double], decoded.values.allSatisfy(\.isFinite) else {
+                    return reply("Command rejected: replay storage is unreadable; nothing changed.")
+                }
+                receipts = decoded.filter { now - $0.value <= 600 }
+            }
+            if receipts[receipt] != nil {
+                return reply("TAK server command already processed.", ready: true)
+            }
+            guard receipts.count < 1_024 else {
+                return reply("Command rejected: TAK server command rate limit; nothing changed.")
+            }
+            do {
+                try setTakServersEnabled(enabled)
+                receipts[receipt] = now
+                defaults.set(receipts, forKey: Self.takServerMasterCommandReceiptsKey)
+                return reply(enabled ? "TAK servers enabled in Companion." : "TAK servers disabled in Companion.",
+                             ready: true)
+            } catch {
+                return reply("Command rejected: \(error.localizedDescription); nothing changed.")
+            }
+        }
+    }
+
     private func processWatchMessage(_ message: BridgeWire.Message) async throws -> BridgeWire.Message {
         if message.kind == .selfStatus {
             guard watchRoute == .apple, let value = message.selfStatusPayload else {
@@ -1725,6 +1820,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
                                       selfStatus: WatchSelfStatus.supportedVersion)
         }
         if message.kind == .provisionIdentity { return provisionIdentity(message) }
+        if message.kind == .takServerMasterCommand { return takServerMasterCommand(message) }
         if message.locationRefresh == true || message.kind == .mapSnapshot {
             requestSelfPosition()
         }
@@ -2214,7 +2310,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         }
         var failures: [String] = []
         if let mapCacheError { failures.append(mapCacheError) }
-        let enabled = servers.filter(\.enabled)
+        let enabled = servers.filter { $0.enabled && takServersEnabled }
         if enabled.isEmpty, !sitx.isConfigured, dittoStatus.state != .syncing {
             failures.append("Enable a TAK server or Ditto in Companion on the phone.")
         }
@@ -2257,7 +2353,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     private func channelReply(to message: BridgeWire.Message) async -> BridgeWire.Message {
-        var snapshots = servers.filter(\.enabled).map { record in
+        var snapshots = servers.filter { $0.enabled && takServersEnabled }.map { record in
             TAKChannelServer(id: record.id, name: record.displayLabel,
                              state: serverStates[record.id]?.connected == true ? "Select server to load channels" : "Server not connected")
         }
@@ -2308,14 +2404,15 @@ extension PhoneBridgeModel {
             let sitx = self.sitx
             return { path, method, query in try await sitx.missionRequest(path: path, method: method, query: query) }
         }
-        guard servers.contains(where: { $0.id == id && $0.enabled }), let session = sessions[id] else { return nil }
+        guard takServersEnabled, servers.contains(where: { $0.id == id && $0.enabled }),
+              let session = sessions[id] else { return nil }
         return { path, method, query in try await session.missionRequest(path: path, method: method, query: query) }
     }
 
     /// Lists a server's Data Sync missions, applies a watch subscribe/unsubscribe, and loads the map items of
     /// subscribed missions. Subscriptions use the watch UID, the identity this phone streams to the server.
     fileprivate func missionReply(to message: BridgeWire.Message) async -> BridgeWire.Message {
-        var snapshots = servers.filter(\.enabled).map { record in
+        var snapshots = servers.filter { $0.enabled && takServersEnabled }.map { record in
             TAKMissionServer(id: record.id, name: record.displayLabel,
                              state: serverStates[record.id]?.connected == true ? TAKMissionServer.selectState : "Server not connected")
         }

@@ -192,6 +192,28 @@ struct CompanionSetupView: View {
                     }
                 }
                 Section(String(localized: "TAK Servers", table: "CompanionApp")) {
+                    Toggle(String(localized: "Enable TAK servers", table: "CompanionApp"), isOn: Binding(
+                        get: { bridge.takServersEnabled },
+                        set: { enabled in
+                            do { try bridge.setTakServersEnabled(enabled) }
+                            catch { errorText = error.localizedDescription }
+                        }
+                    ))
+                    .disabled(bridge.takServersPolicyLocked)
+                    if let managed = bridge.managedTakServersEnabled {
+                        Label(
+                            String(localized: managed
+                                ? "TAK server availability is managed as enabled."
+                                : "TAK server availability is managed as disabled.", table: "CompanionApp"),
+                            systemImage: "lock.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    } else if bridge.adminLockEnabled {
+                        Label("TAK server availability is locked by the administrator.", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if bridge.adminLockEnabled {
                         Label("Server admin lock is on; configuration is read-only.", systemImage: "lock.fill")
                             .font(.caption)

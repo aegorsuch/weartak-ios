@@ -26,7 +26,7 @@ enum ChatCommandParser {
         guard body.lowercased().hasPrefix(prefix) else { return .notCommand }
         guard body.utf8.count <= maximumProvisioningLength else { return .malformed("too long") }
 
-        let rest = Array(body.dropFirst(prefix.count))
+        let rest = Array(body.dropFirst(prefix.count).drop(while: { $0.isWhitespace }))
         let nameEnd = rest.firstIndex(where: \.isWhitespace) ?? rest.endIndex
         let name = String(rest[..<nameEnd]).lowercased()
         guard matches(namePattern, name) else { return .malformed("invalid command name") }

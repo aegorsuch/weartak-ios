@@ -6,6 +6,8 @@ enum WatchChatCommandOutcome: Equatable {
     case reply(String)
     case phoneProvisioning
     case setDittoEnabled(Bool)
+    case setMulticastEnabled(Bool)
+    case setPhoneTakServersEnabled(Bool)
 }
 
 @MainActor
@@ -104,6 +106,26 @@ final class WatchChatCommandRuntime {
         case .malformed(let reason):
             return .reply("Command rejected: \(reason)")
         case .parsed(let command):
+            if let enabled = networkCommandValue(command.name, enabledName: "enablemulticast",
+                                                 disabledName: "disablemulticast") {
+                guard command.arguments.isEmpty, command.positional.isEmpty else {
+                    return .reply("Use enablemulticast or disablemulticast with no arguments; nothing changed.")
+                }
+                guard !settings.networkPreferencesLocked else {
+                    return .reply("Command rejected: network settings are locked.")
+                }
+                return .setMulticastEnabled(enabled)
+            }
+            if let enabled = networkCommandValue(command.name, enabledName: "enabletakservers",
+                                                 disabledName: "disabletakservers") {
+                guard command.arguments.isEmpty, command.positional.isEmpty else {
+                    return .reply("Use enabletakservers or disabletakservers with no arguments; nothing changed.")
+                }
+                guard !settings.networkPreferencesLocked else {
+                    return .reply("Command rejected: network settings are locked.")
+                }
+                return .setPhoneTakServersEnabled(enabled)
+            }
             if command.name == "toggleditto" {
                 guard !settings.networkPreferencesLocked else { return .reply("Command rejected: network settings are locked.") }
                 guard command.arguments.isEmpty, command.positional.count == 1,
@@ -123,6 +145,12 @@ final class WatchChatCommandRuntime {
             }
             return .reply(execute(command, settings: settings))
         }
+    }
+
+    private func networkCommandValue(_ name: String, enabledName: String, disabledName: String) -> Bool? {
+        if name == enabledName { return true }
+        if name == disabledName { return false }
+        return nil
     }
 
     private func execute(_ command: ChatCommand, settings: AppSettings) -> String {

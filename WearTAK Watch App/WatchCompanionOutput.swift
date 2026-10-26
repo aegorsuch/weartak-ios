@@ -615,6 +615,18 @@ final class WatchCompanionOutput: NSObject, ObservableObject, CoTOutput, WCSessi
         return detail
     }
 
+    func setTakServersEnabled(_ enabled: Bool, phase: BridgeWire.Message.NetworkCommandPhase,
+                              from message: TAKChatMessage) async throws -> String {
+        let reply = try await request(BridgeWire.Message(kind: .takServerMasterCommand,
+            commandSender: message.senderUID, commandMessageID: message.id, commandSentAt: message.sentAt,
+            takServersEnabled: enabled, networkCommandPhase: phase), timeoutSeconds: 20)
+        guard reply.kind == .acknowledgement, let detail = reply.detail else {
+            throw CompanionRefreshFailure.message("Companion did not acknowledge the TAK server command.")
+        }
+        guard reply.ready == true else { throw CompanionRefreshFailure.message(detail) }
+        return detail
+    }
+
     func refreshChannels(serverID: UUID? = nil) async {
         await channelRequest(BridgeWire.Message(kind: .channels, serverID: serverID))
     }

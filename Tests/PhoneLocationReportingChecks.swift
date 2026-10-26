@@ -117,6 +117,12 @@ struct PhoneLocationReportingChecks {
         precondition(reversed.onFootInterval == 10 && reversed.vehicleInterval == 100)
         changed = identity; changed.constantStrategy = true
         precondition(PhoneReportingPolicy.interval(for: changed, speed: 0) == 60)
+        let walkingConstantInterval = PhoneReportingPolicy.interval(for: changed, speed: 1)
+        precondition(walkingConstantInterval == 60,
+                     "Constant reporting must not inherit the 3600-second dynamic stationary interval while walking")
+        precondition(PhoneReportingPolicy.isDue(lastSentAt: now.addingTimeInterval(-60),
+                                                interval: walkingConstantInterval, now: now),
+                     "Constant reporting must send again while walking when its selected interval is due")
         var alerting = identity
         alerting.alertingInterval = 15
         alerting.alertActive = true

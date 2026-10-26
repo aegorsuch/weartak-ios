@@ -8,6 +8,12 @@ struct ChatCommandChecks {
         guard case .parsed(let command) = parsed else { fatalError("Valid command was rejected") }
         precondition(command.name == "setprofile")
         precondition(command.arguments == ["callsign": "ODIN-2", "role": "Team Member", "height": "5'10"])
+        for name in ["enabletakservers", "disabletakservers", "enablemulticast", "disablemulticast"] {
+            guard case .parsed(let networkCommand) = ChatCommandParser.parse("#weartakcommand \(name)") else {
+                fatalError("Network command with the documented prefix form was rejected")
+            }
+            precondition(networkCommand.name == name && networkCommand.arguments.isEmpty)
+        }
         precondition(ChatCommandParser.parse("ordinary chat") == .notCommand)
         for malformed in [
             "#weartakcommand", "#weartakcommandsetcallsign callsign",

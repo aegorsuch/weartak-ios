@@ -954,7 +954,7 @@ private struct TacticalMapView: View {
     var body: some View {
         ZStack {
             MapReader { proxy in
-                Map(position: $cameraPosition, selection: $selectedMapPoint) {
+                Map(position: $cameraPosition, bounds: MapCameraBounds(minimumDistance: 11), selection: $selectedMapPoint) {
                     tacticalMapContent
                 }
                 .onMapCameraChange(frequency: .continuous) { context in
@@ -1146,7 +1146,7 @@ private struct TacticalMapView: View {
         .sheet(item: $mapPointCluster) { cluster in
             NavigationStack {
                 List {
-                    ForEach(cluster.selections, id: \.self) { selection in
+                    ForEach(sortedMapPointSelections(cluster.selections), id: \.self) { selection in
                         NavigationLink {
                             mapPointDetail(selection)
                         } label: {
@@ -1260,15 +1260,25 @@ private struct TacticalMapView: View {
                     .stroke(settings.teamColor.mapColor, lineWidth: 3)
             }
             Annotation(String(localized: "Self", table: "WatchMain"), coordinate: location.coordinate, anchor: .center) {
-                Image(systemName: model.headingDegrees == nil ? "circle.fill" : "location.north.fill")
-                    .font(.title3)
-                    .foregroundStyle(settings.teamColor.mapColor)
-                    .rotationEffect(.degrees(model.headingDegrees.map { $0 - cameraHeading } ?? 0))
-                    .padding(4)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .accessibilityLabel(model.headingDegrees.map {
-                        String(localized: "Self, \(settings.teamColor.watchMainLabel), heading \(Int($0.rounded())) degrees", table: "WatchMain")
-                    } ?? String(localized: "Self, \(settings.teamColor.watchMainLabel), compass unavailable", table: "WatchMain"))
+                VStack(spacing: 2) {
+                    Text(selfMarkerTitle)
+                        .font(.caption2.bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: 110)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(.ultraThinMaterial, in: Capsule())
+                    Image(systemName: model.headingDegrees == nil ? "circle.fill" : "location.north.fill")
+                        .font(.title3)
+                        .foregroundStyle(settings.teamColor.mapColor)
+                        .rotationEffect(.degrees(model.headingDegrees.map { $0 - cameraHeading } ?? 0))
+                        .padding(4)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .accessibilityLabel(model.headingDegrees.map {
+                    String(localized: "\(selfMarkerTitle), \(settings.teamColor.watchMainLabel), heading \(Int($0.rounded())) degrees", table: "WatchMain")
+                } ?? String(localized: "\(selfMarkerTitle), \(settings.teamColor.watchMainLabel), compass unavailable", table: "WatchMain"))
             }
             .annotationTitles(.hidden)
             .tag(MapPointSelection.selfMarker)
@@ -1460,6 +1470,23 @@ private struct TacticalMapView: View {
         case .contact(let uid), .incoming(let uid):
             return model.mapEntities.first(where: { $0.id == uid })?.displayTitle ?? String(localized: "Point", table: "WatchMain")
         }
+    }
+
+    private func sortedMapPointSelections(_ selections: [MapPointSelection]) -> [MapPointSelection] {
+        selections.sorted {
+            let left = mapPointTitle($0)
+            let right = mapPointTitle($1)
+            let order = left.localizedStandardCompare(right)
+            if order == .orderedSame {
+                return String(describing: $0).localizedStandardCompare(String(describing: $1)) == .orderedAscending
+            }
+            return order == .orderedAscending
+        }
+    }
+
+    private var selfMarkerTitle: String {
+        let callSign = settings.callSign.trimmingCharacters(in: .whitespacesAndNewlines)
+        return callSign.isEmpty ? String(localized: "You", table: "WatchMain") : "\(callSign) (you)"
     }
 
     @ViewBuilder
@@ -2060,6 +2087,8 @@ private struct SelfCoordinateView: View {
 
     var body: some View {
         List {
+            Text("Self-Location", tableName: "WatchMain")
+                .font(.headline)
             Text("Lat: \(String(format: "%.5f", coordinate.latitude))", tableName: "WatchMain")
             Text("Lon: \(String(format: "%.5f", coordinate.longitude))", tableName: "WatchMain")
             Text(MapCoordinateFormatter.mgrs(coordinate) ?? String(localized: "Unavailable", table: "WatchMain"))

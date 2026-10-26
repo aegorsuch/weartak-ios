@@ -1688,6 +1688,16 @@ arguments. They preserve the selected identity and use the existing saved
 setting/runtime lifecycle. A Ditto-origin `off` attempts a direct room
 acknowledgment before disabling transport, without claiming recipient delivery.
 Once disabled, `on` requires another active route or the UI.
+`#weartakcommand enablemulticast` and `#weartakcommand disablemulticast` change the
+watch's saved multicast setting. `#weartakcommand enabletakservers` and
+`#weartakcommand disabletakservers` change the paired iPhone's aggregate TAK-server
+master without changing individual server toggles. Each disable first requires
+the acknowledgment to be accepted by its originating transport; if that fails,
+the change is refused. Transport acceptance does not guarantee recipient delivery.
+The iPhone master is enabled by default and preserves explicit user choices.
+The `enable_tak_endpoint` managed app configuration key overrides user and remote
+choices; the iPhone Companion settings show the managed state and refuse commands
+that conflict with it.
 No remote command creates servers, changes trust anchors, or disables TLS hostname
 verification. Both the watch network lock and phone administrator lock are honored.
 

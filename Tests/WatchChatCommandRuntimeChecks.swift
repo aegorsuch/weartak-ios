@@ -13,6 +13,7 @@ final class AppSettings {
     var commandsEnabled = true
     var commandSenderUIDs = ["authorized"]
     var networkPreferencesLocked = false
+    var multicastEnabled = true
     var callSign = "Original"
     var teamColor = TeamColor.blue
     var roleGroup = UserRoleGroup.standard
@@ -96,9 +97,33 @@ struct WatchChatCommandRuntimeChecks {
             guard case .reply = runtime.handle(message("#weartakcommandtoggleditto \(arguments)"),
                 ownUID: "watch", settings: settings, now: now) else { fatalError("Invalid Ditto state accepted") }
         }
+        for (name, enabled) in [("enablemulticast", true), ("disablemulticast", false)] {
+            precondition(runtime.handle(message("#weartakcommand \(name)"),
+                ownUID: "watch", settings: settings, now: now) == .setMulticastEnabled(enabled))
+            for arguments in ["on", "enabled=true"] {
+                guard case .reply = runtime.handle(message("#weartakcommand \(name) \(arguments)"),
+                    ownUID: "watch", settings: settings, now: now) else {
+                    fatalError("Network command arguments must be rejected")
+                }
+            }
+        }
+        for (name, enabled) in [("enabletakservers", true), ("disabletakservers", false)] {
+            precondition(runtime.handle(message("#weartakcommand \(name)"),
+                ownUID: "watch", settings: settings, now: now) == .setPhoneTakServersEnabled(enabled))
+            guard case .reply = runtime.handle(message("#weartakcommand \(name) on"),
+                ownUID: "watch", settings: settings, now: now) else {
+                fatalError("TAK server command arguments must be rejected")
+            }
+        }
         settings.networkPreferencesLocked = true
         guard case .reply = runtime.handle(message("#weartakcommandtoggleditto on"),
             ownUID: "watch", settings: settings, now: now) else { fatalError("Locked Ditto mutation accepted") }
+        for name in ["enablemulticast", "disablemulticast", "enabletakservers", "disabletakservers"] {
+            guard case .reply(let reason) = runtime.handle(message("#weartakcommand \(name)"),
+                ownUID: "watch", settings: settings, now: now), reason.contains("network settings are locked") else {
+                fatalError("Network command must respect the admin network lock")
+            }
+        }
         print("PASS: direct-only command authorization, cross-route dedup, credential redaction, locks and positional PDL")
     }
 }

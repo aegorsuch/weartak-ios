@@ -13,13 +13,25 @@ struct BridgeProtocolChecks {
             commandSender: "authorized", commandMessageID: "same-across-routes", commandSentAt: Date())
         let decodedProvisioning = try BridgeWire.Message.decode(provisioning.encoded())
         precondition(decodedProvisioning.commandMessageID == "same-across-routes")
+        let serverCommand = BridgeWire.Message(kind: .takServerMasterCommand,
+            commandSender: "authorized", commandMessageID: "disable-servers",
+            commandSentAt: Date(), takServersEnabled: false, networkCommandPhase: .prepare)
+        let decodedServerCommand = try BridgeWire.Message.decode(serverCommand.encoded())
+        precondition(decodedServerCommand.takServersEnabled == false &&
+            decodedServerCommand.networkCommandPhase == .prepare)
         for malformed in [
             BridgeWire.Message(kind: .provisionIdentity, provisioningCommand: "missing metadata"),
-            BridgeWire.Message(kind: .status, provisioningCommand: "never in status")
+            BridgeWire.Message(kind: .status, provisioningCommand: "never in status"),
+            BridgeWire.Message(kind: .takServerMasterCommand, commandSender: "authorized",
+                commandMessageID: "missing-state", commandSentAt: Date(),
+                networkCommandPhase: .commit),
+            BridgeWire.Message(kind: .status, commandSender: "metadata on unrelated message",
+                commandMessageID: "invalid", commandSentAt: Date(),
+                takServersEnabled: true, networkCommandPhase: .commit)
         ] {
             do {
                 _ = try BridgeWire.Message.decode(malformed.encoded())
-                fatalError("Invalid provisioning envelope accepted")
+                fatalError("Invalid command envelope accepted")
             } catch BridgeWire.Failure.invalidCoT {}
         }
         do {
