@@ -131,6 +131,16 @@ struct TAKChatMessage: Identifiable, Equatable {
         return isCommandOnly(delegate.text)
     }
 
+    /// How the iPhone handles an incoming TAK server or Ditto chat event. Every event is forwarded unchanged
+    /// to the watch while it is reachable, so the original sender UID reaches the watch's authorization.
+    /// Provisioning commands (including enrollserver) are never retained in the phone's chat buffer,
+    /// so a password is never held for later handshake replies.
+    enum PhoneRelay: Equatable { case buffered, liveOnly }
+
+    static func phoneRelay(forXML xml: String) -> PhoneRelay {
+        containsCommandOnly(in: xml) ? .liveOnly : .buffered
+    }
+
     static func parse(_ xml: String, ownUID: String) -> Self? {
         guard let delegate = parsedXML(xml), delegate.type == "b-t-f", let chat = delegate.chat,
               let group = delegate.group, let sender = group["uid0"], let recipient = group["uid1"],

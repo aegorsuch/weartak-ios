@@ -1679,7 +1679,9 @@ bridge, which enrolls and stores only the resulting client certificate in the Ke
 stored, logged, echoed or exported, and is purged on a best-effort basis (residual mesh, peer and server copies
 may remain). If the name and the address/port match different servers, nothing changes. Enrollment fails with
 “server trust not established” unless the server certificate chains to a trusted CA; installing a custom CA
-from the command is not supported. Like `usep12`, it is not relayed through phone-forwarded server chat.
+from the command is not supported. The iPhone relays `enrollserver` arriving by TAK server chat or Ditto to
+the watch unchanged, so the watch authorizes the original sender UID, not the phone. The relay is live only: the
+phone does not buffer, display, notify or log the command text, so it is not replayed after a missed delivery.
 
 The same authorization applies to native ATAK Ditto 1.1.1 chat, TAK server chat
 through Companion, Sit(x), watch multicast, and their WatchConnectivity ingress.

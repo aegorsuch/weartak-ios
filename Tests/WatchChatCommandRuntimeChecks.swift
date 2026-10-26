@@ -76,6 +76,14 @@ struct WatchChatCommandRuntimeChecks {
         precondition(TAKChatMessage.isProvisioningCommand(enroll) && TAKChatMessage.isEnrollServerCommand(enroll))
         precondition(!TAKChatMessage.isEnrollServerCommand(credential))
         precondition(runtime.handle(message(enroll, group: true), ownUID: "watch", settings: settings, now: now) == .phoneProvisioning)
+        // A phone-relayed event keeps the original sender, so the allowlist applies to the real sender.
+        func relayed(sender: String) -> TAKChatMessage {
+            let xml = try! TAKChatMessage.outgoing(senderUID: sender, senderCallSign: "Operator", recipientUID: "watch",
+                recipientCallSign: "Watch", text: enroll, now: now, messageID: UUID().uuidString)
+            return TAKChatMessage.parse(xml, ownUID: "watch")!
+        }
+        precondition(runtime.handle(relayed(sender: "authorized"), ownUID: "watch", settings: settings, now: now) == .phoneProvisioning)
+        precondition(runtime.handle(relayed(sender: "phone-uid"), ownUID: "watch", settings: settings, now: now) == .consumed)
         precondition(runtime.handle(message(enroll, sender: "untrusted", group: true), ownUID: "watch",
             settings: settings, now: now) == .consumed)
         precondition(runtime.handle(message(enroll, sender: "watch", group: true), ownUID: "watch",
