@@ -133,7 +133,10 @@ struct ChatCommandChecks {
         let valid = try request("#weartakcommandenrollserver Training, tak.example.gov ,8089, alice ,pa,ss word,=\"x\"")
         precondition(valid.name == "Training" && valid.address == "tak.example.gov" && valid.port == 8089)
         precondition(valid.username == "alice" && valid.password == "pa,ss word,=\"x\"")
-        precondition(try request("#WEARTAKCOMMANDENROLLSERVER a,b,1,u,p").password == "p")
+        let uppercase = try request("#WEARTAKCOMMANDENROLLSERVER a,b,1,u,p")
+        precondition(uppercase.password == "p")
+        let spaced = try request("#weartakcommand enrollserver a,b,8089,u,p,a=1")
+        precondition(spaced.password == "p,a=1")
         for text in [
             "#weartakcommandenrollserver a,b,8089,u", "#weartakcommandenrollserver a,b,0,u,p",
             "#weartakcommandenrollserver a,b,65536,u,p", "#weartakcommandenrollserver a,b,x,u,p",
@@ -191,6 +194,7 @@ struct ChatCommandChecks {
             remove: { record = nil }, commit: { committed = true })
         precondition(record == "new" && committed)
         record = "old"
+        var reads = 0
         do {
             try AtomicRecordReplacement.apply("new", read: {
                 reads += 1

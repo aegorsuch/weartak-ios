@@ -1674,7 +1674,7 @@ impersonate an allowed sender.
 (the password is everything after the fourth comma) adds a TAK server, or updates the credentials of an
 existing server matched by name or address and port, replying “Server <name> added” or “Server <name> updated”.
 It is accepted from any allow-listed sender on any channel, keeps the freshness, replay and rate limits, and is
-refused when network preferences are locked (the admin lock stands in for MDM). It needs the paired iPhone
+refused when watch network preferences, iPhone administrator settings, or managed server policy are locked. It needs the paired iPhone
 bridge, which enrolls and stores only the resulting client certificate in the Keychain; the password is never
 stored, logged, echoed or exported, and is purged on a best-effort basis (residual mesh, peer and server copies
 may remain). If the name and the address/port match different servers, nothing changes. Enrollment fails with
@@ -1685,7 +1685,7 @@ phone does not buffer, display, notify or log the command text, so it is not rep
 
 The same authorization applies to native ATAK Ditto 1.1.1 chat, TAK server chat
 through Companion, Sit(x), watch multicast, and their WatchConnectivity ingress.
-Commands remain direct-only, non-self, and within five minutes of their timestamp.
+Commands remain direct-only except comma-form `enrollserver`, non-self, and within five minutes of their timestamp.
 Sender/message-ID receipts are shared across routes and retained across watch
 restarts; a full replay ledger rejects new commands rather than evicting live receipts.
 Acknowledgments use only the originating route, not the ordinary chat's additional

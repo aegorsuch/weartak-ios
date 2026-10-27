@@ -45,8 +45,10 @@ struct TAKChatMessage: Identifiable, Equatable {
     }
 
     static func isEnrollServerCommand(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(whereSeparator: \.isWhitespace).first?.lowercased() == "#weartakcommandenrollserver"
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let prefix = "#weartakcommand"
+        guard body.hasPrefix(prefix) else { return false }
+        return body.dropFirst(prefix.count).split(whereSeparator: \.isWhitespace).first == "enrollserver"
     }
 
     static func isCommandOnly(_ text: String) -> Bool {

@@ -56,6 +56,7 @@ struct TAKChatChecks {
             recipientUID: "watch", recipientCallSign: "Watch",
             text: "#weartakcommand enrollserver name=North url=tak.example", now: now)
         precondition(TAKChatMessage.containsCommandOnly(in: enrollmentXML))
+        precondition(TAKChatMessage.phoneRelay(forXML: enrollmentXML) == .liveOnly)
         precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12 " + String(repeating: "a", count: 24_000)))
         precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12other " + String(repeating: "a", count: 3_000)))
         checkInbox(now: now)

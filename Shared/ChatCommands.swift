@@ -66,9 +66,12 @@ enum ChatCommandParser {
         let nameEnd = rest.firstIndex(where: \.isWhitespace) ?? rest.endIndex
         let name = String(rest[..<nameEnd]).lowercased()
         guard matches(namePattern, name) else { return .malformed("invalid command name") }
-        if name == "enrollserver" {
+        let remainder = String(rest[nameEnd...].drop(while: \.isWhitespace))
+        let namedEnrollment = ["name=", "url=", "port="].contains {
+            remainder.lowercased().hasPrefix($0)
+        }
+        if name == "enrollserver", !namedEnrollment {
             // Comma syntax: the password is everything after the fourth comma, so it is not tokenized.
-            let remainder = String(rest[nameEnd...].drop(while: \.isWhitespace))
             guard remainder.utf8.count <= EnrollServerRequest.maximumLength else { return .malformed("too long") }
             return .parsed(ChatCommand(name: name, arguments: [:], positional: [remainder]))
         }

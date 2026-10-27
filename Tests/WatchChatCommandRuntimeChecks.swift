@@ -76,6 +76,9 @@ struct WatchChatCommandRuntimeChecks {
         precondition(TAKChatMessage.isProvisioningCommand(enroll) && TAKChatMessage.isEnrollServerCommand(enroll))
         precondition(!TAKChatMessage.isEnrollServerCommand(credential))
         precondition(runtime.handle(message(enroll, group: true), ownUID: "watch", settings: settings, now: now) == .phoneProvisioning)
+        let spacedEnroll = "#weartakcommand enrollserver Training,tak.example.gov,8089,alice,s3cret,pw"
+        precondition(runtime.handle(message(spacedEnroll, group: true), ownUID: "watch",
+            settings: settings, now: now) == .phoneProvisioning)
         // A phone-relayed event keeps the original sender, so the allowlist applies to the real sender.
         func relayed(sender: String) -> TAKChatMessage {
             let xml = try! TAKChatMessage.outgoing(senderUID: sender, senderCallSign: "Operator", recipientUID: "watch",
@@ -150,6 +153,8 @@ struct WatchChatCommandRuntimeChecks {
             fatalError("Authorized server enrollment command was not forwarded to Companion")
         }
         precondition(enrollment.name == "North" && enrollment.url == "tak.example" && enrollment.port == 8443)
+        precondition(runtime.handle(message("#weartakcommand enrollserver name=North url=tak.example", group: true),
+            ownUID: "watch", settings: settings, now: now) == .consumed)
         guard case .reply = runtime.handle(
             message("#weartakcommand enrollserver name=North url=tak.example password=\"\""),
             ownUID: "watch", settings: settings, now: now) else {

@@ -1744,6 +1744,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         var p12Request: ChatP12Request?
         var enrollRequest: EnrollServerRequest?
         if enrolling {
+            guard !takServersPolicyLocked else {
+                return reply("Command rejected: server settings are administrator-locked; nothing changed.")
+            }
             guard let parsed = try? EnrollServerRequest(command) else {
                 return reply("Use enrollserver name,address,port,username,password; nothing changed.")
             }
@@ -1929,7 +1932,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
             return ("Enrollment failed; check the address, ports, username and password. Nothing changed.", false)
         }
         // Enrollment awaited a network call, so re-check that the server list did not change meanwhile.
-        guard !adminLockEnabled, (try? CompanionServer.saving(record, into: servers)) != nil else {
+        guard !takServersPolicyLocked, (try? CompanionServer.saving(record, into: servers)) != nil else {
             CertificateStore.discardUncommitted(stored)
             return ("Command rejected: configuration changed during enrollment; nothing changed.", false)
         }

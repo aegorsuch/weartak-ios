@@ -81,7 +81,12 @@ final class WatchChatCommandRuntime {
         let parsed = ChatCommandParser.parse(message.text)
         let sensitive = TAKChatMessage.isCommandOnly(message.text)
         // enrollserver is accepted from any allowlisted sender on any channel; other commands stay direct-only.
-        let acceptsGroup = TAKChatMessage.isEnrollServerCommand(message.text)
+        let acceptsGroup: Bool
+        if case .parsed(let command) = parsed {
+            acceptsGroup = command.name == "enrollserver" && !command.positional.isEmpty
+        } else {
+            acceptsGroup = false
+        }
         guard message.senderUID != ownUID, !message.isGroup || acceptsGroup, settings.commandsEnabled else {
             return sensitive ? .consumed : .notCommand
         }
@@ -109,7 +114,7 @@ final class WatchChatCommandRuntime {
         case .malformed(let reason):
             return .reply("Command rejected: \(reason)")
         case .parsed(let command):
-            if command.name == "enrollserver" {
+            if command.name == "enrollserver", command.positional.isEmpty {
                 guard !settings.networkPreferencesLocked else {
                     return .reply("Command rejected: network settings are locked.")
                 }
