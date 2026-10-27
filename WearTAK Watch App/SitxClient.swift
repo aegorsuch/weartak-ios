@@ -982,7 +982,29 @@ final class SitxClient: ObservableObject, TAKTransport {
 }
 
 struct KeychainSitxTokenStore: SitxTokenStore {
-    private let service = "com.aegorsuch.weartak.sitx"
+    static let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    private let service: String
+
+    init(service: String = "com.aegorsuch.weartak.sitx") {
+        self.service = service
+        migrateAccessibility()
+    }
+
+    /// Tokens saved by earlier builds were backup-eligible. Re-protect them in place so a restore
+    /// to another device requires a new Sit(x) sign-in instead of carrying credentials along.
+    private func migrateAccessibility() {
+        for account in ["access", "refresh", "host"] {
+            guard let value = read(account: account) else { continue }
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account
+            ]
+            let attributes = [kSecAttrAccessible as String: Self.accessibility]
+            let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            if status != errSecSuccess { try? save(value, account: account) }
+        }
+    }
 
     func read(account: String) -> String? {
         let query: [String: Any] = [
@@ -1005,7 +1027,7 @@ struct KeychainSitxTokenStore: SitxTokenStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: Data(value.utf8),
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            kSecAttrAccessible as String: Self.accessibility
         ]
         let status = SecItemAdd(item as CFDictionary, nil)
         guard status == errSecSuccess else { throw SitxError.keychain(status) }

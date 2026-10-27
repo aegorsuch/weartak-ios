@@ -167,6 +167,7 @@ if [[ "$(uname -s)" == Darwin ]]; then
     Tests/SitxProtocolChecks.swift -o "$build_dir/sitx-protocol-checks"
   "$build_dir/sitx-protocol-checks" --own-pin-deletion
   "$build_dir/sitx-protocol-checks" --developer-persistence
+  "$build_dir/sitx-protocol-checks" --token-keychain
 fi
 
 swiftc -swift-version 5 -parse-as-library \
