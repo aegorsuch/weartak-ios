@@ -624,6 +624,7 @@ private struct CompanionServerEditor: View {
     init(bridge: PhoneBridgeModel, server: CompanionServer?, prefill: ServerEnrollmentCommand? = nil) {
         self.bridge = bridge
         original = server
+        self.prefill = prefill
         serverID = server?.id ?? UUID()
         _name = State(initialValue: prefill?.name ?? server?.name ?? "")
         _host = State(initialValue: prefill?.url ?? server?.host ?? "")
