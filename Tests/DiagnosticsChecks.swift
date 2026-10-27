@@ -66,8 +66,8 @@ struct DiagnosticsChecks {
         expectFailure { try failure.setEnabled(true) }
         precondition(failure.hasStorageFailure && !failure.isEnabled)
         expectFailure { _ = try failure.export() }
-        precondition(DeveloperPreference.sorted([.diagnostics, .developerMode, .viewDiagnostics],
-            title: \.rawValue) == [.developerMode, .diagnostics, .viewDiagnostics])
+        precondition(DeveloperPreference.sorted([.networkPreferencesChecklist, .diagnostics, .developerMode, .viewDiagnostics],
+            title: \.rawValue) == [.developerMode, .diagnostics, .networkPreferencesChecklist, .viewDiagnostics])
         precondition(DeveloperPreference.sorted([.diagnostics, .developerMode],
             title: { $0 == .diagnostics ? "A" : "Z" }) == [.diagnostics, .developerMode])
         precondition(DeveloperPreference.diagnostics.rawValue == "Logging")
@@ -75,14 +75,24 @@ struct DiagnosticsChecks {
             title: \.rawValue).map(\.rawValue) ==
             ["Beta Features", "Collect Watch Logs", "Developer mode", "Export Logs", "Logging"])
         precondition(DeveloperPreference.viewDiagnostics.rawValue == "View Logs")
+        precondition(DeveloperPreference.networkPreferencesChecklist.rawValue == "Network Preferences Checklist")
         let catalog = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: "Shared/Diagnostics.xcstrings"))) as! [String: Any]
         let strings = catalog["strings"] as! [String: Any]
         for label in ["Logging", "Collect Watch Logs", "Export Logs", "Share Logs", "View Logs"] {
             precondition(strings[label] != nil)
         }
+        let checklist = strings[DeveloperPreference.networkPreferencesChecklist.rawValue] as! [String: Any]
+        let localizations = checklist["localizations"] as! [String: Any]
+        for language in ["fr", "es", "de", "ar", "ja", "zh-Hans"] {
+            let localization = localizations[language] as! [String: Any]
+            let unit = localization["stringUnit"] as! [String: String]
+            precondition(unit["state"] == "translated")
+            precondition(!(unit["value"] ?? "").isEmpty)
+        }
 
         let watch = try String(contentsOfFile: "WearTAK Watch App/SettingsView.swift", encoding: .utf8)
-        precondition(watch.contains("DeveloperPreference.sorted([.developerMode, .diagnostics, .viewDiagnostics]"))
+        precondition(watch.contains("DeveloperPreference.sorted([.developerMode, .diagnostics, .networkPreferencesChecklist, .viewDiagnostics]"))
+        precondition(watch.contains("Toggle(title(item), isOn: $settings.networkPreferencesChecklist)"))
         let phone = try String(contentsOfFile: "WearTAK Companion/DeveloperPreferencesView.swift", encoding: .utf8)
         precondition(phone.contains("[.betaFeatures, .collectWatch, .developerMode, .diagnostics, .exportDiagnostics]"))
         precondition(phone.contains("ShareLink(item: file.url)"))

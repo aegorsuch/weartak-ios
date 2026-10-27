@@ -488,7 +488,13 @@ Network Preferences can be locked from Admin Preferences. Admin Preferences and
 Developer Preferences always appear in Settings but stay disabled until
 developer mode is unlocked; the lock blocks Network Preferences' Settings and
 dashboard shortcuts.
-When unlocked, Network Preferences starts with a Transports checklist sorted by
+Developer Preferences > **Network Preferences Checklist** is a persisted,
+default-off watch preference, sorted alphabetically after Logging (there is no
+Stay awake control on watchOS). Enabling it shows the Transports checklist at
+the top of unlocked Network Preferences; disabling it hides only that section,
+including the TAK Servers summary, without changing any transport settings.
+The normal configuration links remain available either way.
+When enabled, the Transports checklist is sorted by
 label: Ditto, Sit(x) TAK and TAK SA Multicast. Checked means enabled, not
 connected. Unchecking only disables the transport; saved addresses, Sit(x)
 authorization and Ditto PDLs are kept, and the configuration rows stay below.

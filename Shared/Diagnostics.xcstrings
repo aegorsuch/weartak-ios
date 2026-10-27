@@ -11,6 +11,46 @@
     "Export Logs": {},
     "Logging": {},
     "Logging storage is unavailable. Check available storage and try again.": {},
+    "Network Preferences Checklist": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قائمة التحقق من تفضيلات الشبكة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checkliste für Netzwerkeinstellungen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lista de verificación de preferencias de red"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liste de contrôle des préférences réseau"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワーク環境設定チェックリスト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络偏好设置检查清单"
+          }
+        }
+      }
+    },
     "Open the paired Apple Watch app to collect its logs.": {},
     "Share Logs": {},
     "View Logs": {}
