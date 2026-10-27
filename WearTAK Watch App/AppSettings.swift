@@ -96,6 +96,7 @@ enum WiFiBatteryPolicy: String, CaseIterable, Identifiable {
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let developerMode = "WearTAK.developerMode"
+        static let networkPreferencesChecklist = "WearTAK.networkPreferencesChecklist"
         static let networkPreferencesLocked = "WearTAK.networkPreferencesLocked"
         static let dashboardMetric = "WearTAK.dashboardMetric"
         static let mapButtonsVisible = "WearTAK.mapButtonsVisible"
@@ -182,6 +183,10 @@ final class AppSettings: ObservableObject {
 
     @Published var networkPreferencesLocked: Bool {
         didSet { defaults.set(networkPreferencesLocked, forKey: Keys.networkPreferencesLocked) }
+    }
+
+    @Published var networkPreferencesChecklist: Bool {
+        didSet { defaults.set(networkPreferencesChecklist, forKey: Keys.networkPreferencesChecklist) }
     }
 
     @discardableResult
@@ -602,6 +607,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         developerMode = defaults.bool(forKey: Keys.developerMode)
+        networkPreferencesChecklist = defaults.bool(forKey: Keys.networkPreferencesChecklist)
         networkPreferencesLocked = defaults.bool(forKey: Keys.networkPreferencesLocked)
         dashboardMetric = DashboardMetric.restored(defaults.string(forKey: Keys.dashboardMetric))
         mapButtonsVisible = defaults.object(forKey: Keys.mapButtonsVisible) as? Bool ?? true

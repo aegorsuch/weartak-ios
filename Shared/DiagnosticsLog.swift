@@ -175,6 +175,7 @@ nonisolated enum DeveloperPreference: String, Identifiable, CaseIterable {
     case developerMode = "Developer mode"
     case diagnostics = "Logging"
     case exportDiagnostics = "Export Logs"
+    case networkPreferencesChecklist = "Network Preferences Checklist"
     case viewDiagnostics = "View Logs"
 
     var id: String { rawValue }

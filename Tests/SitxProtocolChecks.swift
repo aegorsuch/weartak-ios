@@ -187,6 +187,10 @@ struct SitxProtocolChecks {
             defer { defaults.removePersistentDomain(forName: suite) }
             let settings = AppSettings(defaults: defaults)
             precondition(!settings.developerMode)
+            let transportStates = (settings.dittoEnabled, settings.sitxEnabled, settings.multicastEnabled)
+            precondition(!settings.networkPreferencesChecklist, "checklist is hidden on fresh installs and upgrades")
+            settings.networkPreferencesChecklist = true
+            precondition(AppSettings(defaults: defaults).networkPreferencesChecklist)
             settings.networkPreferencesLocked = true
             for _ in 0..<6 { precondition(!settings.registerVersionTap()) }
             precondition(settings.registerVersionTap() && settings.developerMode)
@@ -196,7 +200,13 @@ struct SitxProtocolChecks {
             precondition(settings.registerVersionTap() && !settings.developerMode)
             let restored = AppSettings(defaults: defaults)
             precondition(!restored.developerMode && restored.networkPreferencesLocked)
-            print("PASS: durable developer unlock, seven-tap explicit disable and independent admin network lock")
+            precondition(restored.networkPreferencesChecklist, "developer unlock and admin lock do not reset checklist preference")
+            restored.networkPreferencesChecklist = false
+            let disabled = AppSettings(defaults: defaults)
+            precondition(!disabled.networkPreferencesChecklist, "explicitly disabling persists")
+            precondition((disabled.dittoEnabled, disabled.sitxEnabled, disabled.multicastEnabled) == transportStates,
+                         "checklist visibility does not change transport settings")
+            print("PASS: durable developer unlock, checklist opt-in persistence and independent admin network lock")
             return
         }
         if CommandLine.arguments.contains("--token-keychain") {

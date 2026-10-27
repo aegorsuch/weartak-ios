@@ -107,7 +107,7 @@ private struct DeveloperPreferencesView: View {
 
     var body: some View {
         List {
-            ForEach(DeveloperPreference.sorted([.developerMode, .diagnostics, .viewDiagnostics], title: title)) { item in
+            ForEach(DeveloperPreference.sorted([.developerMode, .diagnostics, .networkPreferencesChecklist, .viewDiagnostics], title: title)) { item in
                 switch item {
                 case .developerMode:
                     Toggle(title(item), isOn: $settings.developerMode)
@@ -120,6 +120,8 @@ private struct DeveloperPreferencesView: View {
                     }))
                 case .viewDiagnostics:
                     NavigationLink(title(item)) { WatchDiagnosticsView() }
+                case .networkPreferencesChecklist:
+                    Toggle(title(item), isOn: $settings.networkPreferencesChecklist)
                 default:
                     EmptyView()
                 }
@@ -621,20 +623,22 @@ struct NetworkPreferencesView: View {
                 Label(String(localized: "Network settings locked", table: "WatchSettings"), systemImage: "lock.fill")
                     .foregroundStyle(.secondary)
             } else {
-                Section(String(localized: "Transports", table: "WatchSettings")) {
-                    ForEach(NetworkTransport.sorted(title: \.rawValue)) { transport in
-                        transportToggle(transport)
-                    }
-                    NavigationLink {
-                        RelayProviderView(model: model, settings: settings)
-                    } label: {
-                        LabeledContent(String(localized: "TAK Servers", table: "WatchSettings")) {
-                            Text(model.companionServerConfigured
-                                 ? String(localized: "Managed in Companion", table: "WatchSettings")
-                                 : String(localized: "Configure on phone", table: "WatchSettings"))
+                if settings.networkPreferencesChecklist {
+                    Section(String(localized: "Transports", table: "WatchSettings")) {
+                        ForEach(NetworkTransport.sorted(title: \.rawValue)) { transport in
+                            transportToggle(transport)
                         }
+                        NavigationLink {
+                            RelayProviderView(model: model, settings: settings)
+                        } label: {
+                            LabeledContent(String(localized: "TAK Servers", table: "WatchSettings")) {
+                                Text(model.companionServerConfigured
+                                     ? String(localized: "Managed in Companion", table: "WatchSettings")
+                                     : String(localized: "Configure on phone", table: "WatchSettings"))
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
                     }
-                    .accessibilityElement(children: .combine)
                 }
                 Section {
                     networkConfigurationLinks
