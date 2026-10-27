@@ -185,8 +185,9 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
         watchRoute = WatchRoute(rawValue: defaults.string(forKey: Self.watchRouteKey) ?? "") ?? .apple
         developerMode = defaults.bool(forKey: Self.developerModeKey)
         adminLockEnabled = defaults.bool(forKey: Self.adminLockKey)
-        takServersEnabled = defaults.dictionary(forKey: Self.managedConfigurationKey)?
-            [Self.managedTakServersEnabledKey] as? Bool
+        let managedTakServersEnabled = defaults.dictionary(forKey: Self.managedConfigurationKey)
+            .flatMap { $0[Self.managedTakServersEnabledKey] as? Bool }
+        takServersEnabled = managedTakServersEnabled
             ?? defaults.object(forKey: Self.takServersEnabledKey) as? Bool
             ?? true
         reporter = PhoneLocationReporter(defaults: defaults)
@@ -554,8 +555,7 @@ final class PhoneBridgeModel: NSObject, ObservableObject, WCSessionDelegate, Wea
     }
 
     var managedTakServersEnabled: Bool? {
-        defaults.dictionary(forKey: Self.managedConfigurationKey)?
-            [Self.managedTakServersEnabledKey] as? Bool
+        defaults.dictionary(forKey: Self.managedConfigurationKey)?[Self.managedTakServersEnabledKey] as? Bool
     }
 
     var takServersPolicyLocked: Bool {
