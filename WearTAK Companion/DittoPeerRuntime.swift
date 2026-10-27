@@ -222,8 +222,8 @@ final class DittoPeerRuntime {
                 guard ingress.accept(doc, ownUID: uid, localPeer: instance.presence.graph.localPeer.peerKey) else { continue }
                 onEvent?(doc.xml)
             } catch {
-                if let text = raw["msg"] as? String, TAKChatMessage.isProvisioningCommand(text) {
-                    logger.error("Rejected Ditto provisioning chat document.")
+                if let text = raw["msg"] as? String, TAKChatMessage.isCommandOnly(text) {
+                    logger.error("Rejected Ditto command-only chat document.")
                 } else {
                     logger.error("Rejected Ditto \(collection, privacy: .public) document: \(error.localizedDescription, privacy: .public)")
                 }
@@ -247,7 +247,7 @@ final class DittoPeerRuntime {
     func publishEvent(_ xml: String, uid: String, callsign: String) async -> Bool {
         guard let instance, instance.sync.isActive else { return false }
         let provisioning = TAKChatMessage.parse(xml, ownUID: uid).map {
-            TAKChatMessage.isProvisioningCommand($0.text)
+            TAKChatMessage.isCommandOnly($0.text)
         } ?? false
         do {
             let (collection, document) = try DittoCoTDocument.make(xml: xml,

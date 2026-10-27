@@ -42,7 +42,10 @@ struct ChatCommandSettingsView: View {
                 Text("toggleditto on or toggleditto off sets the saved state without changing the identity. After off, use another route or the UI to enable it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("enrollserver and loadprofile are not supported on iOS. Other unknown commands are rejected.")
+                Text("#weartakcommand enrollserver name=North url=tak.example port=8089 opens the iPhone's New Server screen with details prefilled. Enter credentials on iPhone; credentials are not accepted in chat.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("loadprofile is not supported on iOS. Network preferences and iPhone administrator or MDM locks apply to server enrollment.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

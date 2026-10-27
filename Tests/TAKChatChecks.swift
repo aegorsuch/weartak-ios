@@ -48,6 +48,14 @@ struct TAKChatChecks {
         precondition(TAKChatMessage.parse(credentialXML, ownUID: "watch")?.text == provisioning)
         precondition(TAKChatMessage.containsProvisioningCommand(in: credentialXML))
         precondition(!TAKChatMessage.containsProvisioningCommand(in: xml))
+        precondition(TAKChatMessage.isCommandOnly("#weartakcommand enrollserver name=North url=tak.example"))
+        precondition(TAKChatMessage.isCommandOnly(provisioning))
+        precondition(!TAKChatMessage.acceptsTextLength(
+            "#weartakcommand enrollserver name=North url=tak.example " + String(repeating: "a", count: 2_000)))
+        let enrollmentXML = try TAKChatMessage.outgoing(senderUID: "atak", senderCallSign: "ATAK",
+            recipientUID: "watch", recipientCallSign: "Watch",
+            text: "#weartakcommand enrollserver name=North url=tak.example", now: now)
+        precondition(TAKChatMessage.containsCommandOnly(in: enrollmentXML))
         precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12 " + String(repeating: "a", count: 24_000)))
         precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12other " + String(repeating: "a", count: 3_000)))
         checkInbox(now: now)

@@ -1304,7 +1304,8 @@ final class WatchSessionModel: NSObject, ObservableObject {
     }
 
     func sendContactChat(uid: String, route: ContactChatRoute, text: String, isGroup: Bool = false,
-                         allowUnknownDirectRecipient: Bool = false, originatingRouteOnly: Bool = false) async throws {
+                         allowUnknownDirectRecipient: Bool = false, originatingRouteOnly: Bool = false,
+                         requireTransportAcceptance: Bool = false) async throws {
         let isDitto = route == .companion(DittoCoTDocument.sourceID)
         let groupMembers = contactMessages[ContactConversation(uid: uid, route: route, isGroup: true)]?
             .last?.participantUids.filter { $0 != SitxClient.deviceID() && $0 != uid } ?? []
@@ -1327,7 +1328,7 @@ final class WatchSessionModel: NSObject, ObservableObject {
         guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else {
             throw ContactChatFailure.message("Unable to record the outgoing chat message.")
         }
-        if TAKChatMessage.isProvisioningCommand(text) {
+        if TAKChatMessage.isCommandOnly(text) || requireTransportAcceptance {
             guard !isGroup else { throw ContactChatFailure.message("Provisioning requires a direct chat.") }
             switch route {
             case .companion(let server):
@@ -1391,6 +1392,23 @@ final class WatchSessionModel: NSObject, ObservableObject {
                 }
             }
             return
+        case .phoneServerEnrollment(let request):
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let response: String
+                do {
+                    response = try await companionClient.requestServerEnrollment(request, from: message)
+                } catch {
+                    response = "Server enrollment request rejected: \(error.localizedDescription)"
+                }
+                do {
+                    try await sendContactChat(uid: message.senderUID, route: route, text: response,
+                        allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                } catch {
+                    chatLogger.error("Server enrollment command response could not be sent on its originating route: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            return
         case .setDittoEnabled(let enabled):
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -1415,6 +1433,81 @@ final class WatchSessionModel: NSObject, ObservableObject {
                             allowUnknownDirectRecipient: true, originatingRouteOnly: true)
                     } catch {
                         chatLogger.error("Ditto command acknowledgement could not be sent.")
+                    }
+                }
+            }
+            return
+        case .setMulticastEnabled(let enabled):
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if !enabled {
+                    do {
+                        try await sendContactChat(uid: message.senderUID, route: route,
+                            text: "Disabling multicast after this acknowledgement is accepted. Transport acceptance does not confirm delivery; re-enable in settings or by command over another route.",
+                            allowUnknownDirectRecipient: true, originatingRouteOnly: true,
+                            requireTransportAcceptance: true)
+                    } catch {
+                        chatLogger.error("Multicast disable refused because its originating-route acknowledgement was not accepted: \(error.localizedDescription, privacy: .public)")
+                        return
+                    }
+                    settings.multicastEnabled = false
+                } else {
+                    settings.multicastEnabled = true
+                    do {
+                        try await sendContactChat(uid: message.senderUID, route: route,
+                            text: "TAK multicast enabled in watch settings.",
+                            allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                    } catch {
+                        chatLogger.error("Multicast enable acknowledgement failed: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+            }
+            return
+        case .setPhoneTakServersEnabled(let enabled):
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    _ = try await companionClient.setTakServersEnabled(enabled, phase: .prepare, from: message)
+                } catch {
+                    do {
+                        try await sendContactChat(uid: message.senderUID, route: route,
+                            text: "TAK server command rejected: \(error.localizedDescription)",
+                            allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                    } catch {
+                        chatLogger.error("TAK server command rejection could not be replied on its originating route: \(error.localizedDescription, privacy: .public)")
+                    }
+                    return
+                }
+                if !enabled {
+                    do {
+                        try await sendContactChat(uid: message.senderUID, route: route,
+                            text: "Disabling TAK servers on iPhone after this acknowledgement is accepted. Transport acceptance does not confirm delivery; re-enable in Companion or use another active route.",
+                            allowUnknownDirectRecipient: true, originatingRouteOnly: true,
+                            requireTransportAcceptance: true)
+                    } catch {
+                        chatLogger.error("TAK server disable refused because its originating-route acknowledgement was not accepted: \(error.localizedDescription, privacy: .public)")
+                        return
+                    }
+                }
+                do {
+                    _ = try await companionClient.setTakServersEnabled(enabled, phase: .commit, from: message)
+                } catch {
+                    do {
+                        try await sendContactChat(uid: message.senderUID, route: route,
+                            text: "TAK server command could not be applied: \(error.localizedDescription)",
+                            allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                    } catch {
+                        chatLogger.error("TAK server command failure could not be replied on its originating route: \(error.localizedDescription, privacy: .public)")
+                    }
+                    return
+                }
+                if enabled {
+                    do {
+                        try await sendContactChat(uid: message.senderUID, route: route,
+                            text: "TAK servers enabled in iPhone Companion.",
+                            allowUnknownDirectRecipient: true, originatingRouteOnly: true)
+                    } catch {
+                        chatLogger.error("TAK server enable acknowledgement failed: \(error.localizedDescription, privacy: .public)")
                     }
                 }
             }

@@ -12,6 +12,40 @@ struct BloodhoundPickerChecks {
             precondition(WatchPinTitle.trimmingTrailingWhitespace(title + "\t \r\n\u{2003}") == title)
         }
         let source = try String(contentsOfFile: "WearTAK Watch App/WatchSessionModel.swift", encoding: .utf8)
+        let mapSource = try String(contentsOfFile: "WearTAK Watch App/ContentView.swift", encoding: .utf8)
+        precondition(mapSource.contains("ForEach(sortedMapPointSelections(cluster.selections)"),
+                     "Overlapping map items must be listed in sorted order")
+        precondition(mapSource.contains("left.localizedStandardCompare(right)"),
+                     "Map item sorting must follow localized alphabetical order")
+        precondition(mapSource.contains("Text(\"Self-Location\", tableName: \"WatchMain\")") &&
+                     mapSource.contains("String(format: \"%.5f\", coordinate.latitude)") &&
+                     mapSource.contains("String(format: \"%.5f\", coordinate.longitude)"),
+                     "The self popup must label its coordinates and retain five-decimal precision")
+        precondition(mapSource.contains("return callSign.isEmpty ? String(localized: \"You\", table: \"WatchMain\") : \"\\(callSign) (you)\""),
+                     "The visible self marker must identify the user by callsign")
+        precondition(mapSource.contains("bounds: MapCameraBounds(minimumDistance: 11)"),
+                     "Pinch zoom must be bounded at close range")
+        let selectable = mapSource.components(separatedBy: "private func selectableMapPoints()")[1]
+            .components(separatedBy: "private func mapPointTitle(")[0]
+        precondition(selectable.contains("points.append((.selfMarker, location.coordinate))") &&
+                     selectable.contains("model.markers.map { (.marker($0.id), $0.coordinate) }"),
+                     "Self and dropped pins must both participate in overlap selection")
+        precondition(mapSource.contains("hypot(candidate.1.x - anchorPoint.x, candidate.1.y - anchorPoint.y) <= 32"),
+                     "Items under the self marker must enter the same overlap picker")
+        let selfDetails = mapSource.components(separatedBy: "private struct SelfCoordinateView:")[1]
+            .components(separatedBy: "private extension TeamColor")[0]
+        precondition(!selfDetails.contains("Bloodhound"),
+                     "The self-location popup must not offer Bloodhound")
+        let contactDetails = mapSource.components(separatedBy: "private struct MapContactDetailView:")[1]
+            .components(separatedBy: "private struct ContactChatView")[0]
+        precondition(contactDetails.contains("model.toggleContactBloodhound(uid: uid)"),
+                     "Contact map items must offer Bloodhound")
+        let pointDetails = mapSource.components(separatedBy: "private struct IncomingPointDetailView:")[1]
+            .components(separatedBy: "private extension TeamColor")[0]
+        precondition(pointDetails.contains("model.toggleMapItemBloodhound(id: id)"),
+                     "Incoming map items, including aircraft, must offer Bloodhound")
+        precondition(mapSource.contains("model.toggleBloodhound(id: marker.id)"),
+                     "Dropped pins must offer Bloodhound")
         let removal = source.components(separatedBy: "func removePickerTarget(")[1]
             .components(separatedBy: "func removeAllPickerTargets(")[0]
         precondition(removal.contains("case .marker(let id):\n            deleteMarker(id: id)"))

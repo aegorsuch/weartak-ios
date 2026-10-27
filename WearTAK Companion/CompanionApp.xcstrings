@@ -16740,6 +16740,56 @@
           }
         }
       }
+    },
+    "Enable TAK servers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable TAK servers"
+          }
+        }
+      }
+    },
+    "TAK server availability is managed as enabled." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TAK server availability is managed as enabled."
+          }
+        }
+      }
+    },
+    "TAK server availability is managed as disabled." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TAK server availability is managed as disabled."
+          }
+        }
+      }
+    },
+    "TAK server availability is locked by the administrator." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TAK server availability is locked by the administrator."
+          }
+        }
+      }
+    },
+    "Server details came from chat. Enter enrollment credentials on this iPhone; credentials are never sent through chat." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server details came from chat. Enter enrollment credentials on this iPhone; credentials are never sent through chat."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

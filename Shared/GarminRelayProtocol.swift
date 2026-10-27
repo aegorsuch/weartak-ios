@@ -254,7 +254,7 @@ enum GarminRelayProtocol {
             guard let message = TAKChatMessage.parse(xml, ownUID: ownUID) else { return nil }
             let command = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 .lowercased().hasPrefix("#weartakcommand")
-            guard !TAKChatMessage.isProvisioningCommand(message.text),
+            guard !TAKChatMessage.isCommandOnly(message.text),
                   !command || message.text.count <= 512 else {
                 throw Failure.unsupported("credential or oversized command")
             }

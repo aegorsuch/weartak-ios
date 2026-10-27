@@ -5,7 +5,10 @@ enum WatchChatCommandOutcome: Equatable {
     case consumed
     case reply(String)
     case phoneProvisioning
+    case phoneServerEnrollment(ServerEnrollmentCommand)
     case setDittoEnabled(Bool)
+    case setMulticastEnabled(Bool)
+    case setPhoneTakServersEnabled(Bool)
 }
 
 @MainActor
@@ -76,7 +79,7 @@ final class WatchChatCommandRuntime {
     func handle(_ message: TAKChatMessage, ownUID: String, settings: AppSettings,
                 now: Date = Date()) -> WatchChatCommandOutcome {
         let parsed = ChatCommandParser.parse(message.text)
-        let sensitive = TAKChatMessage.isProvisioningCommand(message.text)
+        let sensitive = TAKChatMessage.isCommandOnly(message.text)
         guard message.senderUID != ownUID, !message.isGroup, settings.commandsEnabled else {
             return sensitive ? .consumed : .notCommand
         }
@@ -104,6 +107,36 @@ final class WatchChatCommandRuntime {
         case .malformed(let reason):
             return .reply("Command rejected: \(reason)")
         case .parsed(let command):
+            if command.name == "enrollserver" {
+                guard !settings.networkPreferencesLocked else {
+                    return .reply("Command rejected: network settings are locked.")
+                }
+                do {
+                    return .phoneServerEnrollment(try ServerEnrollmentCommand(command))
+                } catch {
+                    return .reply("Use enrollserver name=<name> url=<host> [port=<1-65535>]; enter credentials on the iPhone.")
+                }
+            }
+            if let enabled = networkCommandValue(command.name, enabledName: "enablemulticast",
+                                                 disabledName: "disablemulticast") {
+                guard command.arguments.isEmpty, command.positional.isEmpty else {
+                    return .reply("Use enablemulticast or disablemulticast with no arguments; nothing changed.")
+                }
+                guard !settings.networkPreferencesLocked else {
+                    return .reply("Command rejected: network settings are locked.")
+                }
+                return .setMulticastEnabled(enabled)
+            }
+            if let enabled = networkCommandValue(command.name, enabledName: "enabletakservers",
+                                                 disabledName: "disabletakservers") {
+                guard command.arguments.isEmpty, command.positional.isEmpty else {
+                    return .reply("Use enabletakservers or disabletakservers with no arguments; nothing changed.")
+                }
+                guard !settings.networkPreferencesLocked else {
+                    return .reply("Command rejected: network settings are locked.")
+                }
+                return .setPhoneTakServersEnabled(enabled)
+            }
             if command.name == "toggleditto" {
                 guard !settings.networkPreferencesLocked else { return .reply("Command rejected: network settings are locked.") }
                 guard command.arguments.isEmpty, command.positional.count == 1,
@@ -125,6 +158,12 @@ final class WatchChatCommandRuntime {
         }
     }
 
+    private func networkCommandValue(_ name: String, enabledName: String, disabledName: String) -> Bool? {
+        if name == enabledName { return true }
+        if name == disabledName { return false }
+        return nil
+    }
+
     private func execute(_ command: ChatCommand, settings: AppSettings) -> String {
         if command.name == "setpdl" {
             guard !settings.networkPreferencesLocked else { return "Command rejected: network settings are locked." }
@@ -139,8 +178,8 @@ final class WatchChatCommandRuntime {
                 return "Command rejected: invalid identity or secure storage unavailable."
             }
         }
-        if command.name == "enrollserver" || command.name == "loadprofile" {
-            return "\(command.name) is not supported in WearTAK for iOS."
+        if command.name == "loadprofile" {
+            return "loadprofile is not supported in WearTAK for iOS."
         }
 
         let keysByCommand: [String: Set<String>] = [
