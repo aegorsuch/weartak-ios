@@ -599,6 +599,7 @@ private struct CompanionServerEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     let original: CompanionServer?
+    let prefill: ServerEnrollmentCommand?
     let serverID: UUID
     @State private var name: String
     @State private var host: String
