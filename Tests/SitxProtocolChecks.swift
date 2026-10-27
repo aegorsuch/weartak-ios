@@ -117,7 +117,7 @@ import Security
 
 @main
 struct SitxProtocolChecks {
-    static func checkTokenKeychainDeviceOnly() {
+    static func checkTokenKeychainDeviceOnly() throws {
         precondition((KeychainSitxTokenStore.accessibility as String)
             == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
         let service = "com.aegorsuch.weartak.sitx.checks.\(UUID().uuidString)"
@@ -130,8 +130,11 @@ struct SitxProtocolChecks {
             request[kSecReturnAttributes as String] = true
             request[kSecMatchLimit as String] = kSecMatchLimitAll
             var result: CFTypeRef?
-            guard SecItemCopyMatching(request as CFDictionary, &result) == errSecSuccess,
-                  let items = result as? [[String: Any]], items.count == 1 else { return nil }
+            let status = SecItemCopyMatching(request as CFDictionary, &result)
+            precondition(status == errSecSuccess, "Keychain attribute query failed: \(status)")
+            guard let items = result as? [[String: Any]], items.count == 1 else {
+                preconditionFailure("Expected exactly one Keychain item for \(account)")
+            }
             return items[0][kSecAttrAccessible as String] as? String
         }
         defer { for account in ["access", "refresh", "host"] { SecItemDelete(query(account) as CFDictionary) } }
@@ -143,19 +146,37 @@ struct SitxProtocolChecks {
             print("SKIP: Keychain unavailable in this environment")
             return
         }
-        precondition(accessibility("refresh") == (kSecAttrAccessibleAfterFirstUnlock as String))
+        let legacyAccessibility = accessibility("refresh")
+        #if os(macOS)
+        // The legacy macOS login Keychain ignores iOS data-protection attributes.
+        let reportsAccessibility = legacyAccessibility != nil
+        if !reportsAccessibility {
+            print("SKIP: accessibility attribute checks on the macOS legacy Keychain; value and uniqueness checks still run")
+        }
+        #else
+        let reportsAccessibility = true
+        #endif
+        if reportsAccessibility {
+            precondition(legacyAccessibility == (kSecAttrAccessibleAfterFirstUnlock as String))
+        }
+        func checkDeviceOnly(_ account: String) {
+            let actual = accessibility(account)
+            if reportsAccessibility {
+                precondition(actual == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+            }
+        }
 
         let store = KeychainSitxTokenStore(service: service)
         precondition(store.read(account: "refresh") == "legacy-refresh")
-        precondition(accessibility("refresh") == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+        checkDeviceOnly("refresh")
 
-        try? store.save("new-access", account: "access")
+        try store.save("new-access", account: "access")
         precondition(store.read(account: "access") == "new-access")
-        precondition(accessibility("access") == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
-        try? store.save("rotated-refresh", account: "refresh")
+        checkDeviceOnly("access")
+        try store.save("rotated-refresh", account: "refresh")
         precondition(store.read(account: "refresh") == "rotated-refresh")
-        precondition(accessibility("refresh") != nil)
-        print("PASS: Sit(x) tokens are device-only; legacy items migrate in place without loss or duplication")
+        checkDeviceOnly("refresh")
+        print("PASS: device-only policy constant and token migration/save without loss or duplication")
     }
 
     @MainActor
@@ -179,7 +200,7 @@ struct SitxProtocolChecks {
             return
         }
         if CommandLine.arguments.contains("--token-keychain") {
-            checkTokenKeychainDeviceOnly()
+            try checkTokenKeychainDeviceOnly()
             return
         }
         if CommandLine.arguments.contains("--own-pin-deletion") {

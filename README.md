@@ -2292,7 +2292,10 @@ xcrun swiftc -swift-version 5 -parse-as-library \
 Watch Sit(x) tokens use `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, so
 they are excluded from backups and device migration. Existing items are
 re-protected in place on launch; after restoring to a new device the user
-signs in to Sit(x) again. `sitx-protocol-checks --token-keychain` verifies this.
+signs in to Sit(x) again. `sitx-protocol-checks --token-keychain` checks the policy,
+token preservation and item uniqueness. Accessibility readback is checked where
+supported; the macOS legacy login Keychain ignores that attribute, so its native
+checks explicitly skip only accessibility readback, not token operations.
 
 The Sit(x) protocol checks include mocked connection loss during device
 authorization, successful group discovery after retry, visible retry status,
