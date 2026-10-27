@@ -492,9 +492,9 @@ When unlocked, Network Preferences starts with a Transports checklist sorted by
 label: Ditto, Sit(x) TAK and TAK SA Multicast. Checked means enabled, not
 connected. Unchecking only disables the transport; saved addresses, Sit(x)
 authorization and Ditto PDLs are kept, and the configuration rows stay below.
-Ditto uses the same setting and custom-PDL guard as Tool Preferences > Plugins,
-with a subtitle showing only the configured PDL source (Community, Custom PDL
-or None), never the PDL or a validity claim. Phone-managed Sit(x) stays
+Ditto uses the same setting and custom-PDL guard as Tool Preferences > Plugins.
+Tapping a transport row (and the TAK Servers row, which opens TAK Relay) opens that
+transport's settings; only the trailing toggle changes whether it is enabled. Phone-managed Sit(x) stays
 read-only. iPhone TAK servers are status only on the watch; enable or disable
 each server in WearTAK Companion.
 The developer UI unlock and the independent admin network/configuration locks
