@@ -72,6 +72,38 @@ struct WatchChatCommandRuntimeChecks {
         else { fatalError("Locked credential command accepted") }
         precondition(!locked.contains("abab"))
         settings.networkPreferencesLocked = false
+        let enroll = "#weartakcommandenrollserver Training,tak.example.gov,8089,alice,s3cret,pw"
+        precondition(TAKChatMessage.isProvisioningCommand(enroll) && TAKChatMessage.isEnrollServerCommand(enroll))
+        precondition(!TAKChatMessage.isEnrollServerCommand(credential))
+        precondition(runtime.handle(message(enroll, group: true), ownUID: "watch", settings: settings, now: now) == .phoneProvisioning)
+        let spacedEnroll = "#weartakcommand enrollserver Training,tak.example.gov,8089,alice,s3cret,pw"
+        precondition(runtime.handle(message(spacedEnroll, group: true), ownUID: "watch",
+            settings: settings, now: now) == .phoneProvisioning)
+        // A phone-relayed event keeps the original sender, so the allowlist applies to the real sender.
+        func relayed(sender: String) -> TAKChatMessage {
+            let xml = try! TAKChatMessage.outgoing(senderUID: sender, senderCallSign: "Operator", recipientUID: "watch",
+                recipientCallSign: "Watch", text: enroll, now: now, messageID: UUID().uuidString)
+            return TAKChatMessage.parse(xml, ownUID: "watch")!
+        }
+        precondition(runtime.handle(relayed(sender: "authorized"), ownUID: "watch", settings: settings, now: now) == .phoneProvisioning)
+        precondition(runtime.handle(relayed(sender: "phone-uid"), ownUID: "watch", settings: settings, now: now) == .consumed)
+        precondition(runtime.handle(message(enroll, sender: "untrusted", group: true), ownUID: "watch",
+            settings: settings, now: now) == .consumed)
+        precondition(runtime.handle(message(enroll, sender: "watch", group: true), ownUID: "watch",
+            settings: settings, now: now) == .consumed)
+        precondition(runtime.handle(message(credential, group: true), ownUID: "watch", settings: settings, now: now) == .consumed)
+        settings.networkPreferencesLocked = true
+        guard case .reply(let enrollLocked) = runtime.handle(message(enroll), ownUID: "watch", settings: settings, now: now)
+        else { fatalError("Locked enrollserver accepted") }
+        precondition(enrollLocked == "Command rejected: network settings are locked." && !enrollLocked.contains("s3cret"))
+        settings.networkPreferencesLocked = false
+        guard case .reply(let badEnroll) = runtime.handle(
+            message("#weartakcommandenrollserver Training,tak.example.gov,nope,alice,s3cret"),
+            ownUID: "watch", settings: settings, now: now) else { fatalError("Malformed enrollserver accepted") }
+        precondition(!badEnroll.contains("s3cret") && !badEnroll.contains("alice"))
+        settings.commandsEnabled = false
+        precondition(runtime.handle(message(enroll), ownUID: "watch", settings: settings, now: now) == .consumed)
+        settings.commandsEnabled = true
         let missingServer = message("#weartakcommandusep12 00")
         precondition(runtime.handle(missingServer, ownUID: "watch", settings: settings, now: now) ==
             .reply("Command rejected: server=<configured-server-UUID> is required; nothing changed."))
@@ -121,6 +153,8 @@ struct WatchChatCommandRuntimeChecks {
             fatalError("Authorized server enrollment command was not forwarded to Companion")
         }
         precondition(enrollment.name == "North" && enrollment.url == "tak.example" && enrollment.port == 8443)
+        precondition(runtime.handle(message("#weartakcommand enrollserver name=North url=tak.example", group: true),
+            ownUID: "watch", settings: settings, now: now) == .consumed)
         guard case .reply = runtime.handle(
             message("#weartakcommand enrollserver name=North url=tak.example password=\"\""),
             ownUID: "watch", settings: settings, now: now) else {
@@ -143,6 +177,6 @@ struct WatchChatCommandRuntimeChecks {
             fatalError("Server enrollment must respect the network lock")
         }
         precondition(enrollmentLock.contains("network settings are locked"))
-        print("PASS: direct-only command authorization, cross-route dedup, credential redaction, locks and positional PDL")
+        print("PASS: direct-only command authorization (enrollserver any channel), cross-route dedup, credential redaction, locks and positional PDL")
     }
 }

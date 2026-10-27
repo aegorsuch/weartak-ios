@@ -61,6 +61,14 @@ enum EnrollmentClient {
     }
 
     /// A rejected server certificate otherwise surfaces only as URLError.cancelled ("cancelled").
+    struct TrustFailure: LocalizedError {
+        let stage: String
+        let detail: String
+        var errorDescription: String? {
+            "Enrollment \(stage) failed: the server certificate was rejected (\(detail)). Check the enrollment port and server CA."
+        }
+    }
+
     private static func load(_ request: URLRequest, session: URLSession, trust: EnrollmentTrustDelegate,
                              stage: String) async throws -> (Data, URLResponse) {
         do {
@@ -68,7 +76,7 @@ enum EnrollmentClient {
         } catch {
             if let rejection = trust.rejection {
                 logger.error("Enrollment \(stage, privacy: .public) TLS rejected: \(rejection.localizedDescription, privacy: .public)")
-                throw CompanionFailure.message("Enrollment \(stage) failed: the server certificate was rejected (\(rejection.localizedDescription)). Check the enrollment port and server CA.")
+                throw TrustFailure(stage: stage, detail: rejection.localizedDescription)
             }
             if Task.isCancelled { logger.notice("Enrollment \(stage, privacy: .public) cancelled by Companion") }
             else { logger.error("Enrollment \(stage, privacy: .public) failed: \(error.localizedDescription, privacy: .public)") }

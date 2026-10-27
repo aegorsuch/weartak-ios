@@ -56,6 +56,7 @@ struct TAKChatChecks {
             recipientUID: "watch", recipientCallSign: "Watch",
             text: "#weartakcommand enrollserver name=North url=tak.example", now: now)
         precondition(TAKChatMessage.containsCommandOnly(in: enrollmentXML))
+        precondition(TAKChatMessage.phoneRelay(forXML: enrollmentXML) == .liveOnly)
         precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12 " + String(repeating: "a", count: 24_000)))
         precondition(!TAKChatMessage.acceptsTextLength("#weartakcommandusep12other " + String(repeating: "a", count: 3_000)))
         checkInbox(now: now)
@@ -66,6 +67,7 @@ struct TAKChatChecks {
         precondition(TAKChatMessage.parse(atak, ownUID: "watch")?.text == "Roger")
         precondition(TAKChatMessage.parse(atak, ownUID: "watch")?.senderCallSign == "ATAK")
         try checkRelayBuffer(xml: atak, now: now)
+        try checkEnrollServerRelay(now: now)
         print("PASS: GeoChat direct privacy, groups, All Chat Rooms, picker order, receive recency, quick messages, inbox bounds and buffered delivery")
     }
 
@@ -157,6 +159,35 @@ struct TAKChatChecks {
                 isGroup: true, participantUids: ["watch", "named"])
             fatalError("Named room without recipients must never become broadcast")
         } catch TAKChatMessage.ChatError.invalidMessage {}
+    }
+
+    static func checkEnrollServerRelay(now: Date) throws {
+        let secret = "pw,with;S3cret"
+        let server = UUID()
+        let session = UUID()
+        func relay(_ text: String, sender: String) throws -> (xml: String, buffer: CompanionChatBuffer, wire: BridgeWire.Message) {
+            let xml = try TAKChatMessage.outgoing(senderUID: sender, senderCallSign: "Operator",
+                recipientUID: "watch", recipientCallSign: "Watch", text: text, now: now, messageID: "m-\(UUID())")
+            var buffer = CompanionChatBuffer()
+            let event = CompanionMapEvent(xml: xml, sourceServerID: server, sourceGeneration: 0, receivedAt: now)
+            if TAKChatMessage.phoneRelay(forXML: xml) == .buffered { _ = buffer.receive(event, now: now) }
+            let wire = try BridgeWire.Message.decode(BridgeWire.Message(kind: .cot, xml: xml, sourceServerID: server,
+                sourceGeneration: 0, sessionID: session).encoded())
+            return (xml, buffer, wire)
+        }
+        let enroll = "#weartakcommandenrollserver Training,tak.example.gov,8089,alice,\(secret)"
+        let relayed = try relay(enroll, sender: "operator-uid")
+        // Forwarded live and unchanged: the watch sees the real sender, not the phone.
+        precondition(TAKChatMessage.phoneRelay(forXML: relayed.xml) == .liveOnly)
+        precondition(relayed.wire.xml == relayed.xml && relayed.wire.sourceServerID == server)
+        let parsed = TAKChatMessage.parse(relayed.wire.xml ?? "", ownUID: "watch")
+        precondition(parsed?.senderUID == "operator-uid" && parsed?.text == enroll)
+        // Never retained on the phone: not in the chat buffer and not in any handshake snapshot.
+        precondition(relayed.buffer.events.isEmpty)
+        let snapshot = try relayed.buffer.filling(BridgeWire.Message(kind: .status)).encoded()
+        precondition(!String(decoding: snapshot, as: UTF8.self).contains(secret))
+        let ordinary = try relay("Roger", sender: "operator-uid")
+        precondition(TAKChatMessage.phoneRelay(forXML: ordinary.xml) == .buffered && ordinary.buffer.events.count == 1)
     }
 
     static func checkRelayBuffer(xml: String, now: Date) throws {

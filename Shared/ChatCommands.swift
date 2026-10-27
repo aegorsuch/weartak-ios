@@ -66,6 +66,15 @@ enum ChatCommandParser {
         let nameEnd = rest.firstIndex(where: \.isWhitespace) ?? rest.endIndex
         let name = String(rest[..<nameEnd]).lowercased()
         guard matches(namePattern, name) else { return .malformed("invalid command name") }
+        let remainder = String(rest[nameEnd...].drop(while: \.isWhitespace))
+        let namedEnrollment = ["name=", "url=", "port="].contains {
+            remainder.lowercased().hasPrefix($0)
+        }
+        if name == "enrollserver", !namedEnrollment {
+            // Comma syntax: the password is everything after the fourth comma, so it is not tokenized.
+            guard remainder.utf8.count <= EnrollServerRequest.maximumLength else { return .malformed("too long") }
+            return .parsed(ChatCommand(name: name, arguments: [:], positional: [remainder]))
+        }
         let provisioning = name == "usep12" || name == "setpdl"
         let acceptsPositional = provisioning || name == "toggleditto"
         guard provisioning || body.utf8.count <= maximumLength else { return .malformed("too long") }
@@ -180,17 +189,57 @@ struct ChatCommandAuthorizer: Codable {
 enum AtomicRecordReplacement {
     enum Failure: Error { case readbackMismatch }
 
+    /// `commit` runs after the readback; if it throws, the previous record is restored.
     static func apply<Value: Equatable>(_ candidate: Value,
-        read: () throws -> Value?, write: (Value) throws -> Void, remove: () throws -> Void) throws {
+        read: () throws -> Value?, write: (Value) throws -> Void, remove: () throws -> Void,
+        commit: () throws -> Void = {}) throws {
         let previous = try read()
         try write(candidate)
         do {
             guard try read() == candidate else { throw Failure.readbackMismatch }
+            try commit()
         } catch {
             if let previous { try write(previous) } else { try remove() }
             throw error
         }
     }
+}
+
+/// `enrollserver name,address,port,username,password`; the password is everything after the fourth comma.
+struct EnrollServerRequest {
+    static let maximumLength = 1_024
+    let name: String
+    let address: String
+    let port: Int
+    let username: String
+    let password: String
+
+    init(_ command: ChatCommand) throws {
+        guard command.name == "enrollserver", command.arguments.isEmpty, command.positional.count == 1 else {
+            throw Failure.syntax
+        }
+        let fields = command.positional[0].split(separator: ",", maxSplits: 4, omittingEmptySubsequences: false)
+        guard fields.count == 5 else { throw Failure.syntax }
+        func clean(_ value: Substring) -> String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
+        func printable(_ value: String) -> Bool {
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        }
+        let name = clean(fields[0]), address = clean(fields[1]), username = clean(fields[3])
+        let password = String(fields[4])
+        guard !name.isEmpty, name.utf8.count <= 64, printable(name),
+              !address.isEmpty, address.utf8.count <= 253, printable(address),
+              !address.contains(where: \.isWhitespace),
+              let port = Int(clean(fields[2])), (1...65535).contains(port),
+              !username.isEmpty, username.utf8.count <= 128, !username.contains(":"), printable(username),
+              !password.isEmpty, password.utf8.count <= 512, printable(password) else { throw Failure.syntax }
+        self.name = name
+        self.address = address
+        self.port = port
+        self.username = username
+        self.password = password
+    }
+
+    enum Failure: Error { case syntax }
 }
 
 struct ChatP12Request {

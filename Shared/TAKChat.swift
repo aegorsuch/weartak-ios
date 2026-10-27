@@ -40,7 +40,15 @@ struct TAKChatMessage: Identifiable, Equatable {
     static func isProvisioningCommand(_ text: String) -> Bool {
         let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .split(whereSeparator: \.isWhitespace).first?.lowercased()
-        return name == "#weartakcommandusep12" || name == "#weartakcommandsetpdl"
+        return name == "#weartakcommandusep12" || name == "#weartakcommandsetpdl" ||
+            name == "#weartakcommandenrollserver"
+    }
+
+    static func isEnrollServerCommand(_ text: String) -> Bool {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let prefix = "#weartakcommand"
+        guard body.hasPrefix(prefix) else { return false }
+        return body.dropFirst(prefix.count).split(whereSeparator: \.isWhitespace).first == "enrollserver"
     }
 
     static func isCommandOnly(_ text: String) -> Bool {
@@ -123,6 +131,16 @@ struct TAKChatMessage: Identifiable, Equatable {
     static func containsCommandOnly(in xml: String) -> Bool {
         guard let delegate = parsedXML(xml), delegate.type == "b-t-f" else { return false }
         return isCommandOnly(delegate.text)
+    }
+
+    /// How the iPhone handles an incoming TAK server or Ditto chat event. Every event is forwarded unchanged
+    /// to the watch while it is reachable, so the original sender UID reaches the watch's authorization.
+    /// Provisioning commands (including enrollserver) are never retained in the phone's chat buffer,
+    /// so a password is never held for later handshake replies.
+    enum PhoneRelay: Equatable { case buffered, liveOnly }
+
+    static func phoneRelay(forXML xml: String) -> PhoneRelay {
+        containsCommandOnly(in: xml) ? .liveOnly : .buffered
     }
 
     static func parse(_ xml: String, ownUID: String) -> Self? {

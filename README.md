@@ -1662,17 +1662,30 @@ Commands. Save exact sender CoT UIDs in the allow-list; allowed direct-chat
 commands can update callsign, team, role and profile metrics. `#weartakcommand enrollserver name=North url=tak.example [port=8089]` is
 allowlisted, replay-protected, and opens the paired iPhone's New Server screen
 with the server name, host, and TAK stream port prefilled. The port defaults to
-8089; enrollment uses the existing 8446 default. Username and password must be
-entered on the iPhone and are never accepted in chat. The command is refused
+8089; enrollment uses the existing 8446 default. For this key/value form,
+username and password must be entered on the iPhone. The command is refused
 when the watch network lock, iPhone administrator lock, or managed server policy
 is active. `loadprofile` remains unsupported and receives an explicit rejection.
 Unknown command names are rejected, while ordinary chat remains unchanged.
 UID allow-lists are not authentication: a peer able to spoof CoT UIDs can
 impersonate an allowed sender.
 
+`loadprofile` requests receive an explicit rejection. `enrollserver name,address,port,username,password`
+(the password is everything after the fourth comma) adds a TAK server, or updates the credentials of an
+existing server matched by name or address and port, replying “Server <name> added” or “Server <name> updated”.
+It is accepted from any allow-listed sender on any channel, keeps the freshness, replay and rate limits, and is
+refused when watch network preferences, iPhone administrator settings, or managed server policy are locked. It needs the paired iPhone
+bridge, which enrolls and stores only the resulting client certificate in the Keychain; the password is never
+stored, logged, echoed or exported, and is purged on a best-effort basis (residual mesh, peer and server copies
+may remain). If the name and the address/port match different servers, nothing changes. Enrollment fails with
+“server trust not established” unless the server certificate chains to a trusted CA; installing a custom CA
+from the command is not supported. The iPhone relays `enrollserver` arriving by TAK server chat or Ditto to
+the watch unchanged, so the watch authorizes the original sender UID, not the phone. The relay is live only: the
+phone does not buffer, display, notify or log the command text, so it is not replayed after a missed delivery.
+
 The same authorization applies to native ATAK Ditto 1.1.1 chat, TAK server chat
 through Companion, Sit(x), watch multicast, and their WatchConnectivity ingress.
-Commands remain direct-only, non-self, and within five minutes of their timestamp.
+Commands remain direct-only except comma-form `enrollserver`, non-self, and within five minutes of their timestamp.
 Sender/message-ID receipts are shared across routes and retained across watch
 restarts; a full replay ledger rejects new commands rather than evicting live receipts.
 Acknowledgments use only the originating route, not the ordinary chat's additional

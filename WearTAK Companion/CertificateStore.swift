@@ -215,6 +215,28 @@ enum CertificateStore {
         guard status == errSecSuccess else { throw CompanionFailure.message("Keychain save failed (\(status)).") }
     }
 
+    /// Swaps in a newly enrolled identity and runs `commit` (saving the server record). If `commit` fails the
+    /// previous identity is restored. The previous key is deleted only after everything succeeded.
+    static func replaceEnrolled(_ stored: StoredIdentity, endpoint: String, commit: () throws -> Void) throws {
+        let previous = try read(endpoint: endpoint)
+        do {
+            try AtomicRecordReplacement.apply(stored, read: {
+                try read(endpoint: endpoint)
+            }, write: {
+                try write($0, endpoint: endpoint)
+            }, remove: {
+                SecItemDelete([kSecClass: kSecClassGenericPassword, kSecAttrService: service,
+                               kSecAttrAccount: endpoint] as CFDictionary)
+            }, commit: commit)
+        } catch {
+            discardUncommitted(stored)
+            throw error
+        }
+        if let tag = previous?.keyTag, tag != stored.keyTag {
+            SecItemDelete([kSecClass: kSecClassKey, kSecAttrApplicationTag: tag] as CFDictionary)
+        }
+    }
+
     /// One endpoint record is the commit point. Keep the previous enrolled key until readback succeeds.
     static func replaceP12(_ data: Data, password: String, endpoint: String) throws {
         let candidate = try importP12(data, password: password)
