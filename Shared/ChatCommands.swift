@@ -186,6 +186,26 @@ struct ChatCommandAuthorizer: Codable {
     }
 }
 
+enum ChatCommandAllowList {
+    static func replacing(_ entries: [String], at index: Int, with candidate: String) -> [String] {
+        guard entries.indices.contains(index) else { return entries }
+        var updated = entries
+        updated[index] = candidate
+        return normalize(updated)
+    }
+
+    static func removing(_ entries: [String], at index: Int) -> [String] {
+        guard entries.indices.contains(index) else { return entries }
+        var updated = entries
+        updated.remove(at: index)
+        return normalize(updated)
+    }
+
+    private static func normalize(_ entries: [String]) -> [String] {
+        ChatCommandAuthorizer.parseAllowList(entries.joined(separator: "\n"))
+    }
+}
+
 enum AtomicRecordReplacement {
     enum Failure: Error { case readbackMismatch }
 
