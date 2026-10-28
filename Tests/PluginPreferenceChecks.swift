@@ -55,6 +55,15 @@ struct PluginPreferenceChecks {
         precondition(symbols["gotenna"] == "antenna.radiowaves.left.and.right")
         precondition(symbols["somewear-labs"] == "dot.radiowaves.left.and.right")
         precondition(symbols["sensor-manager"] == "waveform.path")
+        let commands = try String(contentsOfFile: "WearTAK Watch App/ChatCommandSettingsView.swift", encoding: .utf8)
+        precondition(commands.contains("ForEach(Array(settings.commandSenderUIDs.enumerated())"))
+        precondition(commands.contains("startEditing(uid: uid, index: index)"))
+        precondition(commands.contains(".focused($focusedUIDIndex, equals: index)"))
+        precondition(commands.contains("Button(role: .destructive, action: { removeUID(at: index) })"))
+        precondition(commands.components(separatedBy: ".buttonStyle(.borderless)").count == 3)
+        precondition(commands.contains("ChatCommandAllowList.replacing(settings.commandSenderUIDs"))
+        precondition(commands.contains("ChatCommandAllowList.removing(settings.commandSenderUIDs"))
+        precondition(commands.contains("Button(\"Save Allowed UIDs\", action: saveUIDs)"))
         let settings = try String(contentsOfFile: "WearTAK Watch App/SettingsView.swift", encoding: .utf8)
         let row = settings.components(separatedBy: "case .dataSync:")[1]
             .components(separatedBy: "case .ditto:")[0]

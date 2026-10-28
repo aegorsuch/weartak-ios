@@ -66,6 +66,7 @@ struct ChatCommandChecks {
         precondition(authorizer.authorize(senderUID: "trusted-uid", allowedUIDs: ["trusted-uid"],
             messageID: "3", sentAt: now.addingTimeInterval(-301), now: now) == .stale)
         precondition(ChatCommandAuthorizer.parseAllowList(" one, two\none ,, three ") == ["one", "two", "three"])
+        checkAllowListEditing()
         try checkProvisioning()
         try checkEnrollServer()
         try checkAtomicReplacement()
@@ -77,6 +78,31 @@ struct ChatCommandChecks {
         precondition(limited.authorize(senderUID: "trusted", allowedUIDs: ["trusted"],
             messageID: "same-across-routes", sentAt: now, now: now) == .duplicate)
         print("PASS: command parsing, sender UID allow-list, freshness, and replay protection")
+    }
+
+    static func checkAllowListEditing() {
+        precondition(ChatCommandAllowList.replacing(["alpha", "bravo"], at: 1, with: "charlie") == ["alpha", "charlie"])
+        precondition(ChatCommandAllowList.replacing(["alpha", "bravo"], at: 1, with: " alpha ") == ["alpha"])
+        precondition(ChatCommandAllowList.replacing(["alpha", "bravo"], at: 5, with: "charlie") == ["alpha", "bravo"])
+        precondition(ChatCommandAllowList.removing(["alpha", "bravo", "charlie"], at: 1) == ["alpha", "charlie"])
+        precondition(ChatCommandAllowList.removing(["alpha"], at: 3) == ["alpha"])
+        precondition(ChatCommandAllowList.removing(["alpha"], at: 0).isEmpty)
+        precondition(ChatCommandAllowList.removing([], at: 0).isEmpty)
+        precondition(ChatCommandAllowList.replacing(["alpha", "bravo"], at: 0, with: "Alpha") == ["Alpha", "bravo"])
+        precondition(ChatCommandAllowList.replacing(["alpha", "bravo"], at: 0, with: " \n ") == ["bravo"])
+        precondition(ChatCommandAllowList.replacing(["alpha"], at: -1, with: "bravo") == ["alpha"])
+        precondition(ChatCommandAllowList.replacing(["alpha", "bravo"], at: 1, with: "charlie, delta\ncharlie") ==
+            ["alpha", "charlie", "delta"])
+        var authorizer = ChatCommandAuthorizer()
+        let updated = ChatCommandAllowList.replacing(["alpha", "bravo"], at: 0, with: "charlie")
+        let now = Date()
+        precondition(authorizer.authorize(senderUID: "alpha", allowedUIDs: updated,
+            messageID: "old", sentAt: now, now: now) == .senderNotAllowed)
+        precondition(authorizer.authorize(senderUID: "charlie", allowedUIDs: updated,
+            messageID: "new", sentAt: now, now: now) == .allowed)
+        precondition(authorizer.authorize(senderUID: "charlie",
+            allowedUIDs: ChatCommandAllowList.removing(updated, at: 0),
+            messageID: "deleted", sentAt: now, now: now) == .senderNotAllowed)
     }
 
     static func checkProvisioning() throws {

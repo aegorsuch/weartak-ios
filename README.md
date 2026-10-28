@@ -1664,7 +1664,11 @@ Placeholder” and an inert Scan button; no scanning or pairing is performed.
 ### Commands and Ditto
 
 Commands are off until enabled in Settings → Tool Preferences → Plugins →
-Commands. Save exact sender CoT UIDs in the allow-list; allowed direct-chat
+Commands. Save exact sender CoT UIDs in the allow-list. Tap a saved UID to open
+text entry, then submit it or tap the checkmark to save; the trash icon on the
+right removes that UID immediately. The comma-separated field and Save Allowed
+UIDs button still replace the whole list. These entries are exact sender UIDs,
+not display callsigns. Allowed direct-chat
 commands can update callsign, team, role and profile metrics. `#weartakcommand enrollserver name=North url=tak.example [port=8089]` is
 allowlisted, replay-protected, and opens the paired iPhone's New Server screen
 with the server name, host, and TAK stream port prefilled. The port defaults to
