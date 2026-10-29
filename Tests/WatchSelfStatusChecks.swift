@@ -108,6 +108,16 @@ enum WatchSelfStatusChecks {
         skinFixture.physio?.sktFMeasuredAt = WatchSelfStatus.timestamp(now)
         precondition(skinFixture.biometrics(escapedUID: identity.uid).contains(
             "<skt sampleTime=\"2027-01-15T08:00:00.000Z\">35.0</skt>"))
+        var garminFixture = WatchSelfStatus(version: 1, session: "garmin", seq: 0,
+            deviceUid: identity.uid, model: "GARMIN", physio: skinFixture.physio)
+        let garminXML = PhonePLI.event(identity: identity, fix: fix, interval: 30,
+            appVersion: "1", osVersion: "iOS", selfStatus: garminFixture, now: now)
+        precondition(garminXML.contains("<physiology version=\"1\"><device><model>GARMIN</model><uid>\(identity.uid)</uid><exert sampleTime=\"2027-01-15T08:00:00.000Z\">0.45</exert><skt sampleTime=\"2027-01-15T08:00:00.000Z\">35.0</skt></device></physiology>"), garminXML)
+        precondition(!garminXML.contains("<biometrics") && !garminXML.contains("<hr>"), garminXML)
+        garminFixture.physio = nil
+        let disabledGarminXML = PhonePLI.event(identity: identity, fix: fix, interval: 30,
+            appVersion: "1", osVersion: "iOS", selfStatus: garminFixture, now: now)
+        precondition(!disabledGarminXML.contains("<physiology") && !disabledGarminXML.contains("<biometrics"))
         for exert in [-0.01, 1.01] {
             var invalid = extended; invalid.physio?.exert = exert
             reject { _ = try invalid.validated() }
@@ -116,16 +126,17 @@ enum WatchSelfStatusChecks {
         let xml = PhonePLI.event(identity: identity, fix: fix, interval: 30,
             appVersion: "1", osVersion: "iOS", selfStatus: value, now: now)
         precondition(xml.contains("<remarks>MOPP2; HR: 72 bpm @ 08:00:00Z</remarks>"), xml)
-        precondition(xml.contains("<biometrics version=\"1\"><device sampleTime=\"2027-01-15T08:00:00.000Z\"><model>WATCHOS</model><uid>\(identity.uid)</uid><hr>72</hr></device></biometrics>"), xml)
+        precondition(xml.contains("<physiology version=\"1\"><device sampleTime=\"2027-01-15T08:00:00.000Z\"><model>WATCHOS</model><uid>\(identity.uid)</uid><hr>72</hr></device></physiology>"), xml)
+        precondition(!xml.contains("<biometrics"), xml)
         precondition(!xml.contains("<exert>") && !xml.contains("<_atmist_") && !xml.contains("WearTAK PLI"))
         let clean = PhonePLI.event(identity: identity, fix: fix, interval: 30,
             appVersion: "1", osVersion: "iOS", now: now)
-        precondition(!clean.contains("<remarks>") && !clean.contains("<biometrics"))
+        precondition(!clean.contains("<remarks>") && !clean.contains("<physiology") && !clean.contains("<biometrics"))
         precondition(PhonePLI.header(clean)?.uid == identity.uid)
         precondition(clean.contains("lat=\"38.8977000\"") && clean.contains("callsign=\"ODIN &lt;1&gt;\""))
         let stale = PhonePLI.event(identity: identity, fix: fix, interval: 900,
             appVersion: "1", osVersion: "iOS", selfStatus: snapshot(measuredAt: now.addingTimeInterval(-121)), now: now)
-        precondition(stale.contains("<remarks>MOPP2</remarks>") && !stale.contains("<biometrics"))
+        precondition(stale.contains("<remarks>MOPP2</remarks>") && !stale.contains("<physiology") && !stale.contains("<biometrics"))
         let message = BridgeWire.Message(kind: .selfStatus, selfStatusPayload: value)
         let decodedMessage = try BridgeWire.Message.decode(message.encoded())
         precondition(decodedMessage.selfStatusPayload == value)

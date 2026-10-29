@@ -101,7 +101,7 @@ struct WatchReportingIdentity: Codable, Equatable {
 }
 
 /// Latest watch vitals, shared with Companion so phone-GPS PLI carries the same biometrics as the watch's own PLI.
-/// Wire format matches WearOS WearTAK: readable `<remarks>` plus a structured `<biometrics>` block.
+/// Wire format matches WearOS WearTAK: readable `<remarks>` plus a structured `<physiology>` block.
 struct WatchBiometrics: Codable, Equatable {
     nonisolated static let contextKey = "WearTAKWatch.biometrics"
     static let staleGrace: TimeInterval = 15
@@ -135,12 +135,12 @@ struct WatchBiometrics: Codable, Equatable {
         "Exert:\(exertion.map(String.init) ?? "N/A")%;HR:\(heartRate.map(String.init) ?? "N/A")"
     }
 
-    /// `<biometrics>` device element; `alertAttributes` are already-escaped attributes for alert events.
-    func biometricsElement(uid: String, alertAttributes: String = "") -> String {
+    /// `<physiology>` device element; `alertAttributes` are already-escaped attributes for alert events.
+    func physiologyElement(uid: String, alertAttributes: String = "") -> String {
         guard includesBatdok else { return "" }
-        return "<biometrics\(alertAttributes)><device><model>\(Self.deviceModel)</model><uid>\(PhonePLI.escape(uid))</uid>" +
+        return "<physiology\(alertAttributes)><device><model>\(Self.deviceModel)</model><uid>\(PhonePLI.escape(uid))</uid>" +
             "<hr>\(heartRate.map(String.init) ?? "N/A")</hr>" +
-            "<exert>\(exertion.map(String.init) ?? "N/A")</exert></device></biometrics>"
+            "<exert>\(exertion.map(String.init) ?? "N/A")</exert></device></physiology>"
     }
 
     func pliDetail(uid: String, now: Date = Date(), reportingInterval: TimeInterval = 60) -> String {
@@ -153,7 +153,7 @@ struct WatchBiometrics: Codable, Equatable {
         } else {
             atmist = ""
         }
-        return "<remarks>\(remarks)</remarks>" + atmist + biometricsElement(uid: uid)
+        return "<remarks>\(remarks)</remarks>" + atmist + physiologyElement(uid: uid)
     }
 
     func contextValue() throws -> Data { try JSONEncoder().encode(self) }

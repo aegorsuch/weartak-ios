@@ -241,8 +241,8 @@ struct PhoneLocationReportingChecks {
         let clamped = PhonePLI.event(identity: identity, fix: future, interval: 30, appVersion: "1", osVersion: "iOS", now: now)
         precondition(clamped.contains("start=\"2027-01-15T08:00:00.000Z\""), clamped)
 
-        // Watch biometrics: WearOS-compatible remarks and <biometrics>; stale or missing vitals become N/A.
-        precondition(!xml.contains("<biometrics"))
+        // Watch vitals: WearOS-compatible remarks and <physiology>; stale or missing vitals become N/A.
+        precondition(!xml.contains("<physiology") && !xml.contains("<biometrics"))
         let vitals = WatchBiometrics(heartRate: 72, exertion: 38, measuredAt: now.addingTimeInterval(-60),
                                      ageYears: 35, batdokCotEnabled: true)
         let decodedVitals = WatchBiometrics.decode(contextValue: try vitals.contextValue())
@@ -253,14 +253,22 @@ struct PhoneLocationReportingChecks {
         precondition(bio.contains("<_atmist_ age=\"35\""), bio)
         precondition(bio.contains("(HR,72,"), bio)
         precondition(bio.contains("</_atmist_>"), bio)
-        precondition(bio.contains("<biometrics><device><model>WATCHOS</model><uid>\(uid)</uid><hr>72</hr><exert>38</exert></device></biometrics>"), bio)
+        precondition(bio.contains("<physiology><device><model>WATCHOS</model><uid>\(uid)</uid><hr>72</hr><exert>38</exert></device></physiology>"), bio)
+        precondition(!bio.contains("<biometrics"), bio)
+        let alertAttributes = " alertUid=\"alert-1\" alertState=\"alert\" alertCategory=\"Injury\" alertPriority=\"1\" alertDescription=\"Injury\""
+        let alertVitals = vitals.physiologyElement(uid: "watch<&>", alertAttributes: alertAttributes)
+        precondition(alertVitals == "<physiology\(alertAttributes)><device><model>WATCHOS</model><uid>watch&lt;&amp;&gt;</uid><hr>72</hr><exert>38</exert></device></physiology>", alertVitals)
+        let cancelAttributes = alertAttributes.replacingOccurrences(of: "alertState=\"alert\"", with: "alertState=\"cancel\"")
+        precondition(vitals.physiologyElement(uid: "watch<&>", alertAttributes: cancelAttributes) ==
+            alertVitals.replacingOccurrences(of: "alertState=\"alert\"", with: "alertState=\"cancel\""))
         precondition(CoTStreamFramer.isEvent(Data(bio.utf8)))
         var batdokDisabledVitals = vitals
         batdokDisabledVitals.batdokCotEnabled = false
         let batdokDisabled = PhonePLI.event(identity: identity, fix: fix, interval: 30, appVersion: "1", osVersion: "iOS",
                                             biometrics: batdokDisabledVitals, now: now)
         precondition(batdokDisabled.contains("<remarks>Exert:38%;HR:72</remarks>"), batdokDisabled)
-        precondition(!batdokDisabled.contains("<_atmist_") && !batdokDisabled.contains("<biometrics"), batdokDisabled)
+        precondition(!batdokDisabled.contains("<_atmist_") && !batdokDisabled.contains("<physiology") && !batdokDisabled.contains("<biometrics"), batdokDisabled)
+        precondition(batdokDisabledVitals.physiologyElement(uid: uid, alertAttributes: alertAttributes).isEmpty)
         var cutoffVitals = vitals; cutoffVitals.measuredAt = now.addingTimeInterval(-75)
         let atCutoff = PhonePLI.event(identity: identity, fix: fix, interval: 30, appVersion: "1", osVersion: "iOS",
                                       biometrics: cutoffVitals, now: now)
