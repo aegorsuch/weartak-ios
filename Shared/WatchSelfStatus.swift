@@ -113,7 +113,7 @@ struct WatchSelfStatus: Equatable {
         guard let physio,
               ["WATCHOS", "GARMIN"].contains(model) else { return "" }
         let sampleTime = physio.measuredAt.flatMap(Self.date).map { " sampleTime=\"\(Self.timestamp($0))\"" } ?? ""
-        var detail = "<biometrics version=\"1\"><device\(sampleTime)><model>\(model)</model><uid>\(escapedUID)</uid>"
+        var detail = "<physiology version=\"1\"><device\(sampleTime)><model>\(model)</model><uid>\(escapedUID)</uid>"
         if let hr = physio.hr { detail += "<hr>\(hr)</hr>" }
         if let exert = physio.exert, let measuredAt = physio.exertMeasuredAt.flatMap(Self.date) {
             detail += "<exert sampleTime=\"\(Self.timestamp(measuredAt))\">\(exert)</exert>"
@@ -122,7 +122,7 @@ struct WatchSelfStatus: Equatable {
             let celsius = (skin - 32) * 5 / 9
             detail += "<skt sampleTime=\"\(Self.timestamp(measuredAt))\">\(celsius)</skt>"
         }
-        return detail + "</device></biometrics>"
+        return detail + "</device></physiology>"
     }
 
     static func timestamp(_ date: Date) -> String {

@@ -483,7 +483,7 @@ for a device. Sensor monitoring and direct reporting stop in the background.
 Position reports expire, and physiological values in them are marked
 unavailable, after two reporting intervals plus 15 seconds. The BATDOK
 preference controls whether PLI includes an `_atmist_` vital-sign element and
-the `<biometrics>` block; it defaults on to match Wear OS.
+the `<physiology>` block; it defaults on to match Wear OS.
 Network Preferences can be locked from Admin Preferences. Admin Preferences and
 Developer Preferences always appear in Settings but stay disabled until
 developer mode is unlocked; the lock blocks Network Preferences' Settings and
@@ -1231,7 +1231,7 @@ watchOS suspension cannot guarantee that keepalive; the phone fails closed
 instead of replaying cached status. Missing/off fields are nulled immediately.
 The managed remarks line is ordered `MOPP2; HR: 72 bpm @ 18:15:30Z; Exert: 45% @ 18:15:30Z`.
 MOPP tokens have no space or prefix; None is omitted, not treated as MOPP0.
-Fresh HR and optional native exertion share one versioned biometrics device,
+Fresh HR and optional native exertion share one `<physiology version="1">` device block,
 with actual sample times and fractional exertion. No N/A placeholder device
 is generated on the phone proxy.
 
@@ -2148,7 +2148,9 @@ do not clear the successful-send anchor. Existing user-action refreshes remain.
 
 PLI also carries the watch's vitals in the same format as WearTAK for WearOS:
 `<remarks>Exert:47%;HR:88</remarks>` plus
-`<biometrics><device><model>WATCHOS</model><uid/><hr/><exert/></device></biometrics>`.
+`<physiology><device><model>WATCHOS</model><uid/><hr/><exert/></device></physiology>`.
+Physiology dashboard consumers must listen for `detail/physiology`, not
+`detail/biometrics`; PLI and alert/cancellation events no longer emit the old tag.
 Exertion is heart rate as a percentage of age-predicted maximum. Apple Watch
 does not capture skin temperature, so it is omitted. Heart rate and exertion
 use the existing reporting-interval freshness rule on direct-watch PLI.
@@ -2156,7 +2158,7 @@ Companion's phone-GPS proxy instead uses capability-gated ephemeral snapshots
 and per-metric freshness, withholding stale/disabled/disconnected fields.
 Saved MOPP and real HR/derived exertion are projected under the live-session
 rules above; legacy application-context vitals are not replayed. Alert events include the
-`<biometrics>` device block with `alertUid`, `alertState`, `alertCategory`,
+`<physiology>` device block with unchanged `alertUid`, `alertState`, `alertCategory`,
 `alertPriority="1"` and `alertDescription` attributes.
 
 Manual, physiological, and environmental alert activations and cancellations,
