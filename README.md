@@ -377,8 +377,9 @@ Before the first distribution archive:
   Skip Install Yes. Upload the container archive, not a bare watch archive.
 - Verify the included opaque 1024x1024 watch app-icon image in the AppIcon asset
   set. It uses the central skull/WEARTAK artwork without the watch or outer ring.
-- The project uses Version `5.8.3`, Build `20`, with separate Apple-compatible
-  version/build fields. Increment the build number for each subsequent upload.
+- The project uses Version `5.8.4` and local Build `20`, with separate
+  Apple-compatible version/build fields. Release pipelines set the build number
+  from the monotonically increasing GitLab pipeline IID.
 - Create the matching app record in App Store Connect; provide beta contact
   information, privacy information/policy, screenshots, export-compliance
   answers, and any review instructions needed for Sit(x) authorization.
@@ -414,7 +415,7 @@ Then:
   installable download exists until Apple has processed/approved it and the
   link works. Avoid attaching private credentials or provisioning material.
 
-The current checkout includes its app-icon image and Version `5.8.3`, Build `20`.
+The current checkout includes its app-icon image and Version `5.8.4`, Build `20`.
 The maintainer reports physical-watch verification. Public-beta distribution
 still requires the signing team, approved capabilities/profiles, App Store
 Connect setup, and TestFlight processing/review described above.
