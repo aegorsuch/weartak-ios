@@ -1,32 +1,28 @@
 # weartak-ios
 
-## Repository
+## Purpose and Capabilities
+
+WearTAK is a watch-first TAK application for Apple Watch, with an optional
+iPhone Companion. Capabilities include tactical maps, saved points, Bloodhound
+navigation, chat, alerts, sensor monitoring, multicast and server connectivity.
+See [Features](#features) and the transport sections for behavior, security
+constraints and integration limitations.
+
+### Repository
 
 - Canonical: https://git.tak.gov/core/weartak-core/weartak-ios
 - Backup mirror: https://github.com/aegorsuch/weartak-ios
 
-## Rights and contacts
+## Status
 
-### Rights
-
-Unlimited rights granted to TAK Product Center.
-
-### Point of contact
-
-Alex Gorsuch on chat.tak.gov or Signal.
-
-### Repositories
-
-The TAK Forge repository is canonical. GitHub is a secondary repository.
-
-## Download and install
+### Download and install
 
 WearTAK is currently an early-development Apple Watch app. Join the beta through
 [TestFlight](https://testflight.apple.com/join/UmM8AkNk).
 GitHub source archives and simulator builds cannot be installed directly on a
 physical Apple Watch. Do not treat this build's alerts as a safety service.
 
-### Beta users: TestFlight
+#### Beta users: TestFlight
 
 TestFlight is the recommended distribution route for users without Xcode.
 Open the [WearTAK beta invitation](https://testflight.apple.com/join/UmM8AkNk)
@@ -52,7 +48,7 @@ Beta builds expire after 90 days. Install a newer TestFlight build when one is
 available. WearTAK Companion is optional; see its setup below. Selecting iTAK
 or TAK Aware does not yet connect the watch to those partner apps.
 
-#### Keep WearTAK easy to return to
+##### Keep WearTAK easy to return to
 
 No separate watch face is needed. To keep WearTAK as the app you return to
 when you wake the watch:
@@ -75,7 +71,7 @@ it is still necessary. WearTAK does not currently include a watch-face
 complication. See Apple's
 [display and Return to Clock guidance](https://support.apple.com/guide/watch/adjust-the-display-settings-apd127ec93ac/watchos).
 
-#### Distance units and Manual Alert
+##### Distance units and Manual Alert
 
 On Apple Watch, open **Settings > Tool Preferences > Display Preferences > Units**.
 On iPhone, open **Display Preferences > Units** in Companion. **Metric** is the
@@ -133,7 +129,7 @@ configured output. Transport acceptance does not prove end-to-end recipient
 delivery, and independently configured transports may each carry the alert.
 Automatic/environmental alert position refreshes remain unchanged.
 
-#### Saved custom chat replies
+##### Saved custom chat replies
 
 Watch conversations (direct, group and All Chat Rooms) retain the built-in
 **Quick Messages** and allow saved custom replies. Tap the bottom **+**, enter
@@ -152,7 +148,7 @@ device. Deleting a saved reply does not delete past chats or the current draft.
 Corrupt saved data is reported and is not overwritten. Companion has no
 independent chat composer or quick-reply presets to extend.
 
-#### Build 12: tester message / What to Test
+##### Build 12: tester message / What to Test
 
 WearTAK 5.8.0 (12) includes draft Watch and Companion translations in all
 36 supported languages: **Arabic, Bulgarian, Croatian, Czech, Danish, Dutch,
@@ -181,7 +177,7 @@ Traditional Chinese**.
   screenshots with feedback. The version label should include build 12 and
   revision `806f322`, rather than `unknown`.
 
-#### Build 13: additional testing
+##### Build 13: additional testing
 
 Build 13 adds physiology/network admin controls and remote emergency alerts.
 Test live alerts from another TAK device: alerts should appear first in
@@ -192,6 +188,69 @@ from the picker. Known manual alert categories
 should translate (Injury is Lesión in Spanish); custom categories stay unchanged.
 Check admin controls and reporting behavior on real paired devices.
 Simulator demo alerts are excluded from release builds.
+
+## Point of Contacts
+
+<a id="rights-and-contacts"></a>
+
+Rights are documented under [License](#license).
+
+### Point of contact
+
+Alex Gorsuch on chat.tak.gov or Signal.
+
+### Repositories
+
+The TAK Forge repository is canonical. GitHub is a secondary repository.
+
+## Ports Required
+
+Ports depend on enabled transports and server configuration; not every
+deployment needs every endpoint below.
+
+| Transport / service | Protocol / default port | Purpose |
+| --- | --- | --- |
+| TAK SA multicast | UDP `6969` at `239.2.3.1` (configurable) | Plaintext local CoT |
+| ATAK GeoChat multicast | UDP `17012` at `224.10.10.1` | Local chat |
+| Direct CoT multicast | UDP `6969` at `224.10.10.1` | Local CoT reception |
+| Companion TAK stream | TLS/TCP `8089` (configurable) | Certificate-authenticated CoT |
+| TAK Channels, Data Sync and route-package downloads | HTTPS/TCP `8443` | Server APIs and bounded content retrieval |
+| TAK enrollment | HTTPS/TCP `8446` (explicit HTTPS URL port can override) | Client-certificate enrollment |
+
+Sit(x) uses HTTPS authorization/API requests and a server-returned secure
+WebSocket endpoint; verify actual endpoint ports with the service administrator.
+Ditto discovery/sync port requirements are not documented in this repository;
+confirm them against the deployed SDK and network policy before deployment.
+Apple Watch relay uses WatchConnectivity; Garmin relay uses Connect IQ.
+See [TAK SA Multicast](#tak-sa-multicast), [TAK Relay](#tak-relay) and
+[Sit(x) TAK](#sitx-tak) for transport-specific security and delivery limits.
+
+## Equipment Required
+
+- Apple Watch running watchOS 26.2 or newer for the watch app, with a compatible
+  paired iPhone for TestFlight installation/setup.
+- iPhone running iOS 18 or newer for optional WearTAK Companion. Physical-watch
+  live Sit(x) streaming requires Companion; direct watch streaming is simulator-only.
+- For multicast, a trusted WiFi network permitting multicast between TAK devices.
+- For Companion TAK-server use, an existing server and administrator-provided
+  client certificate or enrollment account; Companion does not supply a server.
+- For development/device installation, a Mac, Xcode with the watchOS 26.2 SDK or
+  newer, and authorized Apple Developer signing/provisioning. See [Compilation](#compilation).
+
+## Equipment Supported
+
+The project targets Apple Watch (watchOS 26.2+) and optional iPhone Companion
+(iOS 18+). No exhaustive validated hardware-model list is documented.
+Apple Watch SE 3 input guidance appears below; simulator checks do not establish
+physical-device sensor, radio or background-delivery support.
+
+Companion also supports the Garmin Connect IQ relay route with WearTAK-Garmin
+and Garmin Connect Mobile. A validated Garmin model list is not documented here;
+pairing and delivery require physical-device verification.
+iTAK and TAK Aware remain incomplete integrations, not working relay providers.
+See [WearTAK Companion](#weartak-companion) and [Limitations](#limitations).
+
+## Compilation
 
 ### CI and release archives
 
@@ -462,7 +521,9 @@ Apple references:
 [TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview)
 and [Upload builds](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/).
 
-## Features
+## Developer Notes
+
+### Features
 
 WearTAK is a watch-first TAK application for Apple Watch. It provides a MapKit
 map, saved tactical points, Bloodhound navigation, manual alerts, physiological
@@ -544,7 +605,7 @@ The watch Info.plist includes both HealthKit read and update purpose strings
 required by App Store validation. The current monitor requests read access only
 and does not save or modify Health data; the update-purpose text states this.
 
-### Dashboard
+#### Dashboard
 
 The dashboard uses the watchOS status-area clock; it has no duplicate bottom
 clock or More button. Marker tools remain available by holding the point
@@ -623,7 +684,7 @@ readiness requires a reachable watch/phone session and a confirmed live server
 connection; iTAK and TAK Aware integration remains incomplete. The TAK indicator
 also opens Network Preferences.
 
-### Dropped markers
+#### Dropped markers
 
 The dashboard point-drop button opens a radial Hostile, Neutral, Friendly,
 and Unknown picker. Selecting a type opens a confirmation form at the current
@@ -663,7 +724,7 @@ Text fields use native watchOS entry. On Apple Watch SE 3, use Scribble,
 dictation, or the paired iPhone's Apple Watch Keyboard notification. In
 Simulator, enable Connect Hardware Keyboard to type using the Mac keyboard.
 
-### Map Layers Menu
+#### Map Layers Menu
 
 The self marker uses the selected team color. When the watch compass supplies
 a valid heading, its arrow rotates with the watch orientation relative to the
@@ -725,7 +786,7 @@ seconds the dot dims, gets an orange ring, and its label turns orange.
 VoiceOver reads the callsign, team, role, report age and stale state.
 Incoming non-user pins show no age.
 
-## TAK Relay
+### TAK Relay
 
 TAK Relay integration with iTAK and TAK Aware is not complete. The project
 developer is working with those partners to complete integration. The provider
@@ -733,7 +794,7 @@ selector currently saves a preference only; choosing iTAK or TAK Aware does not
 establish a relay connection or enable phone-relayed delivery. Their submenu
 rows use a small Teaming label rather than a general integration warning.
 
-### WearTAK Companion
+#### WearTAK Companion
 
 The optional iPhone app requires iOS 18 or newer, an existing TAK server, and
 an administrator-provided client certificate or enrollment account. It does
@@ -799,7 +860,7 @@ search paths so Xcode embeds and loads the Connect IQ framework. Simulator
 builds can show the route-selection interface; Garmin pairing and relay
 delivery must be verified on a physical iPhone and Garmin watch.
 
-### Garmin relay acknowledgements
+#### Garmin relay acknowledgements
 
 Companion advertises `reliableDelivery` in a session-correlated `relay_status`
 response to `relay_hello`. Queued marker, marker-delete, emergency, and chat
@@ -848,7 +909,7 @@ Portable delivery-ledger checks can be run with Swift:
 then execute `garmin-ledger-tests`. The full Companion/ConnectIQ SDK build still
 requires Xcode on macOS.
 
-### Garmin route transport
+#### Garmin route transport
 
 Route-capable Garmin watches advertise `routeVersion: 1` in `relay_hello` and
 `entity_sync_request`; Companion advertises version 1 in `relay_status`. Older
@@ -973,7 +1034,7 @@ updates after reconnection. A newer explicit start begins a new session.
 This Apple protocol does not change Garmin's separate relay protocol or implement
 Android bonding/ATAK plugin controls in iOS. Individual-point Bloodhound remains local.
 
-### Route-only TAK Data Packages (prepared; native acceptance pending)
+#### Route-only TAK Data Packages (prepared; native acceptance pending)
 
 Companion receives `b-f-t-r` advertisements on an enabled, certificate-configured
 TAK stream. It validates `fileshare.sha256`, `sizeInBytes` (legacy `size` also
@@ -1058,7 +1119,7 @@ Translations added for this feature are marked `needs_review` outside English.
 This worktree implements Apple Watch/shared Swift only; WearOS/Garmin picker UI
 and platform-specific icon formats are separate repository changes.
 
-### ATAK picker artwork attribution
+#### ATAK picker artwork attribution
 
 `ATAKBloodhound.imageset` and `ATAKCrosshair.imageset` contain resized 68×68 PNG
 versions of `nav_bloodhound.png` and `ic_crosshair.png` from
@@ -1142,7 +1203,7 @@ The Companion's Watch status row shows "Paired" or "Not paired" using the phone'
 watch pairing state, independently of whether the watch app is foregrounded.
 Pairing status is not TAK server health or live-message availability.
 
-### User metrics import
+#### User metrics import
 
 **User Metrics** is collapsed by default in Companion. Tap the row to reveal
 the profile fields and import buttons.
@@ -1161,7 +1222,7 @@ fields remain editable or importable later. Importing these metrics updates
 Companion's local stored profile only; it does not automatically transmit them
 to TAK servers.
 
-### Phone GPS location reporting
+#### Phone GPS location reporting
 
 Companion's **Background location reporting** section shows the current status
 and a brief explanation. Expand **Details** for the location permission, last
@@ -1287,7 +1348,7 @@ identity becomes invalid. If access is While Using only, reporting can start
 only while Companion is open. Force-quitting Companion, iOS terminating it,
 or rebooting the phone stops reporting until Companion is opened again.
 
-### Locked-phone map refresh
+#### Locked-phone map refresh
 
 The foreground watch automatically requests a map refresh on resume and every
 30 seconds while open. There is no connection-status or manual map-refresh
@@ -1359,7 +1420,7 @@ hardware; simulator tests cannot guarantee background wake-up. There is no
 guaranteed continuous background relay, emergency-alert delivery, or durable
 offline PLI replay.
 
-### Map contact actions
+#### Map contact actions
 
 Tap an incoming user dot to open its contact panel. Latitude, longitude and MGRS
 appear first, followed by Start Chat and Bloodhound to Contact. Bloodhound uses
@@ -1368,7 +1429,7 @@ direction/range and map line with point navigation, and stops when the contact
 expires. Selecting a local point instead replaces the contact target.
 The contact panel omits team, role and last-seen text; contact expiry still applies.
 
-### Incoming points (RGR / nPos)
+#### Incoming points (RGR / nPos)
 
 The Bloodhound picker shows a camera glyph for the exact CoT video type
 `b-i-v` or a direct `<detail><__video .../></detail>` element. Names, generic
@@ -1442,7 +1503,7 @@ the parser; a parse log with zero accepted entities means packets arrived but
 were rejected or were not supported map entities. Include debug-level logs when
 investigating missing alerts.
 
-#### Supported languages (36)
+##### Supported languages (36)
 
 The Watch app and WearTAK Companion localize their interface, common status
 messages and permission descriptions in Arabic, Bulgarian, Croatian, Czech,
@@ -1561,7 +1622,7 @@ live ATAK interoperability still needs paired-device/server testing.
 The dashboard metric uses smaller, single-line, scaling text and a smaller
 icon to preserve the full exertion percentage on small watch screens.
 
-### Map Channels
+#### Map Channels
 
 The connected-nodes button at the watch map's top right opens Channels; Layers
 remains top center. Choose an enabled Companion server to load its assigned
@@ -1609,7 +1670,7 @@ standalone Sit(x), iTAK and TAK Aware do not currently expose this channel menu'
 server operations. Protocol checks and combined builds cover local behavior;
 paired-device channel and CoT interoperability still require live verification.
 
-### Data Sync missions
+#### Data Sync missions
 
 Open Settings → Tool Preferences → Plugins → DataSync, choose a server, then
 toggle its feeds (missions) to subscribe or unsubscribe. Map Channels stay on
@@ -1631,7 +1692,7 @@ change cannot replace the cache. A request already sent may still complete on
 the server; this is not remote cancellation or unsubscribe. The switch does not
 disable the TAK transport or ordinary incoming CoT.
 
-### Manual MOPP status
+#### Manual MOPP status
 
 Open Settings → Tool Preferences → Plugins → **MOPP**, marked with an original
 protective-mask icon. **PPE Status** shows the saved manual choice. Choose
@@ -1662,7 +1723,7 @@ Sensor Manager is also labeled “Unfunded Request” and has a saved enable/dis
 switch (off by default). Opening it shows “Unfunded Request”, “Button is
 Placeholder” and an inert Scan button; no scanning or pairing is performed.
 
-### Commands and Ditto
+#### Commands and Ditto
 
 Commands are off until enabled in Settings → Tool Preferences → Plugins →
 Commands. Save exact sender CoT UIDs in the allow-list. Tap a saved UID to open
@@ -1908,7 +1969,7 @@ aren't handled yet. Subscribe and mission items were verified live on TAK
 Server; Sit(x) listing works, but its subscribe and items requests haven't been
 verified because the test account has no missions.
 
-## TAK SA Multicast
+### TAK SA Multicast
 
 Open Settings > Network Preferences > TAK SA Multicast. The entry appears
 above Sit(x) TAK and shows Enabled or Disabled. Multicast defaults to Enabled;
@@ -1965,7 +2026,7 @@ repeated for distribution builds. Keep HealthKit/Keychain provisioning valid.
 See [Apple's local-network guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
 and [multicast entitlement platforms](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.networking.multicast).
 
-## Sit(x) TAK
+### Sit(x) TAK
 
 When Sit(x) is configured in Companion, the watch shows the phone's enabled
 state, address, selected group and connection status. These phone-managed
@@ -1983,7 +2044,7 @@ refresh token and requires a reachable Companion when the phone owns the connect
 Companion removal clears its local connection and device-authorization identifier.
 This removes local configuration, not the Sit(x) account or organization.
 
-### Setup
+#### Setup
 
 Sit(x) can be set up on the watch or in WearTAK Companion on the iPhone. Both
 use the same steps and menu. A physical watch streams Sit(x) through Companion
@@ -2025,7 +2086,7 @@ authorization, if more than one TAK group is permitted, the Group picker opens
 automatically, just as the code sheet opens for authorization.
 Changing the address also invalidates the previous organization's credentials.
 
-### Connection protocol
+#### Connection protocol
 
 - POST `/api/v1/device/authorization/code` with the device scope and client ID.
 - Poll POST `/api/v1/device/authorization/token` with the device-code grant.
@@ -2067,7 +2128,7 @@ text when present, for example `HTTP 406: <reason>`. OAuth error codes
 (`access_denied`, `expired_token`, `invalid_grant`, `invalid_client`,
 `invalid_scope`, `invalid_request`) are shown in plain language.
 
-### Streaming through WearTAK Companion
+#### Streaming through WearTAK Companion
 
 watchOS blocks WebSockets on Apple Watch hardware for apps that are not audio or
 VoIP apps ([TN3135](https://developer.apple.com/documentation/technotes/tn3135-low-level-networking-on-watchos)).
@@ -2105,7 +2166,7 @@ Without a reachable Companion, a physical watch shows `Live stream needs WearTAK
 Companion; watchOS blocks direct Sit(x) streaming` (menu: Sit(x) Needs iPhone)
 instead of retrying.
 
-### Delivery and shared reporting
+#### Delivery and shared reporting
 
 PLI includes a stable device UID, position, callsign, team, role, and CoT
 time/start/stale fields. It is an `a-f-G-U-C` event with ATAK contact detail:
@@ -2251,7 +2312,7 @@ Multicast does not retry datagrams after local transport acceptance. Offline
 mission edits/subscriptions remain unavailable because they require current
 server permissions; Data Sync is not replayed from this outbox.
 
-### Limitations
+#### Limitations
 
 Watch reporting is foreground-only; continuous screen-off/background watch
 tracking is not implemented. Background PLI is available only from the phone's
@@ -2265,7 +2326,7 @@ disabled. Direct watch Sit(x) streaming works only in the simulator; physical
 watches need the Companion relay above. Repeat device and live Sit(x) checks
 for distribution builds.
 
-## Protocol checks
+### Protocol checks
 
 Run these checks on macOS. They use mocked HTTP, in-memory tokens, and fake
 outputs; they do not use real credentials or broadcast onto the LAN.
@@ -2532,3 +2593,18 @@ inspections are covered. A private-CA fixture verifies automatic recovery from
 a hostname mismatch to the single DNS SAN `takserver2`, while ambiguous-name
 selection and missing CA chains are rejected. No simulator or mock test
 establishes physical-device background reliability or live server compatibility.
+
+## License
+
+### Rights
+
+Unlimited rights granted to TAK Product Center.
+
+No repository-wide license file is present in this checkout. The rights
+statement above is preserved as documented; this reformat does not establish
+additional licensing terms or relicense the project.
+
+The ATAK-derived picker artwork is documented as GPLv3; see
+[ATAK picker artwork attribution](#atak-picker-artwork-attribution) for sources
+and the outstanding licensing/distribution compatibility review. That artwork
+attribution is not a repository-wide license declaration or legal clearance.
