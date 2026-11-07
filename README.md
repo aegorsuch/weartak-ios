@@ -2600,9 +2600,9 @@ establishes physical-device background reliability or live server compatibility.
 
 Unlimited rights granted to TAK Product Center.
 
-No repository-wide license file is present in this checkout. The rights
-statement above is preserved as documented; this reformat does not establish
-additional licensing terms or relicense the project.
+Original project code is licensed under GNU GPLv3; see [LICENSE](LICENSE).
+This license applies only to original project code and does not change
+third-party licenses or permissions.
 
 The ATAK-derived picker artwork is documented as GPLv3; see
 [ATAK picker artwork attribution](#atak-picker-artwork-attribution) for sources
